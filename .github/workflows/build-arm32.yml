@@ -29,7 +29,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: armv7
-          distro: debian_bookworm
+          distro: bookworm
           githubToken: ${{ github.token }}
           install: |
             apt-get update -qq
@@ -102,7 +102,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: armv7
-          distro: debian_bookworm
+          distro: bookworm
           githubToken: ${{ github.token }}
           install: |
             apt-get update -qq
