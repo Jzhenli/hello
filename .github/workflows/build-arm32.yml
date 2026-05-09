@@ -220,6 +220,7 @@ jobs:
 
       - name: Create deployment script
         run: |
+          mkdir -p dist
           cat > dist/install.sh <<'INSTALL_EOF'
           #!/bin/bash
           # ================================================
