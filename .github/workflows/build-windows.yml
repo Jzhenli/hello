@@ -85,7 +85,7 @@ jobs:
       - name: Package Windows app
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
         run: |
-          briefcase package windows --no-sign
+          briefcase package windows --adhoc-sign -p zip
 
       - name: Prepare distribution
         shell: bash
