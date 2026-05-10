@@ -112,6 +112,8 @@ jobs:
         if: steps.vars.outputs.ENABLE_NUITKA == 'true'
         shell: bash
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           python "$GITHUB_WORKSPACE/scripts/nuitka_compile.py" \
             "build/${{ steps.vars.outputs.APP_NAME }}/windows/app/src/app"
