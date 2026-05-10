@@ -71,12 +71,21 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "APP_NAME=${{ inputs.app_name }}" >> $GITHUB_OUTPUT
             echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
-            echo "ENABLE_NUITKA=${{ inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.enable_nuitka }}" = "true" ] || [ "${{ inputs.enable_nuitka }}" = "True" ]; then
+              echo "ENABLE_NUITKA=true" >> $GITHUB_OUTPUT
+            else
+              echo "ENABLE_NUITKA=false" >> $GITHUB_OUTPUT
+            fi
           else
             echo "APP_NAME=${{ steps.tag_info.outputs.APP_NAME }}" >> $GITHUB_OUTPUT
             echo "VERSION=${{ steps.tag_info.outputs.VERSION }}" >> $GITHUB_OUTPUT
             echo "ENABLE_NUITKA=true" >> $GITHUB_OUTPUT
           fi
+          
+          echo "=== 构建变量 ==="
+          echo "APP_NAME: $(grep APP_NAME $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "VERSION: $(grep VERSION $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "ENABLE_NUITKA: $(grep ENABLE_NUITKA $GITHUB_OUTPUT | cut -d= -f2)"
 
       - name: Update version in pyproject.toml
         if: steps.vars.outputs.VERSION != ''
@@ -99,7 +108,11 @@ jobs:
         shell: bash
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
         run: |
+          set -x
           APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
+          ENABLE_NUITKA="${{ steps.vars.outputs.ENABLE_NUITKA }}"
+          
+          echo "ENABLE_NUITKA = $ENABLE_NUITKA"
           
           SRC_DIR="build/${APP_NAME}/windows/app/src"
           
@@ -117,21 +130,19 @@ jobs:
           
           cd "$SRC_DIR"
           
+          echo "查找可编译的模块..."
           for module_dir in */ ; do
             module_name="${module_dir%/}"
+            echo "检查: $module_name"
             
-            if [ "$module_name" = "__pycache__" ] || [ ! -f "$module_name/__init__.py" ]; then
+            if [ "$module_name" = "__pycache__" ]; then
+              echo "  跳过: __pycache__"
               continue
             fi
             
-            if [ -f "$module_name/__main__.py" ]; then
-              MAIN_FUNC=$(grep -E "^def main\s*\(" "$module_name/__main__.py" 2>/dev/null | head -1)
-              if [ -n "$MAIN_FUNC" ]; then
-                HAS_MAIN_FUNC=true
-              else
-                HAS_MAIN_FUNC=false
-              fi
-              echo "模块 $module_name 有 __main__.py, main函数: $HAS_MAIN_FUNC"
+            if [ ! -f "$module_name/__init__.py" ]; then
+              echo "  跳过: 无 __init__.py"
+              continue
             fi
             
             echo "--- 编译模块: $module_name ---"
@@ -144,6 +155,9 @@ jobs:
               --nofollow-imports \
               --follow-import-to="$module_name" \
               --no-progressbar 2>&1
+            
+            echo "编译完成，检查产物..."
+            ls -la ./compiled/ 2>/dev/null || echo "compiled 目录不存在"
           done
           
           echo "--- 移动编译产物 ---"
@@ -154,7 +168,12 @@ jobs:
                 echo "已复制: $(basename $pyd_file)"
               fi
             done
+          else
+            echo "警告: compiled 目录不存在，可能编译失败"
           fi
+          
+          echo "当前目录内容:"
+          ls -la
           
           echo "--- 创建入口文件并清理源码 ---"
           for module_dir in */ ; do
