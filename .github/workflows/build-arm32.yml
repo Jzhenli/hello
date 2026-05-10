@@ -286,6 +286,10 @@ jobs:
                     
                     if ls $so_pattern 1> /dev/null 2>&1; then
                       if [ -f "$module_dir/__main__.py" ]; then
+                        echo "删除源码目录内容..."
+                        rm -rf "$mod_name"
+                        mkdir -p "$mod_name"
+                        
                         echo "创建入口文件: ${mod_name}/__init__.py"
                         
                         so_file=$(ls $so_pattern | head -1)
@@ -299,22 +303,22 @@ jobs:
                         echo "_spec = importlib.util.spec_from_file_location(\"${mod_name}\", _so_path)" >> "$mod_name/__init__.py"
                         echo '_module = importlib.util.module_from_spec(_spec)' >> "$mod_name/__init__.py"
                         echo '_spec.loader.exec_module(_module)' >> "$mod_name/__init__.py"
-                        echo 'sys.modules["${mod_name}"] = _module' >> "$mod_name/__init__.py"
+                        echo "sys.modules[\"${mod_name}\"] = _module" >> "$mod_name/__init__.py"
                         
-                        echo 'import sys' > "$module_dir/__main__.py"
-                        echo 'import os' >> "$module_dir/__main__.py"
-                        echo 'import importlib.util' >> "$module_dir/__main__.py"
-                        echo '' >> "$module_dir/__main__.py"
-                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$module_dir/__main__.py"
-                        echo "_spec = importlib.util.spec_from_file_location(\"${mod_name}\", _so_path)" >> "$module_dir/__main__.py"
-                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_dir/__main__.py"
-                        echo '_spec.loader.exec_module(_module)' >> "$module_dir/__main__.py"
-                        echo '' >> "$module_dir/__main__.py"
-                        echo 'if hasattr(_module, "main"):' >> "$module_dir/__main__.py"
-                        echo '    _module.main()' >> "$module_dir/__main__.py"
-                        echo 'else:' >> "$module_dir/__main__.py"
-                        echo '    print("Error: No main() function found")' >> "$module_dir/__main__.py"
-                        echo '    sys.exit(1)' >> "$module_dir/__main__.py"
+                        echo 'import sys' > "$mod_name/__main__.py"
+                        echo 'import os' >> "$mod_name/__main__.py"
+                        echo 'import importlib.util' >> "$mod_name/__main__.py"
+                        echo '' >> "$mod_name/__main__.py"
+                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$mod_name/__main__.py"
+                        echo "_spec = importlib.util.spec_from_file_location(\"${mod_name}\", _so_path)" >> "$mod_name/__main__.py"
+                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$mod_name/__main__.py"
+                        echo '_spec.loader.exec_module(_module)' >> "$mod_name/__main__.py"
+                        echo '' >> "$mod_name/__main__.py"
+                        echo 'if hasattr(_module, "main"):' >> "$mod_name/__main__.py"
+                        echo '    _module.main()' >> "$mod_name/__main__.py"
+                        echo 'else:' >> "$mod_name/__main__.py"
+                        echo '    print("Error: No main() function found")' >> "$mod_name/__main__.py"
+                        echo '    sys.exit(1)' >> "$mod_name/__main__.py"
                         
                         echo "已创建入口文件"
                       else

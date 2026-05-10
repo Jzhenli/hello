@@ -188,6 +188,10 @@ jobs:
               echo "处理模块: $module_name"
               
               if [ -f "$module_name/__main__.py" ]; then
+                echo "删除源码目录内容..."
+                rm -rf "$module_name"
+                mkdir -p "$module_name"
+                
                 echo "创建入口文件: ${module_name}/__init__.py"
                 
                 echo 'import sys' > "$module_name/__init__.py"
