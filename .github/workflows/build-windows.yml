@@ -194,7 +194,6 @@ jobs:
                 
                 echo "创建入口文件: ${module_name}/__init__.py"
                 
-                echo 'import sys' > "$module_name/__init__.py"
                 echo 'import os' >> "$module_name/__init__.py"
                 echo 'import importlib.util' >> "$module_name/__init__.py"
                 echo '' >> "$module_name/__init__.py"
@@ -202,21 +201,14 @@ jobs:
                 echo "_spec = importlib.util.spec_from_file_location(\"${module_name}\", _pyd_path)" >> "$module_name/__init__.py"
                 echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_name/__init__.py"
                 echo '_spec.loader.exec_module(_module)' >> "$module_name/__init__.py"
-                echo "sys.modules[\"${module_name}\"] = _module" >> "$module_name/__init__.py"
                 
-                echo 'import sys' > "$module_name/__main__.py"
-                echo 'import os' >> "$module_name/__main__.py"
-                echo 'import importlib.util' >> "$module_name/__main__.py"
-                echo '' >> "$module_name/__main__.py"
-                echo "_pyd_path = os.path.join(os.path.dirname(__file__), \"..\", \"${module_name}.cp311-win_amd64.pyd\")" >> "$module_name/__main__.py"
-                echo "_spec = importlib.util.spec_from_file_location(\"${module_name}\", _pyd_path)" >> "$module_name/__main__.py"
-                echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_name/__main__.py"
-                echo '_spec.loader.exec_module(_module)' >> "$module_name/__main__.py"
+                echo 'from ${module_name} import _module' > "$module_name/__main__.py"
                 echo '' >> "$module_name/__main__.py"
                 echo 'if hasattr(_module, "main"):' >> "$module_name/__main__.py"
                 echo '    _module.main()' >> "$module_name/__main__.py"
                 echo 'else:' >> "$module_name/__main__.py"
                 echo '    print("Error: No main() function found")' >> "$module_name/__main__.py"
+                echo '    import sys' >> "$module_name/__main__.py"
                 echo '    sys.exit(1)' >> "$module_name/__main__.py"
                 
                 echo "已创建入口文件"
