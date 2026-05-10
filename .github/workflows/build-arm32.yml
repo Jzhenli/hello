@@ -285,43 +285,35 @@ jobs:
                     so_pattern="${mod_name}.cpython-*.so"
                     
                     if ls $so_pattern 1> /dev/null 2>&1; then
-                      so_file=$(ls $so_pattern | head -1)
-                      compiled_name="${mod_name}_compiled.so"
-                      mv "$so_file" "$compiled_name"
-                      echo "重命名: $(basename $so_file) -> $compiled_name"
-                      
                       if [ -f "$module_dir/__main__.py" ]; then
                         echo "创建入口文件: ${mod_name}/__init__.py"
                         
+                        so_file=$(ls $so_pattern | head -1)
+                        so_basename=$(basename "$so_file")
+                        
                         echo 'import sys' > "$mod_name/__init__.py"
                         echo 'import os' >> "$mod_name/__init__.py"
+                        echo 'import importlib.util' >> "$mod_name/__init__.py"
                         echo '' >> "$mod_name/__init__.py"
-                        echo "_pyd_name = \"${mod_name}_compiled\"" >> "$mod_name/__init__.py"
-                        echo 'try:' >> "$mod_name/__init__.py"
-                        echo '    import importlib.util' >> "$mod_name/__init__.py"
-                        echo '    spec = importlib.util.find_spec(_pyd_name)' >> "$mod_name/__init__.py"
-                        echo '    if spec and spec.loader:' >> "$mod_name/__init__.py"
-                        echo '        _module = importlib.util.module_from_spec(spec)' >> "$mod_name/__init__.py"
-                        echo "        sys.modules[\"${mod_name}\"] = _module" >> "$mod_name/__init__.py"
-                        echo '        spec.loader.exec_module(_module)' >> "$mod_name/__init__.py"
-                        echo 'except Exception as e:' >> "$mod_name/__init__.py"
-                        echo '    print(f"Warning: Could not load compiled module: {e}")' >> "$mod_name/__init__.py"
-                        echo '' >> "$mod_name/__init__.py"
-                        echo "from ${mod_name}_compiled import *" >> "$mod_name/__init__.py"
+                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$mod_name/__init__.py"
+                        echo '_spec = importlib.util.spec_from_file_location("_compiled_module", _so_path)' >> "$mod_name/__init__.py"
+                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$mod_name/__init__.py"
+                        echo '_spec.loader.exec_module(_module)' >> "$mod_name/__init__.py"
+                        echo 'sys.modules["${mod_name}"] = _module' >> "$mod_name/__init__.py"
                         
                         echo 'import sys' > "$module_dir/__main__.py"
                         echo 'import os' >> "$module_dir/__main__.py"
+                        echo 'import importlib.util' >> "$module_dir/__main__.py"
                         echo '' >> "$module_dir/__main__.py"
-                        echo 'sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))' >> "$module_dir/__main__.py"
+                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$module_dir/__main__.py"
+                        echo '_spec = importlib.util.spec_from_file_location("_compiled_module", _so_path)' >> "$module_dir/__main__.py"
+                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_dir/__main__.py"
+                        echo '_spec.loader.exec_module(_module)' >> "$module_dir/__main__.py"
                         echo '' >> "$module_dir/__main__.py"
-                        echo 'try:' >> "$module_dir/__main__.py"
-                        echo "    from ${mod_name}_compiled import main" >> "$module_dir/__main__.py"
-                        echo '    main()' >> "$module_dir/__main__.py"
-                        echo 'except ImportError as e:' >> "$module_dir/__main__.py"
-                        echo '    print(f"Error importing compiled module: {e}")' >> "$module_dir/__main__.py"
-                        echo '    sys.exit(1)' >> "$module_dir/__main__.py"
-                        echo 'except Exception as e:' >> "$module_dir/__main__.py"
-                        echo '    print(f"Error starting application: {e}")' >> "$module_dir/__main__.py"
+                        echo 'if hasattr(_module, "main"):' >> "$module_dir/__main__.py"
+                        echo '    _module.main()' >> "$module_dir/__main__.py"
+                        echo 'else:' >> "$module_dir/__main__.py"
+                        echo '    print("Error: No main() function found")' >> "$module_dir/__main__.py"
                         echo '    sys.exit(1)' >> "$module_dir/__main__.py"
                         
                         echo "已创建入口文件"
