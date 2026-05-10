@@ -22,7 +22,7 @@ permissions:
 
 env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
-  PBS_RELEASE: '20260508'
+  PBS_RELEASE: '20251120'
 
 jobs:
   build:
@@ -116,9 +116,9 @@ jobs:
             echo "=========================================="
             
             case "$PYTHON_VERSION" in
-              3.10) PBS_PYTHON="3.10.16" ;;
-              3.11) PBS_PYTHON="3.11.15" ;;
-              3.12) PBS_PYTHON="3.12.13" ;;
+              3.10) PBS_PYTHON="3.10.19" ;;
+              3.11) PBS_PYTHON="3.11.14" ;;
+              3.12) PBS_PYTHON="3.12.12" ;;
               *) PBS_PYTHON="$PYTHON_VERSION" ;;
             esac
 
