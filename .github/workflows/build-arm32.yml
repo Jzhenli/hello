@@ -1,7 +1,10 @@
 name: Build ARM32 Shared AppDir
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'shared-python/v*'
+      - '*/v*'
   workflow_dispatch:
     inputs:
       python_version:
@@ -9,13 +12,16 @@ on:
         required: false
         default: '3.11'
       strip_stdlib:
-        description: 'Strip unused stdlib modules (saves ~3 MB for stripped builds)'
+        description: 'Strip unused stdlib modules (saves ~3 MB)'
         required: false
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
 env:
-  PYTHON_VERSION: ${{ github.event.inputs.python_version || '3.11' }}
+  PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
   PBS_RELEASE: '20260508'
 
 jobs:
@@ -25,8 +31,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build shared Python base
+      # ============================================================
+      # 步骤 1: 解析标签，决定构建类型
+      # ============================================================
+      - name: Extract tag info
+        if: startsWith(github.ref, 'refs/tags/')
+        id: tag_info
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          COMPONENT_NAME=${TAG_NAME%/*}
+          COMPONENT_VERSION=${TAG_NAME#*/v}
+          COMPONENT_VERSION=${COMPONENT_VERSION#v}
+          
+          if [ "$COMPONENT_NAME" = "shared-python" ]; then
+            BUILD_TYPE="python-only"
+          elif [ -d "apps/$COMPONENT_NAME" ]; then
+            BUILD_TYPE="app-only"
+          else
+            echo "⚠️ 标签 $TAG_NAME 对应的组件 apps/$COMPONENT_NAME 不存在，跳过构建"
+            BUILD_TYPE="skip"
+          fi
+          
+          echo "COMPONENT_NAME=$COMPONENT_NAME" >> $GITHUB_OUTPUT
+          echo "COMPONENT_VERSION=$COMPONENT_VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_TYPE=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "🔍 标签: $TAG_NAME → 类型: $BUILD_TYPE, 组件: $COMPONENT_NAME, 版本: $COMPONENT_VERSION"
+
+      # ============================================================
+      # 步骤 2: 在 ARM32 容器中构建
+      # ============================================================
+      - name: Build ARM32 Packages
+        if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         uses: uraimo/run-on-arch-action@v3
+        env:
+          BUILD_TYPE: ${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}
+          TARGET_COMPONENT: ${{ steps.tag_info.outputs.COMPONENT_NAME || '' }}
+          TARGET_VERSION: ${{ steps.tag_info.outputs.COMPONENT_VERSION || '' }}
         with:
           arch: armv7
           distro: bookworm
@@ -34,9 +74,9 @@ jobs:
           install: |
             apt-get update -qq
             apt-get install -y -qq \
-              build-essential libffi-dev libssl-dev \
-              libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev \
-              wget git file ca-certificates
+            build-essential libffi-dev libssl-dev \
+            libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev \
+            wget git file ca-certificates tar gzip
             echo "✅ 系统依赖安装完成"
             mkdir -p /etc/pip
             cat > /etc/pip/pip.conf <<EOF
@@ -49,426 +89,724 @@ jobs:
             set -e
             PYTHON_VERSION="${{ env.PYTHON_VERSION }}"
             PBS_RELEASE="${{ env.PBS_RELEASE }}"
+            BUILD_TYPE="${BUILD_TYPE}"
+            TARGET_COMPONENT="${TARGET_COMPONENT}"
+            TARGET_VERSION="${TARGET_VERSION}"
+            
+            if [ "$BUILD_TYPE" = "full" ]; then
+              echo "🚀 全量构建模式"
+            elif [ "$BUILD_TYPE" = "python-only" ]; then
+              echo "🐍 仅构建 Shared Python"
+            elif [ "$BUILD_TYPE" = "app-only" ]; then
+              echo "🎯 仅构建应用: $TARGET_COMPONENT"
+            fi
+
+            mkdir -p dist
+
+            # ================= 准备 Shared Python 环境 =================
+            # 始终准备 Python 环境（pip install 需要），按需决定是否打包产物
+            NEED_PACKAGE_PYTHON=false
+            if [ "$BUILD_TYPE" = "full" ] || [ "$BUILD_TYPE" = "python-only" ]; then
+              NEED_PACKAGE_PYTHON=true
+            fi
+
+            echo "=========================================="
+            echo " 准备: shared-python 环境"
+            echo " 是否打包产物: $NEED_PACKAGE_PYTHON"
+            echo "=========================================="
             
             case "$PYTHON_VERSION" in
-              3.10) PBS_PYTHON="3.10.20" ;;
+              3.10) PBS_PYTHON="3.10.16" ;;
               3.11) PBS_PYTHON="3.11.15" ;;
               3.12) PBS_PYTHON="3.12.13" ;;
-              *)    PBS_PYTHON="$PYTHON_VERSION" ;;
+              *) PBS_PYTHON="$PYTHON_VERSION" ;;
             esac
-            
+
             PBS_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_RELEASE}/cpython-${PBS_PYTHON}+${PBS_RELEASE}-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"
             
-            echo "=== 下载 python-build-standalone ==="
-            wget -q "$PBS_URL" -O /tmp/pbs.tar.gz || {
-              echo "❌ 下载失败，请检查版本号"
-              echo "   访问 https://github.com/astral-sh/python-build-standalone/releases 确认"
-              exit 1
-            }
-            
+            wget -q "$PBS_URL" -O /tmp/pbs.tar.gz || { echo "❌ 下载失败"; exit 1; }
             tar xzf /tmp/pbs.tar.gz -C /tmp/
+
             PBS_DIR="/tmp/python"
-            [ ! -d "$PBS_DIR" ] && PBS_DIR=$(find /tmp -maxdepth 1 -type d -name "cpython*" | head -1)
+            if [ ! -d "$PBS_DIR" ]; then
+              PBS_DIR=$(find /tmp -maxdepth 1 -type d -name "cpython*" | head -1)
+            fi
+            if [ -z "$PBS_DIR" ] || [ ! -d "$PBS_DIR" ]; then
+              echo "❌ 无法找到解压后的 Python 目录"
+              exit 1
+            fi
             
             mkdir -p shared-python
             cp -a "$PBS_DIR/." shared-python/
-            
             PYLIB=$(ls -d shared-python/lib/python3.* 2>/dev/null | head -1)
-            
-            if [ "${{ github.event.inputs.strip_stdlib }}" != "false" ]; then
-              echo "=== 精简标准库 ==="
-              echo "注意: install_only_stripped 版本已移除 test/__pycache__，此处仅删除 GUI/开发工具"
-              
+
+            if [ "${{ inputs.strip_stdlib || 'true' }}" = "true" ]; then
               for mod in tkinter idlelib lib2to3 unittest pydoc_data curses tty webbrowser; do
                 rm -rf "$PYLIB/$mod" 2>/dev/null || true
               done
-              
-              find "$PYLIB" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-              find "$PYLIB" -type d -name test -exec rm -rf {} + 2>/dev/null || true
-              find "$PYLIB" -type d -name tests -exec rm -rf {} + 2>/dev/null || true
+              find "$PYLIB" -type d \( -name __pycache__ -o -name test -o -name tests \) -exec rm -rf {} + 2>/dev/null || true
               rm -rf shared-python/include
-              
-              echo "✅ 标准库已精简 (节省约 3 MB)"
             fi
-            
-            echo "${PBS_PYTHON}" > shared-python/VERSION
-            shared-python/bin/python3 --version
-            shared-python/bin/python3 -c "import json, ssl, sqlite3; print(\"✅ 核心模块正常\")"
-            
-            tar czf shared-python-base-arm32.tar.gz shared-python/
-            echo "✅ 共享 Python: $(ls -lh shared-python-base-arm32.tar.gz | awk '{print $5}')"
 
-      - name: Build apps
-        uses: uraimo/run-on-arch-action@v3
-        with:
-          arch: armv7
-          distro: bookworm
-          githubToken: ${{ github.token }}
-          install: |
-            apt-get update -qq
-            apt-get install -y -qq tar gzip
-          run: |
-            set -e
-            
-            if [ ! -d "shared-python" ]; then
-              echo "解压 shared-python-base-arm32.tar.gz..."
-              tar xzf shared-python-base-arm32.tar.gz
-            fi
-            
-            PYTHON="$(pwd)/shared-python/bin/python3"
-            if [ -x "$(pwd)/shared-python/bin/pip3" ]; then
-              PIP="$(pwd)/shared-python/bin/pip3"
+            # 版本号：python-only 从标签取，其余用 PBS 版本
+            if [ "$BUILD_TYPE" = "python-only" ]; then
+              PY_VER="${TARGET_VERSION:-${PBS_PYTHON}-${PBS_RELEASE}}"
             else
-              PIP="$PYTHON -m pip"
+              PY_VER="${PBS_PYTHON}-${PBS_RELEASE}"
+            fi
+            echo "$PY_VER" > shared-python/VERSION
+            
+            if [ "$NEED_PACKAGE_PYTHON" = true ]; then
+              tar czf dist/shared-python-base-arm32.tar.gz shared-python/
+              echo "✅ shared-python ($PY_VER) 已打包到 dist/"
+            else
+              echo "✅ shared-python 环境已准备 (仅用于 pip install，不打包产物)"
+            fi
+
+            # ================= 构建应用 =================
+            BUILD_APPS=""
+            if [ "$BUILD_TYPE" = "full" ]; then
+              BUILD_APPS=$(ls -d apps/*/ 2>/dev/null | xargs -n1 basename || true)
+            elif [ "$BUILD_TYPE" = "app-only" ]; then
+              if [ -d "apps/$TARGET_COMPONENT" ]; then
+                BUILD_APPS="$TARGET_COMPONENT"
+              else
+                echo "❌ 错误: 目录 apps/$TARGET_COMPONENT 不存在"
+                exit 1
+              fi
+            fi
+
+            if [ -n "$BUILD_APPS" ]; then
+              PYTHON="$(pwd)/shared-python/bin/python3"
+              if [ -x "$(pwd)/shared-python/bin/pip3" ]; then
+                PIP="$(pwd)/shared-python/bin/pip3"
+              else
+                PIP="$PYTHON -m pip"
+              fi
+
+              for APP_NAME in $BUILD_APPS; do
+                echo "=========================================="
+                echo " 构建: $APP_NAME"
+                echo "=========================================="
+
+                APP_DIR="apps/$APP_NAME"
+                BUILD_DIR="build/${APP_NAME}"
+                rm -rf "$BUILD_DIR"
+                mkdir -p "$BUILD_DIR/usr/app"
+                mkdir -p "$BUILD_DIR/usr/app_packages"
+
+                if [ -d "$APP_DIR/src" ]; then
+                  cp -a "$APP_DIR/src/." "$BUILD_DIR/usr/app/"
+                else
+                  cp -a "$APP_DIR"/*.py "$BUILD_DIR/usr/app/" 2>/dev/null || true
+                fi
+
+                if [ -f "$APP_DIR/requirements.txt" ]; then
+                  echo "--- 安装依赖 ---"
+                  $PIP install --target "$BUILD_DIR/usr/app_packages" -r "$APP_DIR/requirements.txt" 2>&1 | tail -5
+                fi
+
+                if [ -d "$BUILD_DIR/usr/app/$APP_NAME" ] && [ -f "$BUILD_DIR/usr/app/$APP_NAME/__main__.py" ]; then
+                  MODULE_NAME="$APP_NAME"
+                elif [ -f "$BUILD_DIR/usr/app/__main__.py" ]; then
+                  MODULE_NAME=$(find "$BUILD_DIR/usr/app" -mindepth 2 -name "__main__.py" -type f | head -1 | xargs dirname | xargs basename)
+                  MODULE_NAME=${MODULE_NAME:-$APP_NAME}
+                else
+                  MODULE_NAME="$APP_NAME"
+                fi
+
+                # 版本号：app-only 从标签取，全量构建从代码取
+                if [ "$BUILD_TYPE" = "app-only" ] && [ -n "$TARGET_VERSION" ]; then
+                  APP_VERSION="$TARGET_VERSION"
+                else
+                  INIT_FILE="$APP_DIR/src/$MODULE_NAME/__init__.py"
+                  if [ -f "$INIT_FILE" ]; then
+                    APP_VERSION=$(grep '^__version__' "$INIT_FILE" | head -1 | awk -F'["'"'"']' '{print $2}')
+                    APP_VERSION=${APP_VERSION:-0.0.0}
+                  else
+                    APP_VERSION="0.0.0"
+                  fi
+                fi
+                
+                echo "$APP_VERSION" > "$BUILD_DIR/VERSION"
+                echo "模块名: $MODULE_NAME, 版本: $APP_VERSION"
+
+                cat > "$BUILD_DIR/run.sh" << RUNEOF
+            #!/bin/bash
+            SCRIPT_DIR="\$(dirname "\$(readlink -f "\${BASH_SOURCE[0]}")")"
+            PYTHON="/opt/shared-python/bin/python3"
+
+            if [ ! -x "\$PYTHON" ]; then
+                echo "错误: 未找到共享 Python" >&2; exit 1
+            fi
+
+            export PYTHONPATH="\${SCRIPT_DIR}/usr/app:\${SCRIPT_DIR}/usr/app_packages"
+            export LD_LIBRARY_PATH="/opt/shared-python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export APP_VERSION="${APP_VERSION}"
+
+            exec -a "${MODULE_NAME}" "\$PYTHON" -s -m ${MODULE_NAME} "\$@"
+            RUNEOF
+                chmod +x "$BUILD_DIR/run.sh"
+
+                find "$BUILD_DIR/usr/app_packages" -type d \( -name "*.dist-info" -o -name "*.egg-info" -o -name "tests" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true
+                find "$BUILD_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+                find "$BUILD_DIR" -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete 2>/dev/null || true
+
+                tar czf "dist/${APP_NAME}-arm32.tar.gz" -C build "$APP_NAME"
+                echo "✅ $APP_NAME ($APP_VERSION) 已打包到 dist/"
+              done
             fi
             
-            mkdir -p dist
-            
-            if [ ! -d "apps" ] || [ -z "$(ls -A apps 2>/dev/null)" ]; then
-              echo "⚠️ apps 目录不存在或为空，跳过应用构建"
-              exit 0
-            fi
-            
-            for APP_DIR in apps/*/; do
-              [ -d "$APP_DIR" ] || continue
-              APP_NAME=$(basename "$APP_DIR")
-              
-              echo "=========================================="
-              echo "  构建: $APP_NAME"
-              echo "=========================================="
-              
-              BUILD_DIR="build/${APP_NAME}"
-              rm -rf "$BUILD_DIR"
-              mkdir -p "$BUILD_DIR/usr/app"
-              mkdir -p "$BUILD_DIR/usr/app_packages"
-              
-              if [ -d "$APP_DIR/src" ]; then
-                cp -a "$APP_DIR/src/." "$BUILD_DIR/usr/app/"
-              elif [ -f "$APP_DIR/__main__.py" ]; then
-                cp -a "$APP_DIR"/*.py "$BUILD_DIR/usr/app/" 2>/dev/null || true
-              elif [ -f "$APP_DIR/__init__.py" ]; then
-                mkdir -p "$BUILD_DIR/usr/app/$APP_NAME"
-                cp -a "$APP_DIR"/*.py "$BUILD_DIR/usr/app/$APP_NAME/" 2>/dev/null || true
-              else
-                cp -a "$APP_DIR"/*.py "$BUILD_DIR/usr/app/" 2>/dev/null || true
-              fi
-              
-              if [ -f "$APP_DIR/requirements.txt" ]; then
-                echo "--- 安装依赖 ---"
-                $PIP install \
-                  --target "$BUILD_DIR/usr/app_packages" \
-                  -r "$APP_DIR/requirements.txt" 2>&1 | tail -5
-              fi
-              
-              if [ -f "$BUILD_DIR/usr/app/__main__.py" ]; then
-                MODULE_NAME=$(basename "$(find "$BUILD_DIR/usr/app" -name "__main__.py" -type f | head -1 | xargs dirname)")
-              elif [ -f "$BUILD_DIR/usr/app/$APP_NAME/__main__.py" ]; then
-                MODULE_NAME="$APP_NAME"
-              elif [ -f "$BUILD_DIR/usr/app/$APP_NAME/__init__.py" ]; then
-                MODULE_NAME="$APP_NAME"
-              else
-                MODULE_NAME="$APP_NAME"
-              fi
-              
-              echo "模块名: $MODULE_NAME"
-              echo "$MODULE_NAME" > "$BUILD_DIR/MODULE_NAME"
-              
-              printf '%s\n' '#!/bin/bash' "SCRIPT_DIR=\"\$(dirname \"\$(readlink -f \"\${BASH_SOURCE[0]}\")\")\"" 'PYTHON="/opt/shared-python/bin/python3"' '' 'if [ ! -x "\$PYTHON" ]; then' '  echo "错误: 未找到共享 Python (/opt/shared-python/bin/python3)" >&2' '  echo "请先安装 shared-python-base" >&2' '  exit 1' 'fi' '' 'export PYTHONPATH="\${SCRIPT_DIR}/usr/app:\${SCRIPT_DIR}/usr/app_packages"' 'export LD_LIBRARY_PATH="/opt/shared-python/lib:\${LD_LIBRARY_PATH}"' 'exec "\$PYTHON" -s -m hello "\$@"' > "$BUILD_DIR/run.sh"
-              chmod +x "$BUILD_DIR/run.sh"
-              
-              echo "--- 验证 ---"
-              export PYTHONPATH="$(pwd)/$BUILD_DIR/usr/app:$(pwd)/$BUILD_DIR/usr/app_packages"
-              export LD_LIBRARY_PATH="$(pwd)/shared-python/lib"
-              
-              if $PYTHON -s -c "import ${MODULE_NAME}; print('✅ import ${MODULE_NAME} 成功')" 2>&1; then
-                echo "验证通过"
-              else
-                echo "⚠️ import 验证失败，请检查代码和依赖"
-                echo "继续构建，但应用可能无法正常运行"
-              fi
-              
-              echo "--- 清理 ---"
-              find "$BUILD_DIR/usr/app_packages" -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-              find "$BUILD_DIR/usr/app_packages" -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-              find "$BUILD_DIR/usr/app_packages" -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-              find "$BUILD_DIR/usr/app_packages" -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
-              find "$BUILD_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-              find "$BUILD_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
-              find "$BUILD_DIR" -type f -name "*.pyo" -delete 2>/dev/null || true
-              
-              tar czf "dist/${APP_NAME}-arm32.tar.gz" \
-                -C build "$APP_NAME"
-              
-              SIZE=$(ls -lh "dist/${APP_NAME}-arm32.tar.gz" | awk '{print $5}')
-              echo "✅ $APP_NAME 打包完成: $SIZE"
-            done
+            find dist -type d -exec chmod 755 {} +
+            find dist -type f -exec chmod 644 {} +
+            chmod +x dist/install.sh 2>/dev/null || true
 
-            chmod -R 777 dist
-
-      - name: Create deployment script
+      # ============================================================
+      # 步骤 3: 生成智能部署脚本
+      # ============================================================
+      - name: Create smart deployment script
+        if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: |
-          mkdir -p dist
           cat > dist/install.sh <<'INSTALL_EOF'
           #!/bin/bash
           # ================================================
-          # ARM32 共享 Python 应用部署/升级脚本
+          # ARM32 共享 Python 应用 - 智能部署/升级脚本
+          # 自动识别包类型，校验合法性，预览变更
           # ================================================
           set -e
-          
+
           INSTALL_DIR="/opt"
           SHARED_PYTHON_DIR="${INSTALL_DIR}/shared-python"
+          VERSIONS_FILE="${INSTALL_DIR}/versions"
           SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-          
+
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          YELLOW='\033[1;33m'
+          CYAN='\033[0;36m'
+          BOLD='\033[1m'
+          NC='\033[0m'
+
           FORCE_MODE=false
-          UPGRADE_MODE=
-          UPGRADE_APP=
-          
-          show_help() {
-            echo "Usage:"
-            echo "  $0                           # 首次安装"
-            echo "  $0 --force                   # 强制安装（跳过确认）"
-            echo "  $0 --upgrade app1            # 只升级 app1"
-            echo "  $0 --upgrade-shared-python   # 只升级共享 Python"
-            echo "  $0 --upgrade-all             # 全量升级"
-            echo "  $0 --list                    # 列出可安装的应用"
-            echo "  $0 --clean-backup            # 清理所有备份"
-            exit 0
-          }
-          
+          YES_MODE=false
+
+          log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+          log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+          log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+          log_step()  { echo -e "${CYAN}--- $1 ---${NC}"; }
+
           check_root() {
             if [ "$(id -u)" -ne 0 ]; then
-              echo "❌ 错误: 需要 root 权限"
-              echo "   请使用: sudo $0 $@"
+              log_error "需要 root 权限，请使用: sudo $0 $@"
               exit 1
             fi
           }
-          
-          check_files() {
-            if [ ! -f "shared-python-base-arm32.tar.gz" ]; then
-              echo "❌ 错误: 未找到 shared-python-base-arm32.tar.gz"
-              exit 1
-            fi
-            
-            if [ -z "$(ls *-arm32.tar.gz 2>/dev/null | grep -v shared-python)" ]; then
-              echo "⚠️ 警告: 未找到任何应用包"
+
+          # 从 tar.gz 中读取 VERSION 文件（不解压整个包）
+          read_version_from_tar() {
+            local tar_file="$1"
+            local inner_path="$2"
+            tar xzf "$tar_file" -O "$inner_path" 2>/dev/null || echo "unknown"
+          }
+
+          # 从已安装目录读取版本
+          read_installed_version() {
+            local component="$1"
+            local dir="${INSTALL_DIR}/${component}"
+            if [ -f "$dir/VERSION" ]; then
+              cat "$dir/VERSION"
+            else
+              echo "unknown"
             fi
           }
-          
-          list_apps() {
-            echo "可安装的应用:"
-            echo "  - shared-python (基础环境)"
-            
-            for app_tar in *-arm32.tar.gz; do
-              [ "$app_tar" = "shared-python-base-arm32.tar.gz" ] && continue
-              [ ! -f "$app_tar" ] && continue
-              
-              APP_NAME=$(echo "$app_tar" | sed "s/-arm32.tar.gz//")
-              SIZE=$(du -sh "$app_tar" 2>/dev/null | cut -f1)
-              echo "  - $APP_NAME ($SIZE)"
+
+          # ============================================================
+          # 包类型检测
+          # ============================================================
+
+          HAS_PYTHON_PKG=false
+          APP_TARS=()
+
+          scan_package() {
+            cd "$SCRIPT_DIR"
+
+            if [ -f "shared-python-base-arm32.tar.gz" ]; then
+              HAS_PYTHON_PKG=true
+            fi
+
+            for tar_file in *-arm32.tar.gz; do
+              [ "$tar_file" = "shared-python-base-arm32.tar.gz" ] && continue
+              [ ! -f "$tar_file" ] && continue
+              APP_TARS+=("$tar_file")
             done
-            exit 0
           }
-          
-          clean_backup() {
-            echo "清理备份文件..."
-            find "$INSTALL_DIR" -name "*.bak" -type d -exec rm -rf {} + 2>/dev/null || true
-            echo "✅ 备份清理完成"
-            exit 0
+
+          get_package_type() {
+            if $HAS_PYTHON_PKG && [ ${#APP_TARS[@]} -gt 0 ]; then
+              echo "full"
+            elif $HAS_PYTHON_PKG && [ ${#APP_TARS[@]} -eq 0 ]; then
+              echo "python-only"
+            elif ! $HAS_PYTHON_PKG && [ ${#APP_TARS[@]} -gt 0 ]; then
+              echo "app-only"
+            else
+              echo "empty"
+            fi
           }
-          
+
+          get_package_type_label() {
+            case "$1" in
+              full)         echo "全量包 (Python + 应用)" ;;
+              python-only)  echo "Python 升级包" ;;
+              app-only)     echo "应用增量升级包" ;;
+              empty)        echo "空包" ;;
+            esac
+          }
+
+          # ============================================================
+          # 目标机状态检测
+          # ============================================================
+
+          PYTHON_INSTALLED=false
+          INSTALLED_APPS=()
+
+          scan_installed() {
+            if [ -d "$SHARED_PYTHON_DIR" ] && [ -x "$SHARED_PYTHON_DIR/bin/python3" ]; then
+              PYTHON_INSTALLED=true
+            fi
+
+            for app_dir in "${INSTALL_DIR}"/*/; do
+              [ ! -d "$app_dir" ] && continue
+              local name=$(basename "$app_dir")
+              [ "$name" = "shared-python" ] && continue
+              [[ "$name" == *.bak* ]] && continue
+              if [ -f "$app_dir/run.sh" ]; then
+                INSTALLED_APPS+=("$name")
+              fi
+            done
+          }
+
+          # ============================================================
+          # 版本管控
+          # ============================================================
+
+          update_versions() {
+            local component="$1"
+            local version="$2"
+            local tmpfile=$(mktemp)
+            if [ -f "$VERSIONS_FILE" ]; then
+              grep -v "^${component}:" "$VERSIONS_FILE" > "$tmpfile" || true
+            else
+              > "$tmpfile"
+            fi
+            echo "${component}:${version}" >> "$tmpfile"
+            mv "$tmpfile" "$VERSIONS_FILE"
+          }
+
+          show_versions() {
+            echo ""
+            echo -e "========================================"
+            echo -e " ${BOLD}当前工控机已安装版本${NC}"
+            echo -e "========================================"
+            if [ -f "$VERSIONS_FILE" ]; then
+              printf "  %-20s %s\n" "组件" "版本"
+              printf "  %-20s %s\n" "----" "----"
+              while IFS=: read -r comp ver; do
+                printf "  %-20s %s\n" "$comp" "$ver"
+              done < "$VERSIONS_FILE"
+            else
+              log_warn "未找到版本记录文件 $VERSIONS_FILE"
+            fi
+            echo ""
+          }
+
+          # ============================================================
+          # 备份
+          # ============================================================
+
           backup_app() {
             local APP_DIR="$1"
             if [ -d "$APP_DIR" ]; then
-              local BACKUP_DIR="${APP_DIR}.bak.$(date +%Y%m%d_%H%M%S)"
-              echo "备份: $APP_DIR -> $BACKUP_DIR"
+              local OLD_VERSION=$(cat "$APP_DIR/VERSION" 2>/dev/null || echo "unknown")
+              local BACKUP_DIR="${APP_DIR}.bak.$(date +%Y%m%d_%H%M%S)_v${OLD_VERSION}"
+              log_info "备份: $(basename $APP_DIR) ($OLD_VERSION) → $(basename $BACKUP_DIR)"
               cp -a "$APP_DIR" "$BACKUP_DIR"
-              
-              find "$INSTALL_DIR" -name "*.bak.*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+              touch "$BACKUP_DIR"
+              find "$INSTALL_DIR" -maxdepth 1 -name "*.bak.*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
             fi
           }
-          
+
+          # ============================================================
+          # 安装函数
+          # ============================================================
+
           install_shared_python() {
-            echo "--- 安装共享 Python ---"
-            
-            if [ -d "$SHARED_PYTHON_DIR" ]; then
-              if [ "$FORCE_MODE" = true ]; then
-                backup_app "$SHARED_PYTHON_DIR"
-                rm -rf "$SHARED_PYTHON_DIR"
-              else
-                echo "⚠️ 共享 Python 已存在: $SHARED_PYTHON_DIR"
-                $SHARED_PYTHON_DIR/bin/python3 --version 2>/dev/null || true
-                
-                if [ -t 0 ]; then
-                  read -p "是否覆盖? (y/N): " overwrite
-                  if [ "$overwrite" = "y" ] || [ "$overwrite" = "Y" ]; then
-                    backup_app "$SHARED_PYTHON_DIR"
-                    rm -rf "$SHARED_PYTHON_DIR"
-                  else
-                    echo "跳过共享 Python 安装"
-                    return 0
-                  fi
-                else
-                  echo "❌ 共享 Python 已存在，使用 --force 强制覆盖"
-                  exit 1
-                fi
-              fi
-            fi
-            
+            log_step "安装共享 Python"
+
+            local NEW_DIR="${SHARED_PYTHON_DIR}.new"
+            rm -rf "$NEW_DIR"
+
             tar xzf shared-python-base-arm32.tar.gz -C "$INSTALL_DIR/"
-            rm -f "$SHARED_PYTHON_DIR/bin/pip"* 2>/dev/null || true
-            
-            $SHARED_PYTHON_DIR/bin/python3 --version
-            echo "✅ 共享 Python 已安装"
+            mv "$SHARED_PYTHON_DIR" "$NEW_DIR"
+            rm -f "$NEW_DIR/bin/pip"* 2>/dev/null || true
+
+            if [ ! -x "$NEW_DIR/bin/python3" ]; then
+              log_error "新 Python 环境校验失败: python3 不可执行"
+              rm -rf "$NEW_DIR"
+              exit 1
+            fi
+
+            if [ -d "$SHARED_PYTHON_DIR" ]; then
+              backup_app "$SHARED_PYTHON_DIR"
+              mv "$SHARED_PYTHON_DIR" "${SHARED_PYTHON_DIR}.old"
+            fi
+
+            mv "$NEW_DIR" "$SHARED_PYTHON_DIR"
+            rm -rf "${SHARED_PYTHON_DIR}.old"
+
+            local new_ver=$(cat "$SHARED_PYTHON_DIR/VERSION")
+            update_versions "shared-python" "$new_ver"
+            log_info "共享 Python 已安装: $new_ver"
           }
-          
+
           install_app() {
             local APP_TAR="$1"
             local APP_NAME=$(echo "$APP_TAR" | sed "s/-arm32.tar.gz//")
             local APP_DIR="${INSTALL_DIR}/${APP_NAME}"
-            
-            echo "--- 安装应用: $APP_NAME ---"
-            
-            if [ -d "$APP_DIR" ]; then
-              if [ "$FORCE_MODE" = true ]; then
-                backup_app "$APP_DIR"
-                rm -rf "$APP_DIR"
-              else
-                echo "⚠️ 应用已存在: $APP_DIR"
-                if [ -t 0 ]; then
-                  read -p "是否覆盖? (y/N): " overwrite
-                  if [ "$overwrite" = "y" ] || [ "$overwrite" = "Y" ]; then
-                    backup_app "$APP_DIR"
-                    rm -rf "$APP_DIR"
-                  else
-                    echo "跳过 $APP_NAME 安装"
-                    return 0
-                  fi
-                else
-                  backup_app "$APP_DIR"
-                  rm -rf "$APP_DIR"
-                fi
-              fi
+            local NEW_DIR="${APP_DIR}.new"
+
+            log_step "安装应用: $APP_NAME"
+
+            rm -rf "$NEW_DIR"
+            mkdir -p "$NEW_DIR"
+            tar xzf "$APP_TAR" -C "$NEW_DIR/" --strip-components=1
+            chmod +x "$NEW_DIR/run.sh" 2>/dev/null || true
+
+            if [ ! -f "$NEW_DIR/VERSION" ]; then
+              log_error "新应用校验失败: VERSION 文件缺失"
+              rm -rf "$NEW_DIR"
+              exit 1
             fi
-            
-            mkdir -p "$APP_DIR"
-            tar xzf "$APP_TAR" -C "$APP_DIR/" --strip-components=1
-            chmod +x "$APP_DIR/run.sh" 2>/dev/null || true
-            
+
+            if [ -d "$APP_DIR" ]; then
+              backup_app "$APP_DIR"
+              mv "$APP_DIR" "${APP_DIR}.old"
+            fi
+
+            mv "$NEW_DIR" "$APP_DIR"
+            rm -rf "${APP_DIR}.old"
+
             rm -f "/usr/local/bin/$APP_NAME" 2>/dev/null || true
             ln -sf "$APP_DIR/run.sh" "/usr/local/bin/$APP_NAME"
-            
-            echo "✅ $APP_NAME 已安装 → 运行: $APP_NAME"
+
+            local new_ver=$(cat "$APP_DIR/VERSION")
+            update_versions "$APP_NAME" "$new_ver"
+            log_info "$APP_NAME 已安装: $new_ver → 运行: $APP_NAME"
           }
-          
+
+          # ============================================================
+          # 完整性校验
+          # ============================================================
+
+          verify_checksums() {
+            if [ ! -f "$SCRIPT_DIR/checksums.txt" ]; then
+              log_warn "未找到 checksums.txt，跳过完整性校验"
+              return 0
+            fi
+            log_step "校验安装包完整性 (SHA256)"
+            cd "$SCRIPT_DIR"
+            if sha256sum -c checksums.txt 2>/dev/null; then
+              log_info "所有安装包校验通过"
+            else
+              log_error "安装包校验失败！文件可能已损坏或被篡改"
+              log_error "请重新下载部署包"
+              exit 1
+            fi
+          }
+
+          # ============================================================
+          # 校验逻辑
+          # ============================================================
+
+          validate_full_install() {
+            if ! $HAS_PYTHON_PKG; then
+              log_error "首次安装需要 shared-python-base-arm32.tar.gz"
+              log_error "当前包为应用增量包，请使用全量部署包"
+              return 1
+            fi
+            if [ ${#APP_TARS[@]} -eq 0 ]; then
+              log_error "首次安装需要至少一个应用包"
+              log_error "当前包为 Python 升级包，请使用全量部署包"
+              return 1
+            fi
+            return 0
+          }
+
+          validate_python_upgrade() {
+            if ! $HAS_PYTHON_PKG; then
+              log_error "升级共享 Python 需要 shared-python-base-arm32.tar.gz"
+              return 1
+            fi
+            if ! $PYTHON_INSTALLED; then
+              log_error "目标机未安装 shared-python，无法执行升级"
+              log_error "请先使用全量部署包完成首次安装"
+              return 1
+            fi
+            return 0
+          }
+
+          validate_app_upgrade() {
+            if ! $PYTHON_INSTALLED; then
+              log_error "目标机未安装 shared-python，应用无法运行"
+              log_error "请先使用全量部署包完成首次安装"
+              return 1
+            fi
+            if [ ${#APP_TARS[@]} -eq 0 ]; then
+              log_error "未找到任何应用升级包"
+              return 1
+            fi
+            return 0
+          }
+
+          # ============================================================
+          # 预览变更
+          # ============================================================
+
+          show_preview() {
+            local pkg_type="$1"
+            local is_first_install="$2"
+
+            echo ""
+            echo -e "========================================"
+            echo -e " ${BOLD}📦 部署预览${NC}"
+            echo -e "========================================"
+            echo -e "  包类型:   ${CYAN}$(get_package_type_label "$pkg_type")${NC}"
+
+            if $is_first_install; then
+              echo -e "  系统状态: ${YELLOW}未安装 (首次部署)${NC}"
+            else
+              echo -e "  系统状态: ${GREEN}已安装${NC}"
+            fi
+
+            echo ""
+            echo -e "  ${BOLD}即将执行的操作:${NC}"
+
+            # Python 变更
+            if $HAS_PYTHON_PKG; then
+              if $PYTHON_INSTALLED; then
+                local old_py_ver=$(read_installed_version "shared-python")
+                local new_py_ver=$(read_version_from_tar "shared-python-base-arm32.tar.gz" "shared-python/VERSION")
+                if [ "$old_py_ver" = "$new_py_ver" ]; then
+                  echo -e "  ${CYAN}≡${NC} 重装 shared-python:  $old_py_ver (版本未变)"
+                else
+                  echo -e "  ${YELLOW}↻${NC} 升级 shared-python:  $old_py_ver → ${GREEN}$new_py_ver${NC}"
+                fi
+              else
+                local new_py_ver=$(read_version_from_tar "shared-python-base-arm32.tar.gz" "shared-python/VERSION")
+                echo -e "  ${GREEN}✚${NC} 安装 shared-python:  ${GREEN}$new_py_ver${NC}"
+              fi
+            fi
+
+            # 应用变更
+            for app_tar in "${APP_TARS[@]}"; do
+              local app_name=$(echo "$app_tar" | sed "s/-arm32.tar.gz//")
+              local new_ver=$(read_version_from_tar "$app_tar" "$app_name/VERSION")
+              local is_installed=false
+
+              for installed in "${INSTALLED_APPS[@]}"; do
+                if [ "$installed" = "$app_name" ]; then
+                  is_installed=true
+                  break
+                fi
+              done
+
+              if $is_installed; then
+                local old_ver=$(read_installed_version "$app_name")
+                if [ "$old_ver" = "$new_ver" ]; then
+                  echo -e "  ${CYAN}≡${NC} 重装 $app_name:  $old_ver (版本未变)"
+                else
+                  echo -e "  ${YELLOW}↻${NC} 升级 $app_name:  $old_ver → ${GREEN}$new_ver${NC}"
+                fi
+              else
+                echo -e "  ${GREEN}✚${NC} 安装 $app_name:  ${GREEN}$new_ver${NC}"
+              fi
+            done
+
+            echo ""
+          }
+
+          # ============================================================
+          # 帮助
+          # ============================================================
+
+          show_help() {
+            echo ""
+            echo "ARM32 共享 Python 应用 - 智能部署脚本"
+            echo ""
+            echo "Usage:"
+            echo "  sudo bash $0                        # 智能模式: 自动识别包类型并部署"
+            echo "  sudo bash $0 --force                # 强制模式: 跳过确认直接执行"
+            echo "  sudo bash $0 -y                     # 自动确认: 跳过交互提示"
+            echo "  sudo bash $0 --show-versions        # 查看当前已安装版本"
+            echo "  sudo bash $0 --clean-backup         # 清理所有备份"
+            echo "  sudo bash $0 --help                 # 显示帮助"
+            echo ""
+            echo "智能识别规则:"
+            echo "  含 shared-python + 应用包  →  首次安装 或 全量升级"
+            echo "  仅含 shared-python         →  Python 升级"
+            echo "  仅含应用包                 →  应用增量升级"
+            echo "  目标机无 Python + 非全量包 →  拒绝并提示"
+            echo ""
+            exit 0
+          }
+
+          # ============================================================
+          # 参数解析
+          # ============================================================
+
           while [[ $# -gt 0 ]]; do
             case "$1" in
-              --force)
-                FORCE_MODE=true
-                shift
-                ;;
-              --upgrade)
-                UPGRADE_MODE=app
-                if [ -z "$2" ] || [[ "$2" == -* ]]; then
-                  echo "❌ 错误: --upgrade 需要指定应用名"
-                  exit 1
-                fi
-                UPGRADE_APP="$2"
-                shift 2
-                ;;
-              --upgrade-shared-python)
-                UPGRADE_MODE=shared-python
-                shift
-                ;;
-              --upgrade-all)
-                UPGRADE_MODE=all
-                shift
-                ;;
-              --list)
-                list_apps
-                ;;
+              --force|-f)  FORCE_MODE=true; shift ;;
+              -y|--yes)    YES_MODE=true; shift ;;
+              --show-versions) scan_installed; show_versions; exit 0 ;;
               --clean-backup)
-                clean_backup
+                echo "清理备份文件..."
+                find "$INSTALL_DIR" -maxdepth 1 -name "*.bak.*" -type d -exec rm -rf {} + 2>/dev/null || true
+                log_info "备份清理完成"
+                exit 0
                 ;;
-              --help|-h)
-                show_help
-                ;;
-              *)
-                echo "❌ 未知参数: $1"
-                show_help
-                ;;
+              --help|-h)   show_help ;;
+              *)           log_error "未知参数: $1"; show_help ;;
             esac
           done
-          
+
+          # ============================================================
+          # 主流程
+          # ============================================================
+
           check_root "$@"
-          cd "$SCRIPT_DIR"
-          check_files
-          
-          if [ -z "$UPGRADE_MODE" ]; then
-            echo "========================================"
-            echo "  ARM32 共享 Python 应用 - 首次安装"
-            echo "========================================"
-            
-            install_shared_python
-            
-            for app_tar in *-arm32.tar.gz; do
-              [ "$app_tar" = "shared-python-base-arm32.tar.gz" ] && continue
-              [ ! -f "$app_tar" ] && continue
-              install_app "$app_tar"
-            done
-            
-            echo ""
-            echo "========================================"
-            echo "  首次安装完成！"
-            echo "========================================"
-            echo "已安装应用:"
-            for app in /usr/local/bin/*; do
-              [ -L "$app" ] && echo "  - $(basename $app)"
-            done
-            exit 0
+
+          # 1. 扫描包和目标机
+          scan_package
+          scan_installed
+
+          # 2. 校验安装包完整性
+          verify_checksums
+
+          PKG_TYPE=$(get_package_type)
+
+          # 3. 判断是否首次安装
+          FIRST_INSTALL=false
+          if ! $PYTHON_INSTALLED; then
+            FIRST_INSTALL=true
           fi
-          
-          case "$UPGRADE_MODE" in
-            app)
-              APP_TAR="${UPGRADE_APP}-arm32.tar.gz"
-              if [ ! -f "$APP_TAR" ]; then
-                echo "❌ 未找到 $APP_TAR"
-                echo "可用的应用:"
-                ls *-arm32.tar.gz 2>/dev/null | sed 's/-arm32.tar.gz//' | sed 's/^/  - /'
+
+          # 4. 校验合法性
+          echo ""
+          case "$PKG_TYPE" in
+            full)
+              if $FIRST_INSTALL; then
+                validate_full_install || exit 1
+                ACTION_LABEL="首次安装"
+              else
+                validate_full_install || exit 1
+                ACTION_LABEL="全量升级"
+              fi
+              ;;
+            python-only)
+              if $FIRST_INSTALL; then
+                log_error "系统未安装 shared-python，仅 Python 升级包无法完成首次安装"
+                log_error "请使用全量部署包 (含 Python + 至少一个应用)"
                 exit 1
               fi
-              install_app "$APP_TAR"
+              validate_python_upgrade || exit 1
+              ACTION_LABEL="Python 升级"
               ;;
-            shared-python)
-              install_shared_python
+            app-only)
+              if $FIRST_INSTALL; then
+                log_error "系统未安装 shared-python，应用无法运行"
+                log_error "请使用全量部署包完成首次安装"
+                exit 1
+              fi
+              validate_app_upgrade || exit 1
+              if [ ${#APP_TARS[@]} -eq 1 ]; then
+                ACTION_LABEL="应用增量升级 ($(echo ${APP_TARS[0]} | sed 's/-arm32.tar.gz//'))"
+              else
+                ACTION_LABEL="应用增量升级 (${#APP_TARS[@]} 个应用)"
+              fi
               ;;
-            all)
-              echo "========================================"
-              echo "  全量升级"
-              echo "========================================"
-              install_shared_python
-              for app_tar in *-arm32.tar.gz; do
-                [ "$app_tar" = "shared-python-base-arm32.tar.gz" ] && continue
-                [ ! -f "$app_tar" ] && continue
-                install_app "$app_tar"
-              done
-              echo ""
-              echo "========================================"
-              echo "  全量升级完成！"
-              echo "========================================"
+            empty)
+              log_error "当前目录未找到任何有效的安装包 (*-arm32.tar.gz)"
+              exit 1
               ;;
           esac
+
+          # 5. 展示预览
+          show_preview "$PKG_TYPE" "$FIRST_INSTALL"
+
+          # 6. 确认
+          if ! $FORCE_MODE && ! $YES_MODE; then
+            if [ -t 0 ]; then
+              read -p "确认执行 $ACTION_LABEL? (y/N): " confirm
+              if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                echo "已取消"
+                exit 0
+              fi
+            else
+              log_warn "非交互式终端，使用 -y 或 --force 跳过确认"
+              exit 1
+            fi
+          fi
+
+          # 7. 执行
+          echo ""
+          echo -e "========================================"
+          echo -e " ${BOLD}开始执行: $ACTION_LABEL${NC}"
+          echo -e "========================================"
+
+          if $HAS_PYTHON_PKG; then
+            install_shared_python
+          fi
+
+          for app_tar in "${APP_TARS[@]}"; do
+            install_app "$app_tar"
+          done
+
+          # 8. 结果
+          echo ""
+          echo -e "========================================"
+          echo -e " ${GREEN}${BOLD}✅ $ACTION_LABEL 完成！${NC}"
+          echo -e "========================================"
+          show_versions
           INSTALL_EOF
           chmod +x dist/install.sh
 
       - name: Assemble deployment package
+        if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: |
-          cp shared-python-base-arm32.tar.gz dist/
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          echo "✅ 校验文件已生成:"
+          cat checksums.txt
+          echo ""
           echo "=== 部署包内容 ==="
-          for f in dist/*; do
+          for f in *; do
             echo "  $(basename $f): $(du -sh $f | cut -f1)"
           done
+          echo ""
+          if [ -f "dist/shared-python-base-arm32.tar.gz" ]; then
+            APP_COUNT=$(ls dist/*-arm32.tar.gz 2>/dev/null | grep -v shared-python | wc -l)
+            if [ "$APP_COUNT" -gt 0 ]; then
+              echo "📦 包类型: 全量包 (Python + ${APP_COUNT} 个应用)"
+            else
+              echo "📦 包类型: Python 升级包"
+            fi
+          else
+            APP_COUNT=$(ls dist/*-arm32.tar.gz 2>/dev/null | wc -l)
+            echo "📦 包类型: 应用增量升级包 (${APP_COUNT} 个应用)"
+          fi
 
       - name: Upload artifacts
+        if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         uses: actions/upload-artifact@v4
         with:
           name: arm32-deployment
@@ -477,16 +815,17 @@ jobs:
       - name: Build summary
         if: always()
         run: |
+          BUILD_TYPE="${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}"
+          if [ "$BUILD_TYPE" = "skip" ]; then
+            echo "⚠️ 构建已跳过: 标签对应的组件不存在"
+            exit 0
+          fi
           echo "============================================"
-          echo "  构建完成摘要"
+          echo " 构建完成摘要"
           echo "============================================"
-          echo "Python 版本: ${{ env.PYTHON_VERSION }}"
-          echo "目标架构: ARM32 (armv7)"
-          echo ""
+          echo "构建类型: $BUILD_TYPE"
+          if [ "$BUILD_TYPE" != "app-only" ]; then
+            echo "Python版本: ${{ steps.tag_info.outputs.COMPONENT_VERSION || env.PYTHON_VERSION }}"
+          fi
           echo "产物:"
-          for f in dist/* shared-python-base-arm32.tar.gz; do
-            [ -f "$f" ] && echo "  $(basename $f): $(du -sh $f | cut -f1)"
-          done
-          echo ""
-          echo "部署: sudo bash install.sh"
-          echo "升级: sudo bash install.sh --upgrade hello"
+          for f in dist/*; do [ -f "$f" ] && echo "  $(basename $f): $(du -sh $f | cut -f1)"; done

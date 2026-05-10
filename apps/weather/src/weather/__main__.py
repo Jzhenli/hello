@@ -72,7 +72,7 @@ async def health_check():
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "run":
-        uvicorn.run("__main__:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run(app=app, host="0.0.0.0", port=8000)
     else:
         print("FastAPI Demo 应用")
         print("用法: python -m weather run")
