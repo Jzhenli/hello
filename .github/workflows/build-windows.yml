@@ -198,32 +198,34 @@ jobs:
               if [ -f "$module_name/__main__.py" ]; then
                 echo "创建入口文件: ${module_name}/__init__.py"
                 
-                cat > "$module_name/__init__.py" << ENTRYPOINT
+                cat > "$module_name/__init__.py" << 'EOF'
 import sys
 import os
 
-_pyd_name = "${module_name}_compiled"
+_pyd_name = "MODULE_COMPILED"
 try:
     import importlib.util
     spec = importlib.util.find_spec(_pyd_name)
     if spec and spec.loader:
         _module = importlib.util.module_from_spec(spec)
-        sys.modules["${module_name}"] = _module
+        sys.modules["MODULE_NAME"] = _module
         spec.loader.exec_module(_module)
 except Exception as e:
     print(f"Warning: Could not load compiled module: {e}")
 
-from ${module_name}_compiled import *
-ENTRYPOINT
+from MODULE_COMPILED import *
+EOF
+                sed -i "s/MODULE_NAME/$module_name/g" "$module_name/__init__.py"
+                sed -i "s/MODULE_COMPILED/${module_name}_compiled/g" "$module_name/__init__.py"
                 
-                cat > "$module_name/__main__.py" << MAINENTRY
+                cat > "$module_name/__main__.py" << 'EOF'
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from ${module_name}_compiled import main
+    from MODULE_COMPILED import main
     main()
 except ImportError as e:
     print(f"Error importing compiled module: {e}")
@@ -231,7 +233,8 @@ except ImportError as e:
 except Exception as e:
     print(f"Error starting application: {e}")
     sys.exit(1)
-MAINENTRY
+EOF
+                sed -i "s/MODULE_COMPILED/${module_name}_compiled/g" "$module_name/__main__.py"
                 
                 echo "已创建入口文件"
               else
