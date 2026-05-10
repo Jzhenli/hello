@@ -101,40 +101,16 @@ jobs:
         run: |
           APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
           
-          PROJECT_NAME=$(echo "${APP_NAME^}" | sed 's/^./\u&/')
-          [ -z "$PROJECT_NAME" ] && PROJECT_NAME="${APP_NAME^}"
+          SRC_DIR="build/${APP_NAME}/windows/app/src"
           
-          for dir in build/${APP_NAME}/windows/app/*/; do
-            if [ -d "$dir/app" ]; then
-              APP_DIR="$dir"
-              break
-            fi
-          done
-          
-          if [ -z "$APP_DIR" ]; then
-            POSSIBLE_PATHS=(
-              "build/${APP_NAME}/windows/app/${PROJECT_NAME}/app"
-              "build/${APP_NAME}/windows/app/Weather/app"
-            )
-            for p in "${POSSIBLE_PATHS[@]}"; do
-              if [ -d "$p" ]; then
-                APP_DIR=$(dirname "$p")
-                break
-              fi
-            done
-          fi
-          
-          if [ -z "$APP_DIR" ]; then
-            echo "错误: 找不到 Briefcase 应用目录"
+          if [ ! -d "$SRC_DIR" ]; then
+            echo "错误: 找不到源码目录 $SRC_DIR"
             echo "当前目录结构:"
-            find build -type d -name "app" 2>/dev/null | head -20
+            find build -type d 2>/dev/null | head -30
             exit 1
           fi
           
-          SRC_DIR="${APP_DIR}/app"
-          
           echo "=== Nuitka 编译开始 ==="
-          echo "应用目录: $APP_DIR"
           echo "源码目录: $SRC_DIR"
           echo "目录内容:"
           ls -la "$SRC_DIR/"

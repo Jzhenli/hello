@@ -1,6 +1,5 @@
 __version__ = "1.0.0"
 
-from weather.app import app
-from weather.main import main
+from .main import main
 
-__all__ = ["app", "main", "__version__"]
+__all__ = ["main", "__version__"]

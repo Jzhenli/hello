@@ -1,8 +1,9 @@
 import uvicorn
-from weather.app import app
 
 
 def main():
+    from .app import app
+    
     print("FastAPI Demo 应用")
     print("用法: python -m weather")
     print("然后访问: http://localhost:8000")
