@@ -246,10 +246,18 @@ jobs:
                   echo "--- Nuitka 编译模块 ---"
                   cd "$BUILD_DIR/usr/app"
                   
+                  echo "当前目录内容:"
+                  ls -la
+                  
                   for module_dir in */ ; do
                     mod_name="${module_dir%/}"
                     
-                    if [ "$mod_name" = "__pycache__" ] || [ ! -f "$mod_name/__init__.py" ]; then
+                    if [ "$mod_name" = "__pycache__" ]; then
+                      continue
+                    fi
+                    
+                    if [ ! -f "$mod_name/__init__.py" ]; then
+                      echo "跳过: $mod_name (无 __init__.py)"
                       continue
                     fi
                     
@@ -262,7 +270,10 @@ jobs:
                       --assume-yes-for-downloads \
                       --nofollow-imports \
                       --follow-import-to="$mod_name" \
-                      --no-progressbar 2>&1 | tail -10
+                      --no-progressbar 2>&1
+                    
+                    echo "编译完成，检查产物:"
+                    ls -la ./compiled/ 2>/dev/null || echo "compiled 目录不存在"
                   done
                   
                   echo "--- 移动编译产物 ---"
@@ -273,7 +284,12 @@ jobs:
                         echo "已复制: $(basename $so_file)"
                       fi
                     done
+                  else
+                    echo "警告: compiled 目录不存在，可能编译失败"
                   fi
+                  
+                  echo "当前目录内容:"
+                  ls -la
                   
                   echo "--- 创建入口文件并清理源码 ---"
                   for module_dir in */ ; do
@@ -284,8 +300,12 @@ jobs:
                     
                     so_pattern="${mod_name}.cpython-*.so"
                     
+                    echo "检查模块: $mod_name, so文件模式: $so_pattern"
+                    
                     if ls $so_pattern 1> /dev/null 2>&1; then
-                      if [ -f "$module_dir/__main__.py" ]; then
+                      echo "找到 .so 文件"
+                      
+                      if [ -f "$mod_name/__main__.py" ]; then
                         echo "删除源码目录内容..."
                         rm -rf "$mod_name"
                         mkdir -p "$mod_name"
@@ -294,6 +314,7 @@ jobs:
                         
                         so_file=$(ls $so_pattern | head -1)
                         so_basename=$(basename "$so_file")
+                        echo ".so 文件名: $so_basename"
                         
                         echo 'import sys' > "$mod_name/__init__.py"
                         echo 'import os' >> "$mod_name/__init__.py"
@@ -325,6 +346,8 @@ jobs:
                         echo "移除源码目录: $mod_name"
                         rm -rf "$mod_name"
                       fi
+                    else
+                      echo "未找到 .so 文件，跳过"
                     fi
                   done
                   
