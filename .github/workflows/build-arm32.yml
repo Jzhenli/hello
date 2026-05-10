@@ -316,26 +316,30 @@ jobs:
                         so_basename=$(basename "$so_file")
                         echo ".so 文件名: $so_basename"
                         
-                        printf '%s\n' \
-                          'import importlib.util' \
-                          'import os' \
-                          '' \
-                          "_so_path = os.path.join(os.path.dirname(__file__), '..', '${so_basename}')" \
-                          "_spec = importlib.util.spec_from_file_location('${mod_name}', _so_path)" \
-                          '_module = importlib.util.module_from_spec(_spec)' \
-                          '_spec.loader.exec_module(_module)' \
-                          > "$mod_name/__init__.py"
+                        echo 'import sys' > "$mod_name/__init__.py"
+                        echo 'import os' >> "$mod_name/__init__.py"
+                        echo 'import importlib.util' >> "$mod_name/__init__.py"
+                        echo '' >> "$mod_name/__init__.py"
+                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$mod_name/__init__.py"
+                        echo "_spec = importlib.util.spec_from_file_location(\"${mod_name}\", _so_path)" >> "$mod_name/__init__.py"
+                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$mod_name/__init__.py"
+                        echo '_spec.loader.exec_module(_module)' >> "$mod_name/__init__.py"
+                        echo "sys.modules[\"${mod_name}\"] = _module" >> "$mod_name/__init__.py"
                         
-                        printf '%s\n' \
-                          "from ${mod_name} import _module" \
-                          '' \
-                          'if hasattr(_module, "main"):' \
-                          '    _module.main()' \
-                          'else:' \
-                          '    print("Error: No main() function found")' \
-                          '    import sys' \
-                          '    sys.exit(1)' \
-                          > "$mod_name/__main__.py"
+                        echo 'import sys' > "$mod_name/__main__.py"
+                        echo 'import os' >> "$mod_name/__main__.py"
+                        echo 'import importlib.util' >> "$mod_name/__main__.py"
+                        echo '' >> "$mod_name/__main__.py"
+                        echo "_so_path = os.path.join(os.path.dirname(__file__), \"..\", \"${so_basename}\")" >> "$mod_name/__main__.py"
+                        echo "_spec = importlib.util.spec_from_file_location(\"${mod_name}\", _so_path)" >> "$mod_name/__main__.py"
+                        echo '_module = importlib.util.module_from_spec(_spec)' >> "$mod_name/__main__.py"
+                        echo '_spec.loader.exec_module(_module)' >> "$mod_name/__main__.py"
+                        echo '' >> "$mod_name/__main__.py"
+                        echo 'if hasattr(_module, "main"):' >> "$mod_name/__main__.py"
+                        echo '    _module.main()' >> "$mod_name/__main__.py"
+                        echo 'else:' >> "$mod_name/__main__.py"
+                        echo '    print("Error: No main() function found")' >> "$mod_name/__main__.py"
+                        echo '    sys.exit(1)' >> "$mod_name/__main__.py"
                         
                         echo "已创建入口文件"
                       else
