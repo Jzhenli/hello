@@ -260,8 +260,8 @@ jobs:
                       --output-dir=./compiled \
                       --remove-output \
                       --assume-yes-for-downloads \
-                      --follow-imports \
-                      --prefer-source-code \
+                      --nofollow-imports \
+                      --follow-import-to="$mod_name" \
                       --no-progressbar 2>&1 | tail -10
                   done
                   
@@ -275,18 +275,64 @@ jobs:
                     done
                   fi
                   
-                  echo "--- 清理原始 Python 源码 ---"
+                  echo "--- 创建入口文件并清理源码 ---"
                   for module_dir in */ ; do
                     mod_name="${module_dir%/}"
                     if [ "$mod_name" = "__pycache__" ] || [ "$mod_name" = "compiled" ]; then
                       continue
                     fi
                     
-                    so_file="${mod_name}.cpython-*.so"
+                    so_pattern="${mod_name}.cpython-*.so"
                     
-                    if ls $so_file 1> /dev/null 2>&1; then
-                      echo "移除源码目录: $mod_name"
-                      rm -rf "$mod_name"
+                    if ls $so_pattern 1> /dev/null 2>&1; then
+                      so_file=$(ls $so_pattern | head -1)
+                      compiled_name="${mod_name}_compiled.so"
+                      mv "$so_file" "$compiled_name"
+                      echo "重命名: $(basename $so_file) -> $compiled_name"
+                      
+                      if [ -f "$module_dir/__main__.py" ]; then
+                        echo "创建入口文件: ${mod_name}/__init__.py"
+                        
+                        cat > "$mod_name/__init__.py" << ENTRYPOINT
+import sys
+import os
+
+_pyd_name = "${mod_name}_compiled"
+try:
+    import importlib.util
+    spec = importlib.util.find_spec(_pyd_name)
+    if spec and spec.loader:
+        _module = importlib.util.module_from_spec(spec)
+        sys.modules["${mod_name}"] = _module
+        spec.loader.exec_module(_module)
+except Exception as e:
+    print(f"Warning: Could not load compiled module: {e}")
+
+from ${mod_name}_compiled import *
+ENTRYPOINT
+                        
+                        cat > "$module_dir/__main__.py" << MAINENTRY
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from ${mod_name}_compiled import main
+    main()
+except ImportError as e:
+    print(f"Error importing compiled module: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error starting application: {e}")
+    sys.exit(1)
+MAINENTRY
+                        
+                        echo "已创建入口文件"
+                      else
+                        echo "移除源码目录: $mod_name"
+                        rm -rf "$mod_name"
+                      fi
                     fi
                   done
                   
@@ -294,6 +340,10 @@ jobs:
                   
                   echo "=== Nuitka 编译完成 ==="
                   ls -la *.so 2>/dev/null || echo "未找到 .so 文件"
+                  
+                  echo ""
+                  echo "最终目录结构:"
+                  ls -la
                   
                   cd - > /dev/null
                 fi

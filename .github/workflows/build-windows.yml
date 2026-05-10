@@ -148,6 +148,16 @@ jobs:
               continue
             fi
             
+            if [ -f "$module_name/__main__.py" ]; then
+              MAIN_FUNC=$(grep -E "^def main\s*\(" "$module_name/__main__.py" 2>/dev/null | head -1)
+              if [ -n "$MAIN_FUNC" ]; then
+                HAS_MAIN_FUNC=true
+              else
+                HAS_MAIN_FUNC=false
+              fi
+              echo "模块 $module_name 有 __main__.py, main函数: $HAS_MAIN_FUNC"
+            fi
+            
             echo "--- 编译模块: $module_name ---"
             
             python -m nuitka \
@@ -170,7 +180,7 @@ jobs:
             done
           fi
           
-          echo "--- 清理原始 Python 源码 ---"
+          echo "--- 创建入口文件并清理源码 ---"
           for module_dir in */ ; do
             module_name="${module_dir%/}"
             if [ "$module_name" = "__pycache__" ] || [ "$module_name" = "compiled" ]; then
@@ -180,8 +190,54 @@ jobs:
             pyd_file="${module_name}.cp311-win_amd64.pyd"
             
             if [ -f "$pyd_file" ]; then
-              echo "移除源码目录: $module_name"
-              rm -rf "$module_name"
+              echo "处理模块: $module_name"
+              
+              mv "$pyd_file" "${module_name}_compiled.pyd"
+              echo "重命名: $pyd_file -> ${module_name}_compiled.pyd"
+              
+              if [ -f "$module_name/__main__.py" ]; then
+                echo "创建入口文件: ${module_name}/__init__.py"
+                
+                cat > "$module_name/__init__.py" << ENTRYPOINT
+import sys
+import os
+
+_pyd_name = "${module_name}_compiled"
+try:
+    import importlib.util
+    spec = importlib.util.find_spec(_pyd_name)
+    if spec and spec.loader:
+        _module = importlib.util.module_from_spec(spec)
+        sys.modules["${module_name}"] = _module
+        spec.loader.exec_module(_module)
+except Exception as e:
+    print(f"Warning: Could not load compiled module: {e}")
+
+from ${module_name}_compiled import *
+ENTRYPOINT
+                
+                cat > "$module_name/__main__.py" << MAINENTRY
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from ${module_name}_compiled import main
+    main()
+except ImportError as e:
+    print(f"Error importing compiled module: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error starting application: {e}")
+    sys.exit(1)
+MAINENTRY
+                
+                echo "已创建入口文件"
+              else
+                echo "移除源码目录: $module_name"
+                rm -rf "$module_name"
+              fi
             fi
           done
           
@@ -194,6 +250,15 @@ jobs:
           echo ""
           echo "最终目录结构:"
           ls -la
+          
+          echo ""
+          echo "入口模块内容:"
+          for d in */ ; do
+            if [ -f "$d/__main__.py" ]; then
+              echo "--- $d ---"
+              ls -la "$d"
+            fi
+          done
 
       - name: Build Windows app
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
