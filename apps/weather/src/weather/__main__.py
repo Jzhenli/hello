@@ -71,13 +71,17 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "run":
-        uvicorn.run(app=app, host="0.0.0.0", port=8000)
-    else:
-        print("FastAPI Demo 应用")
-        print("用法: python -m weather run")
-        print("然后访问: http://localhost:8000")
-        print("API文档: http://localhost:8000/docs")
+    print("FastAPI Demo 应用")
+    print("用法: python -m weather")
+    print("然后访问: http://localhost:8000")
+    print("API文档: http://localhost:8000/docs")
+
+    uvicorn.run(app=app, host="0.0.0.0", port=8000)
+    # else:
+    #     print("FastAPI Demo 应用")
+    #     print("用法: python -m weather run")
+    #     print("然后访问: http://localhost:8000")
+    #     print("API文档: http://localhost:8000/docs")
 
 if __name__ == "__main__":
     main()
