@@ -64,6 +64,10 @@ jobs:
       # ============================================================
       # 步骤 2: 在 ARM32 容器中构建
       # ============================================================
+      - name: Prepare dist directory
+        if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
+        run: mkdir -p dist
+
       - name: Build ARM32 Packages
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         uses: uraimo/run-on-arch-action@v3
@@ -271,6 +275,7 @@ jobs:
       - name: Create smart deployment script
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: |
+          mkdir -p dist
           cat > dist/install.sh <<'INSTALL_EOF'
           #!/bin/bash
           # ================================================
