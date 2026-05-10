@@ -114,7 +114,7 @@ jobs:
           
           echo "ENABLE_NUITKA = $ENABLE_NUITKA"
           
-          SRC_DIR="build/${APP_NAME}/windows/app/src"
+          SRC_DIR="build/${APP_NAME}/windows/app/src/app"
           
           if [ ! -d "$SRC_DIR" ]; then
             echo "错误: 找不到源码目录 $SRC_DIR"
