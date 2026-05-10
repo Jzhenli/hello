@@ -100,17 +100,46 @@ jobs:
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
         run: |
           APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
-          BUILD_DIR="build/${APP_NAME}/windows/app/src"
           
-          echo "=== Nuitka 编译开始 ==="
-          echo "应用目录: $BUILD_DIR"
+          PROJECT_NAME=$(echo "${APP_NAME^}" | sed 's/^./\u&/')
+          [ -z "$PROJECT_NAME" ] && PROJECT_NAME="${APP_NAME^}"
           
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "错误: 找不到构建目录 $BUILD_DIR"
+          for dir in build/${APP_NAME}/windows/app/*/; do
+            if [ -d "$dir/app" ]; then
+              APP_DIR="$dir"
+              break
+            fi
+          done
+          
+          if [ -z "$APP_DIR" ]; then
+            POSSIBLE_PATHS=(
+              "build/${APP_NAME}/windows/app/${PROJECT_NAME}/app"
+              "build/${APP_NAME}/windows/app/Weather/app"
+            )
+            for p in "${POSSIBLE_PATHS[@]}"; do
+              if [ -d "$p" ]; then
+                APP_DIR=$(dirname "$p")
+                break
+              fi
+            done
+          fi
+          
+          if [ -z "$APP_DIR" ]; then
+            echo "错误: 找不到 Briefcase 应用目录"
+            echo "当前目录结构:"
+            find build -type d -name "app" 2>/dev/null | head -20
             exit 1
           fi
           
-          cd "$BUILD_DIR"
+          SRC_DIR="${APP_DIR}/app"
+          
+          echo "=== Nuitka 编译开始 ==="
+          echo "应用目录: $APP_DIR"
+          echo "源码目录: $SRC_DIR"
+          echo "目录内容:"
+          ls -la "$SRC_DIR/"
+          
+          cd "$SRC_DIR"
           
           for module_dir in */ ; do
             module_name="${module_dir%/}"
@@ -126,9 +155,9 @@ jobs:
               --output-dir=./compiled \
               --remove-output \
               --assume-yes-for-downloads \
-              --follow-imports \
-              --prefer-source-code \
-              --no-progressbar
+              --nofollow-imports \
+              --follow-import-to="$module_name" \
+              --no-progressbar 2>&1
           done
           
           echo "--- 移动编译产物 ---"
@@ -137,13 +166,6 @@ jobs:
               if [ -f "$pyd_file" ]; then
                 cp "$pyd_file" ./
                 echo "已复制: $(basename $pyd_file)"
-              fi
-            done
-            
-            for so_file in ./compiled/*.so; do
-              if [ -f "$so_file" ]; then
-                cp "$so_file" ./
-                echo "已复制: $(basename $so_file)"
               fi
             done
           fi
@@ -156,9 +178,8 @@ jobs:
             fi
             
             pyd_file="${module_name}.cp311-win_amd64.pyd"
-            so_file="${module_name}.cpython-311-x86_64-linux-gnu.so"
             
-            if [ -f "$pyd_file" ] || [ -f "$so_file" ]; then
+            if [ -f "$pyd_file" ]; then
               echo "移除源码目录: $module_name"
               rm -rf "$module_name"
             fi
@@ -167,8 +188,12 @@ jobs:
           rm -rf ./compiled 2>/dev/null || true
           
           echo "=== Nuitka 编译完成 ==="
+          echo "编译产物:"
           ls -la *.pyd 2>/dev/null || echo "未找到 .pyd 文件"
-          ls -la *.so 2>/dev/null || echo "未找到 .so 文件"
+          
+          echo ""
+          echo "最终目录结构:"
+          ls -la
 
       - name: Build Windows app
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
