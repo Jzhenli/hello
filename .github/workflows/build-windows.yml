@@ -198,43 +198,36 @@ jobs:
               if [ -f "$module_name/__main__.py" ]; then
                 echo "创建入口文件: ${module_name}/__init__.py"
                 
-                cat > "$module_name/__init__.py" << 'EOF'
-import sys
-import os
-
-_pyd_name = "MODULE_COMPILED"
-try:
-    import importlib.util
-    spec = importlib.util.find_spec(_pyd_name)
-    if spec and spec.loader:
-        _module = importlib.util.module_from_spec(spec)
-        sys.modules["MODULE_NAME"] = _module
-        spec.loader.exec_module(_module)
-except Exception as e:
-    print(f"Warning: Could not load compiled module: {e}")
-
-from MODULE_COMPILED import *
-EOF
-                sed -i "s/MODULE_NAME/$module_name/g" "$module_name/__init__.py"
-                sed -i "s/MODULE_COMPILED/${module_name}_compiled/g" "$module_name/__init__.py"
+                echo 'import sys' > "$module_name/__init__.py"
+                echo 'import os' >> "$module_name/__init__.py"
+                echo '' >> "$module_name/__init__.py"
+                echo "_pyd_name = \"${module_name}_compiled\"" >> "$module_name/__init__.py"
+                echo 'try:' >> "$module_name/__init__.py"
+                echo '    import importlib.util' >> "$module_name/__init__.py"
+                echo '    spec = importlib.util.find_spec(_pyd_name)' >> "$module_name/__init__.py"
+                echo '    if spec and spec.loader:' >> "$module_name/__init__.py"
+                echo '        _module = importlib.util.module_from_spec(spec)' >> "$module_name/__init__.py"
+                echo "        sys.modules[\"${module_name}\"] = _module" >> "$module_name/__init__.py"
+                echo '        spec.loader.exec_module(_module)' >> "$module_name/__init__.py"
+                echo 'except Exception as e:' >> "$module_name/__init__.py"
+                echo '    print(f"Warning: Could not load compiled module: {e}")' >> "$module_name/__init__.py"
+                echo '' >> "$module_name/__init__.py"
+                echo "from ${module_name}_compiled import *" >> "$module_name/__init__.py"
                 
-                cat > "$module_name/__main__.py" << 'EOF'
-import sys
-import os
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-try:
-    from MODULE_COMPILED import main
-    main()
-except ImportError as e:
-    print(f"Error importing compiled module: {e}")
-    sys.exit(1)
-except Exception as e:
-    print(f"Error starting application: {e}")
-    sys.exit(1)
-EOF
-                sed -i "s/MODULE_COMPILED/${module_name}_compiled/g" "$module_name/__main__.py"
+                echo 'import sys' > "$module_name/__main__.py"
+                echo 'import os' >> "$module_name/__main__.py"
+                echo '' >> "$module_name/__main__.py"
+                echo 'sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))' >> "$module_name/__main__.py"
+                echo '' >> "$module_name/__main__.py"
+                echo 'try:' >> "$module_name/__main__.py"
+                echo "    from ${module_name}_compiled import main" >> "$module_name/__main__.py"
+                echo '    main()' >> "$module_name/__main__.py"
+                echo 'except ImportError as e:' >> "$module_name/__main__.py"
+                echo '    print(f"Error importing compiled module: {e}")' >> "$module_name/__main__.py"
+                echo '    sys.exit(1)' >> "$module_name/__main__.py"
+                echo 'except Exception as e:' >> "$module_name/__main__.py"
+                echo '    print(f"Error starting application: {e}")' >> "$module_name/__main__.py"
+                echo '    sys.exit(1)' >> "$module_name/__main__.py"
                 
                 echo "已创建入口文件"
               else
