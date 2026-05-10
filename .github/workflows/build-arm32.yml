@@ -93,9 +93,9 @@ jobs:
             set -e
             PYTHON_VERSION="${{ env.PYTHON_VERSION }}"
             PBS_RELEASE="${{ env.PBS_RELEASE }}"
-            BUILD_TYPE="${BUILD_TYPE}"
-            TARGET_COMPONENT="${TARGET_COMPONENT}"
-            TARGET_VERSION="${TARGET_VERSION}"
+            BUILD_TYPE="${BUILD_TYPE:-full}"
+            TARGET_COMPONENT="${TARGET_COMPONENT:-}"
+            TARGET_VERSION="${TARGET_VERSION:-}"
             
             if [ "$BUILD_TYPE" = "full" ]; then
               echo "🚀 全量构建模式"
