@@ -306,7 +306,7 @@ class ARM32Builder:
         # 安装 Nuitka
         if self.enable_nuitka:
             print("\n━━━ 安装 Nuitka ━━━")
-            self.pip_install("nuitka", "ordered-set", "zstandard")
+            self.pip_install("cffi","nuitka", "ordered-set", "zstandard")
 
         # 逐个构建
         for app_name in app_names:
