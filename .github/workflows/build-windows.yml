@@ -17,6 +17,10 @@ on:
         description: 'Version (e.g., 1.0.0)'
         required: false
         default: ''
+      python_version:
+        description: 'Python version (3.10 / 3.11 / 3.12)'
+        required: false
+        default: '3.11'
       enable_nuitka:
         description: 'Enable Nuitka compilation'
         required: false
@@ -25,6 +29,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
 
 jobs:
   build-windows:
@@ -36,7 +43,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Briefcase
         run: |
@@ -44,13 +51,13 @@ jobs:
           pip install briefcase
 
       - name: Install Nuitka and dependencies
-        if: inputs.enable_nuitka != false
+        if: inputs.enable_nuitka == true
         run: |
           pip install nuitka ordered-set zstandard
           pip install imageio
 
       - name: Setup MSVC for Nuitka
-        if: inputs.enable_nuitka != false
+        if: inputs.enable_nuitka == true
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Extract version from tag
@@ -182,10 +189,12 @@ jobs:
               continue
             fi
             
-            pyd_file="${module_name}.cp311-win_amd64.pyd"
+            pyd_pattern="${module_name}.cpython-*.pyd"
             
-            if [ -f "$pyd_file" ]; then
-              echo "处理模块: $module_name"
+            echo "检查模块: $module_name, pyd文件模式: $pyd_pattern"
+            
+            if ls $pyd_pattern 1> /dev/null 2>&1; then
+              echo "找到 .pyd 文件"
               
               if [ -f "$module_name/__main__.py" ]; then
                 echo "删除源码目录内容..."
@@ -194,11 +203,15 @@ jobs:
                 
                 echo "创建入口文件: ${module_name}/__init__.py"
                 
+                pyd_file=$(ls $pyd_pattern | head -1)
+                pyd_basename=$(basename "$pyd_file")
+                echo ".pyd 文件名: $pyd_basename"
+                
                 echo 'import sys' > "$module_name/__init__.py"
                 echo 'import os' >> "$module_name/__init__.py"
                 echo 'import importlib.util' >> "$module_name/__init__.py"
                 echo '' >> "$module_name/__init__.py"
-                echo "_pyd_path = os.path.join(os.path.dirname(__file__), \"..\", \"${module_name}.cp311-win_amd64.pyd\")" >> "$module_name/__init__.py"
+                echo "_pyd_path = os.path.join(os.path.dirname(__file__), \"..\", \"${pyd_basename}\")" >> "$module_name/__init__.py"
                 echo "_spec = importlib.util.spec_from_file_location(\"${module_name}\", _pyd_path)" >> "$module_name/__init__.py"
                 echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_name/__init__.py"
                 echo '_spec.loader.exec_module(_module)' >> "$module_name/__init__.py"
@@ -208,7 +221,7 @@ jobs:
                 echo 'import os' >> "$module_name/__main__.py"
                 echo 'import importlib.util' >> "$module_name/__main__.py"
                 echo '' >> "$module_name/__main__.py"
-                echo "_pyd_path = os.path.join(os.path.dirname(__file__), \"..\", \"${module_name}.cp311-win_amd64.pyd\")" >> "$module_name/__main__.py"
+                echo "_pyd_path = os.path.join(os.path.dirname(__file__), \"..\", \"${pyd_basename}\")" >> "$module_name/__main__.py"
                 echo "_spec = importlib.util.spec_from_file_location(\"${module_name}\", _pyd_path)" >> "$module_name/__main__.py"
                 echo '_module = importlib.util.module_from_spec(_spec)' >> "$module_name/__main__.py"
                 echo '_spec.loader.exec_module(_module)' >> "$module_name/__main__.py"
@@ -224,6 +237,8 @@ jobs:
                 echo "移除源码目录: $module_name"
                 rm -rf "$module_name"
               fi
+            else
+              echo "未找到 .pyd 文件，跳过"
             fi
           done
           
@@ -264,12 +279,15 @@ jobs:
           VERSION="${{ steps.vars.outputs.VERSION }}"
           [ -z "$VERSION" ] && VERSION="dev"
           
-          if [ -d "build/weather/windows/app/Weather" ]; then
-            cp -r "build/weather/windows/app/Weather" "dist/weather-$VERSION-windows"
+          APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
+          FORMAL_NAME="$(echo "${APP_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${APP_NAME:1}"
+          
+          if [ -d "build/${APP_NAME}/windows/app/${FORMAL_NAME}" ]; then
+            cp -r "build/${APP_NAME}/windows/app/${FORMAL_NAME}" "dist/${APP_NAME}-$VERSION-windows"
           fi
           
-          if [ -f "build/weather/windows/app/Weather.zip" ]; then
-            cp "build/weather/windows/app/Weather.zip" "dist/weather-$VERSION-windows.zip"
+          if [ -f "build/${APP_NAME}/windows/app/${FORMAL_NAME}.zip" ]; then
+            cp "build/${APP_NAME}/windows/app/${FORMAL_NAME}.zip" "dist/${APP_NAME}-$VERSION-windows.zip"
           fi
 
       - name: Upload artifacts
@@ -279,6 +297,7 @@ jobs:
           path: apps/${{ steps.vars.outputs.APP_NAME }}/dist/
 
       - name: Build summary
+        if: always()
         shell: bash
         run: |
           echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
@@ -289,4 +308,4 @@ jobs:
           echo "- **Nuitka**: ${{ steps.vars.outputs.ENABLE_NUITKA }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Artifacts" >> $GITHUB_STEP_SUMMARY
-          ls -la apps/${{ steps.vars.outputs.APP_NAME }}/dist/ 2>/dev/null || echo "No artifacts found"
+          ls -la apps/${{ steps.vars.outputs.APP_NAME }}/dist/ 2>/dev/null | while read line; do echo "$line" >> $GITHUB_STEP_SUMMARY; done || echo "No artifacts found" >> $GITHUB_STEP_SUMMARY

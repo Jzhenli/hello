@@ -153,7 +153,7 @@ jobs:
               for mod in tkinter idlelib lib2to3 unittest pydoc_data curses tty webbrowser; do
                 rm -rf "$PYLIB/$mod" 2>/dev/null || true
               done
-              find "$PYLIB" -type d \( -name __pycache__ -o -name test -o -name tests \) -exec rm -rf {} + 2>/dev/null || true
+              find "$PYLIB" -depth -type d \( -name __pycache__ -o -name test -o -name tests \) -exec rm -rf {} + 2>/dev/null || true
               rm -rf shared-python/include
             fi
 
@@ -373,7 +373,7 @@ jobs:
             fi
 
             export PYTHONPATH="\${SCRIPT_DIR}/usr/app:\${SCRIPT_DIR}/usr/app_packages"
-            export LD_LIBRARY_PATH="/opt/shared-python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export LD_LIBRARY_PATH="/opt/shared-python/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
             export APP_VERSION="${APP_VERSION}"
 
             exec -a "${MODULE_NAME}" "\$PYTHON" -s -m ${MODULE_NAME} "\$@"
@@ -867,15 +867,15 @@ jobs:
             echo "  $(basename $f): $(du -sh $f | cut -f1)"
           done
           echo ""
-          if [ -f "dist/shared-python-base-arm32.tar.gz" ]; then
-            APP_COUNT=$(ls dist/*-arm32.tar.gz 2>/dev/null | grep -v shared-python | wc -l)
+          if [ -f "shared-python-base-arm32.tar.gz" ]; then
+            APP_COUNT=$(ls *-arm32.tar.gz 2>/dev/null | grep -v shared-python | wc -l)
             if [ "$APP_COUNT" -gt 0 ]; then
               echo "📦 包类型: 全量包 (Python + ${APP_COUNT} 个应用)"
             else
               echo "📦 包类型: Python 升级包"
             fi
           else
-            APP_COUNT=$(ls dist/*-arm32.tar.gz 2>/dev/null | wc -l)
+            APP_COUNT=$(ls *-arm32.tar.gz 2>/dev/null | wc -l)
             echo "📦 包类型: 应用增量升级包 (${APP_COUNT} 个应用)"
           fi
 
