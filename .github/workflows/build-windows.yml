@@ -17,6 +17,11 @@ on:
         description: 'Version (e.g., 1.0.0)'
         required: false
         default: ''
+      enable_nuitka:
+        description: 'Enable Nuitka compilation'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -38,6 +43,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install briefcase
 
+      - name: Install Nuitka and dependencies
+        if: inputs.enable_nuitka != false
+        run: |
+          pip install nuitka ordered-set zstandard
+          pip install imageio
+
+      - name: Setup MSVC for Nuitka
+        if: inputs.enable_nuitka != false
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Extract version from tag
         if: startsWith(github.ref, 'refs/tags/')
         id: tag_info
@@ -56,9 +71,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "APP_NAME=${{ inputs.app_name }}" >> $GITHUB_OUTPUT
             echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "ENABLE_NUITKA=${{ inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
           else
             echo "APP_NAME=${{ steps.tag_info.outputs.APP_NAME }}" >> $GITHUB_OUTPUT
             echo "VERSION=${{ steps.tag_info.outputs.VERSION }}" >> $GITHUB_OUTPUT
+            echo "ENABLE_NUITKA=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Update version in pyproject.toml
@@ -76,6 +93,82 @@ jobs:
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
         run: |
           briefcase create windows
+
+      - name: Compile Python modules with Nuitka
+        if: steps.vars.outputs.ENABLE_NUITKA == 'true'
+        shell: bash
+        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
+        run: |
+          APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
+          BUILD_DIR="build/${APP_NAME}/windows/app/src"
+          
+          echo "=== Nuitka 编译开始 ==="
+          echo "应用目录: $BUILD_DIR"
+          
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "错误: 找不到构建目录 $BUILD_DIR"
+            exit 1
+          fi
+          
+          cd "$BUILD_DIR"
+          
+          for module_dir in */ ; do
+            module_name="${module_dir%/}"
+            
+            if [ "$module_name" = "__pycache__" ] || [ ! -f "$module_name/__init__.py" ]; then
+              continue
+            fi
+            
+            echo "--- 编译模块: $module_name ---"
+            
+            python -m nuitka \
+              --module "$module_name" \
+              --output-dir=./compiled \
+              --remove-output \
+              --assume-yes-for-downloads \
+              --follow-imports \
+              --prefer-source-code \
+              --no-progressbar
+          done
+          
+          echo "--- 移动编译产物 ---"
+          if [ -d "./compiled" ]; then
+            for pyd_file in ./compiled/*.pyd; do
+              if [ -f "$pyd_file" ]; then
+                cp "$pyd_file" ./
+                echo "已复制: $(basename $pyd_file)"
+              fi
+            done
+            
+            for so_file in ./compiled/*.so; do
+              if [ -f "$so_file" ]; then
+                cp "$so_file" ./
+                echo "已复制: $(basename $so_file)"
+              fi
+            done
+          fi
+          
+          echo "--- 清理原始 Python 源码 ---"
+          for module_dir in */ ; do
+            module_name="${module_dir%/}"
+            if [ "$module_name" = "__pycache__" ] || [ "$module_name" = "compiled" ]; then
+              continue
+            fi
+            
+            pyd_file="${module_name}.cp311-win_amd64.pyd"
+            so_file="${module_name}.cpython-311-x86_64-linux-gnu.so"
+            
+            if [ -f "$pyd_file" ] || [ -f "$so_file" ]; then
+              echo "移除源码目录: $module_name"
+              rm -rf "$module_name"
+            fi
+          done
+          
+          rm -rf ./compiled 2>/dev/null || true
+          
+          echo "=== Nuitka 编译完成 ==="
+          ls -la *.pyd 2>/dev/null || echo "未找到 .pyd 文件"
+          ls -la *.so 2>/dev/null || echo "未找到 .so 文件"
 
       - name: Build Windows app
         working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
@@ -117,6 +210,7 @@ jobs:
           echo "- **App**: ${{ steps.vars.outputs.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ steps.vars.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform**: Windows" >> $GITHUB_STEP_SUMMARY
+          echo "- **Nuitka**: ${{ steps.vars.outputs.ENABLE_NUITKA }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Artifacts" >> $GITHUB_STEP_SUMMARY
           ls -la apps/${{ steps.vars.outputs.APP_NAME }}/dist/ 2>/dev/null || echo "No artifacts found"

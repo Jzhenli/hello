@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: true
+      enable_nuitka:
+        description: 'Enable Nuitka compilation'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -31,9 +36,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ============================================================
-      # 步骤 1: 解析标签，决定构建类型
-      # ============================================================
       - name: Extract tag info
         id: tag_info
         run: |
@@ -61,9 +63,6 @@ jobs:
             echo "🚀 手动触发 → 全量构建模式"
           fi
 
-      # ============================================================
-      # 步骤 2: 在 ARM32 容器中构建
-      # ============================================================
       - name: Prepare dist directory
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: mkdir -p dist
@@ -75,6 +74,7 @@ jobs:
           BUILD_TYPE: ${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}
           TARGET_COMPONENT: ${{ steps.tag_info.outputs.COMPONENT_NAME || '' }}
           TARGET_VERSION: ${{ steps.tag_info.outputs.COMPONENT_VERSION || '' }}
+          ENABLE_NUITKA: ${{ inputs.enable_nuitka || 'true' }}
         with:
           arch: armv7
           distro: bookworm
@@ -84,7 +84,8 @@ jobs:
             apt-get install -y -qq \
             build-essential libffi-dev libssl-dev \
             libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev \
-            wget git file ca-certificates tar gzip
+            wget git file ca-certificates tar gzip \
+            gcc g++ make patchelf
             echo "✅ 系统依赖安装完成"
             mkdir -p /etc/pip
             cat > /etc/pip/pip.conf <<EOF
@@ -100,6 +101,7 @@ jobs:
             BUILD_TYPE="${BUILD_TYPE:-full}"
             TARGET_COMPONENT="${TARGET_COMPONENT:-}"
             TARGET_VERSION="${TARGET_VERSION:-}"
+            ENABLE_NUITKA="${ENABLE_NUITKA:-true}"
             
             if [ "$BUILD_TYPE" = "full" ]; then
               echo "🚀 全量构建模式"
@@ -108,11 +110,10 @@ jobs:
             elif [ "$BUILD_TYPE" = "app-only" ]; then
               echo "🎯 仅构建应用: $TARGET_COMPONENT"
             fi
+            echo "Nuitka 编译: $ENABLE_NUITKA"
 
             mkdir -p dist
 
-            # ================= 准备 Shared Python 环境 =================
-            # 始终准备 Python 环境（pip install 需要），按需决定是否打包产物
             NEED_PACKAGE_PYTHON=false
             if [ "$BUILD_TYPE" = "full" ] || [ "$BUILD_TYPE" = "python-only" ]; then
               NEED_PACKAGE_PYTHON=true
@@ -156,7 +157,6 @@ jobs:
               rm -rf shared-python/include
             fi
 
-            # 版本号：python-only 从标签取，其余用 PBS 版本
             if [ "$BUILD_TYPE" = "python-only" ]; then
               PY_VER="${TARGET_VERSION:-${PBS_PYTHON}-${PBS_RELEASE}}"
             else
@@ -171,7 +171,6 @@ jobs:
               echo "✅ shared-python 环境已准备 (仅用于 pip install，不打包产物)"
             fi
 
-            # ================= 构建应用 =================
             BUILD_APPS=""
             if [ "$BUILD_TYPE" = "full" ]; then
               BUILD_APPS=$(ls -d apps/*/ 2>/dev/null | xargs -n1 basename || true)
@@ -190,6 +189,11 @@ jobs:
                 PIP="$(pwd)/shared-python/bin/pip3"
               else
                 PIP="$PYTHON -m pip"
+              fi
+
+              if [ "$ENABLE_NUITKA" = "true" ]; then
+                echo "--- 安装 Nuitka ---"
+                $PIP install nuitka ordered-set zstandard
               fi
 
               for APP_NAME in $BUILD_APPS; do
@@ -223,7 +227,6 @@ jobs:
                   MODULE_NAME="$APP_NAME"
                 fi
 
-                # 版本号：app-only 从标签取，全量构建从代码取
                 if [ "$BUILD_TYPE" = "app-only" ] && [ -n "$TARGET_VERSION" ]; then
                   APP_VERSION="$TARGET_VERSION"
                 else
@@ -238,6 +241,62 @@ jobs:
                 
                 echo "$APP_VERSION" > "$BUILD_DIR/VERSION"
                 echo "模块名: $MODULE_NAME, 版本: $APP_VERSION"
+
+                if [ "$ENABLE_NUITKA" = "true" ]; then
+                  echo "--- Nuitka 编译模块 ---"
+                  cd "$BUILD_DIR/usr/app"
+                  
+                  for module_dir in */ ; do
+                    mod_name="${module_dir%/}"
+                    
+                    if [ "$mod_name" = "__pycache__" ] || [ ! -f "$mod_name/__init__.py" ]; then
+                      continue
+                    fi
+                    
+                    echo "编译模块: $mod_name"
+                    
+                    $PYTHON -m nuitka \
+                      --module "$mod_name" \
+                      --output-dir=./compiled \
+                      --remove-output \
+                      --assume-yes-for-downloads \
+                      --follow-imports \
+                      --prefer-source-code \
+                      --no-progressbar 2>&1 | tail -10
+                  done
+                  
+                  echo "--- 移动编译产物 ---"
+                  if [ -d "./compiled" ]; then
+                    for so_file in ./compiled/*.so; do
+                      if [ -f "$so_file" ]; then
+                        cp "$so_file" ./
+                        echo "已复制: $(basename $so_file)"
+                      fi
+                    done
+                  fi
+                  
+                  echo "--- 清理原始 Python 源码 ---"
+                  for module_dir in */ ; do
+                    mod_name="${module_dir%/}"
+                    if [ "$mod_name" = "__pycache__" ] || [ "$mod_name" = "compiled" ]; then
+                      continue
+                    fi
+                    
+                    so_file="${mod_name}.cpython-*.so"
+                    
+                    if ls $so_file 1> /dev/null 2>&1; then
+                      echo "移除源码目录: $mod_name"
+                      rm -rf "$mod_name"
+                    fi
+                  done
+                  
+                  rm -rf ./compiled 2>/dev/null || true
+                  
+                  echo "=== Nuitka 编译完成 ==="
+                  ls -la *.so 2>/dev/null || echo "未找到 .so 文件"
+                  
+                  cd - > /dev/null
+                fi
 
                 cat > "$BUILD_DIR/run.sh" << RUNEOF
             #!/bin/bash
@@ -269,9 +328,6 @@ jobs:
             find dist -type f -exec chmod 644 {} +
             chmod +x dist/install.sh 2>/dev/null || true
 
-      # ============================================================
-      # 步骤 3: 生成智能部署脚本
-      # ============================================================
       - name: Create smart deployment script
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: |
@@ -311,14 +367,12 @@ jobs:
             fi
           }
 
-          # 从 tar.gz 中读取 VERSION 文件（不解压整个包）
           read_version_from_tar() {
             local tar_file="$1"
             local inner_path="$2"
             tar xzf "$tar_file" -O "$inner_path" 2>/dev/null || echo "unknown"
           }
 
-          # 从已安装目录读取版本
           read_installed_version() {
             local component="$1"
             local dir="${INSTALL_DIR}/${component}"
@@ -328,10 +382,6 @@ jobs:
               echo "unknown"
             fi
           }
-
-          # ============================================================
-          # 包类型检测
-          # ============================================================
 
           HAS_PYTHON_PKG=false
           APP_TARS=()
@@ -371,10 +421,6 @@ jobs:
             esac
           }
 
-          # ============================================================
-          # 目标机状态检测
-          # ============================================================
-
           PYTHON_INSTALLED=false
           INSTALLED_APPS=()
 
@@ -393,10 +439,6 @@ jobs:
               fi
             done
           }
-
-          # ============================================================
-          # 版本管控
-          # ============================================================
 
           update_versions() {
             local component="$1"
@@ -428,10 +470,6 @@ jobs:
             echo ""
           }
 
-          # ============================================================
-          # 备份
-          # ============================================================
-
           backup_app() {
             local APP_DIR="$1"
             if [ -d "$APP_DIR" ]; then
@@ -443,10 +481,6 @@ jobs:
               find "$INSTALL_DIR" -maxdepth 1 -name "*.bak.*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
             fi
           }
-
-          # ============================================================
-          # 安装函数
-          # ============================================================
 
           install_shared_python() {
             log_step "安装共享 Python"
@@ -512,10 +546,6 @@ jobs:
             log_info "$APP_NAME 已安装: $new_ver → 运行: $APP_NAME"
           }
 
-          # ============================================================
-          # 完整性校验
-          # ============================================================
-
           verify_checksums() {
             if [ ! -f "$SCRIPT_DIR/checksums.txt" ]; then
               log_warn "未找到 checksums.txt，跳过完整性校验"
@@ -531,10 +561,6 @@ jobs:
               exit 1
             fi
           }
-
-          # ============================================================
-          # 校验逻辑
-          # ============================================================
 
           validate_full_install() {
             if ! $HAS_PYTHON_PKG; then
@@ -576,10 +602,6 @@ jobs:
             return 0
           }
 
-          # ============================================================
-          # 预览变更
-          # ============================================================
-
           show_preview() {
             local pkg_type="$1"
             local is_first_install="$2"
@@ -599,7 +621,6 @@ jobs:
             echo ""
             echo -e "  ${BOLD}即将执行的操作:${NC}"
 
-            # Python 变更
             if $HAS_PYTHON_PKG; then
               if $PYTHON_INSTALLED; then
                 local old_py_ver=$(read_installed_version "shared-python")
@@ -615,7 +636,6 @@ jobs:
               fi
             fi
 
-            # 应用变更
             for app_tar in "${APP_TARS[@]}"; do
               local app_name=$(echo "$app_tar" | sed "s/-arm32.tar.gz//")
               local new_ver=$(read_version_from_tar "$app_tar" "$app_name/VERSION")
@@ -643,10 +663,6 @@ jobs:
             echo ""
           }
 
-          # ============================================================
-          # 帮助
-          # ============================================================
-
           show_help() {
             echo ""
             echo "ARM32 共享 Python 应用 - 智能部署脚本"
@@ -668,10 +684,6 @@ jobs:
             exit 0
           }
 
-          # ============================================================
-          # 参数解析
-          # ============================================================
-
           while [[ $# -gt 0 ]]; do
             case "$1" in
               --force|-f)  FORCE_MODE=true; shift ;;
@@ -688,28 +700,20 @@ jobs:
             esac
           done
 
-          # ============================================================
-          # 主流程
-          # ============================================================
-
           check_root "$@"
 
-          # 1. 扫描包和目标机
           scan_package
           scan_installed
 
-          # 2. 校验安装包完整性
           verify_checksums
 
           PKG_TYPE=$(get_package_type)
 
-          # 3. 判断是否首次安装
           FIRST_INSTALL=false
           if ! $PYTHON_INSTALLED; then
             FIRST_INSTALL=true
           fi
 
-          # 4. 校验合法性
           echo ""
           case "$PKG_TYPE" in
             full)
@@ -749,10 +753,8 @@ jobs:
               ;;
           esac
 
-          # 5. 展示预览
           show_preview "$PKG_TYPE" "$FIRST_INSTALL"
 
-          # 6. 确认
           if ! $FORCE_MODE && ! $YES_MODE; then
             if [ -t 0 ]; then
               read -p "确认执行 $ACTION_LABEL? (y/N): " confirm
@@ -766,7 +768,6 @@ jobs:
             fi
           fi
 
-          # 7. 执行
           echo ""
           echo -e "========================================"
           echo -e " ${BOLD}开始执行: $ACTION_LABEL${NC}"
@@ -780,7 +781,6 @@ jobs:
             install_app "$app_tar"
           done
 
-          # 8. 结果
           echo ""
           echo -e "========================================"
           echo -e " ${GREEN}${BOLD}✅ $ACTION_LABEL 完成！${NC}"
@@ -833,6 +833,7 @@ jobs:
           echo " 构建完成摘要"
           echo "============================================"
           echo "构建类型: $BUILD_TYPE"
+          echo "Nuitka 编译: ${{ inputs.enable_nuitka || 'true' }}"
           if [ "$BUILD_TYPE" != "app-only" ]; then
             echo "Python版本: ${{ steps.tag_info.outputs.COMPONENT_VERSION || env.PYTHON_VERSION }}"
           fi
