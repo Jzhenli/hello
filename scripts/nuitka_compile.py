@@ -141,7 +141,7 @@ def compile_module(
     cmd = [
         python_exe, "-m", "nuitka",
         "--module", module_name,
-        "--output-dir", str(compiled_dir),
+        f"--output-dir={compiled_dir}",
         "--remove-output",
         "--assume-yes-for-downloads",
         "--nofollow-imports",
