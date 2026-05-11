@@ -1,0 +1,19 @@
+name: bacnet
+type: south
+version: "1.0.0"
+description: "BACnet/IP Protocol Plugin"
+enabled: true
+
+defaults:
+  device_id: 1234
+  port: 47808
+  timeout: 5
+  heartbeat_mode: false
+  heartbeat_property: null
+
+capabilities:
+  - read_property
+  - write_property
+  - read_property_multiple
+  - who_is
+  - i_am

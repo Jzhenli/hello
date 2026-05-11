@@ -1,0 +1,118 @@
+asset: example_modbus_rtu_device
+name: "Example Modbus RTU Device"
+description: "Sample Modbus RTU serial device configuration"
+enabled: false
+status: active
+
+plugin:
+  name: modbus_rtu
+  config:
+    serial_port: "/dev/ttyUSB0"
+    baudrate: 9600
+    parity: "N"
+    stopbits: 1
+    bytesize: 8
+    slave_id: 1
+    timeout: 3
+    reconnect_interval: 5
+    max_gap: 5
+
+points:
+  - name: temperature
+    description: "Temperature sensor (float32)"
+    data_type: float32
+    unit: "°C"
+    enabled: true
+    config:
+      address: 0
+      register_type: holding
+      count: 2
+      scale: 0.1
+    metadata:
+      min: -20
+      max: 60
+    tags:
+      - environment
+      - temperature
+
+  - name: pressure
+    description: "Pressure sensor (int32)"
+    data_type: int32
+    unit: "kPa"
+    enabled: true
+    config:
+      address: 2
+      register_type: holding
+      count: 2
+      word_order: little
+    metadata:
+      min: 0
+      max: 1000
+    tags:
+      - process
+      - pressure
+
+  - name: level
+    description: "Tank level (uint16)"
+    data_type: uint16
+    unit: "%"
+    enabled: true
+    config:
+      address: 4
+      register_type: holding
+    metadata:
+      min: 0
+      max: 100
+    tags:
+      - process
+      - level
+
+  - name: motor_run
+    description: "Motor run command (coil)"
+    data_type: bool
+    enabled: true
+    config:
+      address: 0
+      register_type: coil
+    tags:
+      - equipment
+      - motor
+      - control
+
+  - name: emergency_stop
+    description: "Emergency stop button (discrete input)"
+    data_type: bool
+    enabled: true
+    config:
+      address: 0
+      register_type: discrete_input
+    tags:
+      - equipment
+      - safety
+
+  - name: voltage_l1
+    description: "Voltage L1 (input register)"
+    data_type: uint16
+    unit: "V"
+    enabled: true
+    config:
+      address: 0
+      register_type: input
+      scale: 0.1
+    metadata:
+      min: 0
+      max: 500
+    tags:
+      - electrical
+      - voltage
+
+metadata:
+  location: "Workshop B"
+  manufacturer: "RTU Device Corp"
+  model: "RTU-200"
+  install_date: "2024-06-15"
+
+tags:
+  - example
+  - demo
+  - rtu

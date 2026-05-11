@@ -1,0 +1,24 @@
+name: knx
+type: south
+version: "1.0.0"
+description: "KNX/IP Protocol Plugin"
+enabled: true
+
+defaults:
+  gateway_ip: "192.168.1.100"
+  gateway_port: 3671
+  local_ip: null
+  route_back: false
+  interval: 5
+  reconnect_interval: 5
+  heartbeat_timeout: 2.0
+  heartbeat_retries: 2
+  point_timeout: 3.0
+  point_retries: 2
+  sync_mode: "smart"
+  sync_interval: 60
+  max_concurrent_syncs: 5
+
+capabilities:
+  - read_group_address
+  - write_group_address

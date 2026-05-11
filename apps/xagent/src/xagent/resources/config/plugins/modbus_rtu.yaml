@@ -1,0 +1,26 @@
+name: modbus_rtu
+type: south
+version: "1.0.0"
+description: "Modbus RTU Serial Protocol Plugin"
+enabled: true
+
+defaults:
+  serial_port: "/dev/ttyUSB0"
+  baudrate: 9600
+  parity: "N"
+  stopbits: 1
+  bytesize: 8
+  slave_id: 1
+  timeout: 3
+  reconnect_interval: 5
+  heartbeat_address: null
+  heartbeat_timeout: 1.5
+  max_gap: 5
+
+capabilities:
+  - read_coils
+  - read_discrete_inputs
+  - read_holding_registers
+  - read_input_registers
+  - write_single_coil
+  - write_single_register

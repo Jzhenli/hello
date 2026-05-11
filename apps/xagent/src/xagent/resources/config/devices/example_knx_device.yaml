@@ -1,0 +1,236 @@
+# Example KNX Device Configuration
+# This is a sample device configuration file for KNX protocol.
+# Copy and modify this file to create your own KNX devices.
+
+asset: example_knx_device
+name: "Example KNX Device"
+description: "Sample KNX/IP device configuration"
+enabled: true
+status: active
+
+plugin:
+  name: knx
+  config:
+    gateway_ip: "192.168.1.100"
+    gateway_port: 3671
+    local_ip: null
+    route_back: false
+    interval: 10
+    reconnect_interval: 5
+    heartbeat_timeout: 2.0
+    heartbeat_retries: 2
+    point_timeout: 3.0
+    point_retries: 2
+    sync_mode: "smart"
+    sync_interval: 60
+    max_concurrent_syncs: 5
+
+points:
+  - name: light_switch
+    description: "Living room light switch"
+    data_type: switch
+    unit: null
+    enabled: true
+    config:
+      group_address: "1/2/3"
+      status_address: "1/2/4"
+      control_address: "1/2/5"
+      writable: true
+    metadata:
+      room: "Living Room"
+      device_type: "light"
+    tags:
+      - lighting
+      - switch
+
+  - name: temperature
+    description: "Room temperature sensor"
+    data_type: temperature
+    unit: "°C"
+    enabled: true
+    config:
+      group_address: "2/3/4"
+      writable: false
+    metadata:
+      min: 0
+      max: 50
+      room: "Living Room"
+    tags:
+      - environment
+      - temperature
+
+  - name: brightness
+    description: "Light brightness level"
+    data_type: brightness
+    unit: "%"
+    enabled: true
+    config:
+      group_address: "3/4/5"
+      status_address: "3/4/6"
+      control_address: "3/4/7"
+      writable: true
+    metadata:
+      min: 0
+      max: 100
+    tags:
+      - lighting
+      - brightness
+
+  - name: blinds_position
+    description: "Window blinds position"
+    data_type: blinds
+    unit: "%"
+    enabled: true
+    config:
+      group_address: "4/5/6"
+      status_address: "4/5/7"
+      control_address: "4/5/8"
+      writable: true
+    metadata:
+      min: 0
+      max: 100
+      room: "Living Room"
+    tags:
+      - blinds
+      - position
+
+  - name: presence_sensor
+    description: "Presence detection sensor"
+    data_type: binary
+    unit: null
+    enabled: true
+    config:
+      group_address: "5/6/7"
+      writable: false
+    metadata:
+      room: "Living Room"
+    tags:
+      - sensor
+      - presence
+
+  - name: humidity
+    description: "Room humidity sensor"
+    data_type: humidity
+    unit: "%"
+    enabled: true
+    config:
+      group_address: "6/7/8"
+      writable: false
+    metadata:
+      min: 0
+      max: 100
+      room: "Living Room"
+    tags:
+      - environment
+      - humidity
+
+  - name: co2_level
+    description: "CO2 concentration sensor"
+    data_type: co2
+    unit: "ppm"
+    enabled: true
+    config:
+      group_address: "7/8/9"
+      writable: false
+    metadata:
+      min: 0
+      max: 5000
+      room: "Living Room"
+    tags:
+      - environment
+      - air_quality
+
+  - name: power_meter
+    description: "Power consumption meter"
+    data_type: power
+    unit: "W"
+    enabled: true
+    config:
+      group_address: "8/9/10"
+      writable: false
+    metadata:
+      min: 0
+      max: 10000
+    tags:
+      - energy
+      - power
+
+  - name: energy_meter
+    description: "Energy consumption meter"
+    data_type: energy
+    unit: "kWh"
+    enabled: true
+    config:
+      group_address: "9/10/11"
+      writable: false
+    metadata:
+      min: 0
+    tags:
+      - energy
+      - consumption
+
+  - name: scene_control
+    description: "Scene control"
+    data_type: scene
+    unit: null
+    enabled: true
+    config:
+      group_address: "10/11/12"
+      writable: true
+    metadata:
+      scenes:
+        - id: 1
+          name: "Morning"
+        - id: 2
+          name: "Evening"
+        - id: 3
+          name: "Night"
+    tags:
+      - scene
+      - control
+
+  - name: dimming_control
+    description: "Light dimming control"
+    data_type: dimming
+    unit: "%"
+    enabled: true
+    config:
+      group_address: "11/12/13"
+      status_address: "11/12/14"
+      control_address: "11/12/15"
+      writable: true
+    metadata:
+      min: 0
+      max: 100
+    tags:
+      - lighting
+      - dimming
+
+  - name: color_light
+    description: "RGB color light control"
+    data_type: color_rgb
+    unit: null
+    enabled: true
+    config:
+      group_address: "12/13/14"
+      status_address: "12/13/15"
+      control_address: "12/13/16"
+      writable: true
+    metadata:
+      room: "Living Room"
+    tags:
+      - lighting
+      - color
+
+metadata:
+  location: "Building A, Floor 1"
+  manufacturer: "KNX Association"
+  model: "KNX/IP Gateway"
+  install_date: "2024-01-15"
+  gateway_type: "IP Router"
+  project_id: "KNX-Project-001"
+
+tags:
+  - knx
+  - building_automation
+  - example

@@ -1,0 +1,27 @@
+# Example MQTT North Device Configuration
+# This device publishes data to an MQTT broker.
+
+asset: example_mqtt_north
+name: "Example MQTT Publisher"
+description: "Sample MQTT north device for publishing data"
+enabled: fasle
+status: active
+
+plugin:
+  name: mqtt_client
+  config:
+    host: "192.168.1.200"
+    port: 1883
+    client_id: "xagent_publisher"
+    qos: 1
+
+points: []
+
+metadata:
+  purpose: "Data publishing"
+  target_broker: "Mosquitto"
+
+tags:
+  - example
+  - north
+  - mqtt

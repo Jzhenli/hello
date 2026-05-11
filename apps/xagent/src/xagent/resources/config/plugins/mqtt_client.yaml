@@ -1,0 +1,19 @@
+name: mqtt_client
+type: north
+version: "1.0.0"
+description: "MQTT Client Plugin for publishing data"
+enabled: true
+
+defaults:
+  host: "127.0.0.1"
+  port: 1883
+  username: null
+  password: null
+  client_id: "xagent_client"
+  qos: 1
+  keepalive: 60
+  clean_session: true
+
+capabilities:
+  - publish
+  - subscribe

@@ -1,0 +1,194 @@
+asset: example_modbus_device
+name: "Example Modbus Device"
+description: "Sample Modbus TCP device configuration"
+enabled: true
+status: active
+
+plugin:
+  name: modbus_tcp
+  config:
+    host: "192.168.1.100"
+    port: 502
+    slave_id: 1
+    timeout: 5
+    reconnect_interval: 5
+    max_gap: 5
+
+points:
+  - name: temperature
+    description: "Temperature sensor (float32, standard Modbus)"
+    data_type: float32
+    unit: "°C"
+    enabled: true
+    config:
+      address: 0
+      register_type: holding
+      count: 2
+      scale: 0.1
+    metadata:
+      min: -20
+      max: 60
+    tags:
+      - environment
+      - temperature
+
+  - name: pressure
+    description: "Pressure sensor (int32, word_order=little for Siemens/Mitsubishi)"
+    data_type: int32
+    unit: "kPa"
+    enabled: true
+    config:
+      address: 2
+      register_type: holding
+      count: 2
+      word_order: little
+    metadata:
+      min: 0
+      max: 1000
+    tags:
+      - process
+      - pressure
+
+  - name: level
+    description: "Tank level (uint16, single register)"
+    data_type: uint16
+    unit: "%"
+    enabled: true
+    config:
+      address: 4
+      register_type: holding
+    metadata:
+      min: 0
+      max: 100
+    tags:
+      - process
+      - level
+
+  - name: flow_rate
+    description: "Flow rate (float32_swap = float32 with word_order=little)"
+    data_type: float32_swap
+    unit: "m³/h"
+    enabled: true
+    config:
+      address: 5
+      register_type: holding
+      count: 2
+    metadata:
+      min: 0
+      max: 100
+    tags:
+      - process
+      - flow
+
+  - name: voltage
+    description: "Voltage (int16 with byte_order=little)"
+    data_type: int16
+    unit: "V"
+    enabled: true
+    config:
+      address: 7
+      register_type: holding
+      byte_order: little
+      scale: 0.1
+    metadata:
+      min: 0
+      max: 500
+    tags:
+      - electrical
+      - voltage
+
+  - name: motor_run
+    description: "Motor run command (coil)"
+    data_type: bool
+    enabled: true
+    config:
+      address: 0
+      register_type: coil
+    tags:
+      - equipment
+      - motor
+      - control
+
+  - name: motor_status
+    description: "Motor running status (coil)"
+    data_type: bool
+    enabled: true
+    config:
+      address: 1
+      register_type: coil
+    tags:
+      - equipment
+      - motor
+
+  - name: emergency_stop
+    description: "Emergency stop button (discrete input)"
+    data_type: bool
+    enabled: true
+    config:
+      address: 0
+      register_type: discrete_input
+    tags:
+      - equipment
+      - safety
+
+  - name: power_consumption
+    description: "Power consumption (uint64, 4 registers)"
+    data_type: uint64
+    unit: "Wh"
+    enabled: true
+    config:
+      address: 10
+      register_type: holding
+      count: 4
+    tags:
+      - energy
+      - metering
+
+  - name: energy_value
+    description: "Energy value (float64, 4 registers)"
+    data_type: float64
+    unit: "kWh"
+    enabled: true
+    config:
+      address: 14
+      register_type: holding
+      count: 4
+    tags:
+      - energy
+
+  - name: device_name
+    description: "Device name string (10 characters = 5 registers)"
+    data_type: string
+    enabled: true
+    config:
+      address: 20
+      register_type: holding
+      count: 5
+    tags:
+      - info
+
+  - name: voltage_l1
+    description: "Voltage L1 (input register)"
+    data_type: uint16
+    unit: "V"
+    enabled: true
+    config:
+      address: 0
+      register_type: input
+      scale: 0.1
+    metadata:
+      min: 0
+      max: 500
+    tags:
+      - electrical
+      - voltage
+
+metadata:
+  location: "Workshop A"
+  manufacturer: "Example Corp"
+  model: "EX-100"
+  install_date: "2024-01-15"
+
+tags:
+  - example
+  - demo

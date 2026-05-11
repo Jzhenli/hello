@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XAgent Gateway - 设备监控</title>
+    <link rel="stylesheet" href="/static/style.css?v=2">
+    <style>
+        .initial-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease-out;
+        }
+        .initial-loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .initial-loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(52, 152, 219, 0.2);
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .initial-loading .loading-text {
+            color: #2c3e50;
+            margin-top: 20px;
+            font-size: 18px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="initial-loading" class="initial-loading">
+        <div class="spinner"></div>
+        <div class="loading-text">XAgent Gateway 加载中...</div>
+    </div>
+    
+    <div class="container">
+        <header class="header">
+            <h1>XAgent Gateway</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status-indicator disconnected">未连接</span>
+                <span id="last-update">最后更新: --</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="config-section">
+                <h2>配置管理</h2>
+                <div class="config-controls">
+                    <div class="token-input-group">
+                        <label for="api-token">API Token:</label>
+                        <input type="password" id="api-token" placeholder="输入API Token">
+                    </div>
+                    <div class="config-buttons">
+                        <input type="file" id="config-file-input" accept=".yaml,.yml" style="display: none;">
+                        <button id="upload-config-btn" class="btn-primary">上传配置</button>
+                        <button id="download-config-btn" class="btn-secondary">下载配置</button>
+                    </div>
+                </div>
+                <div id="config-message" class="config-message"></div>
+            </section>
+
+            <section class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-value" id="device-count">0</div>
+                    <div class="stat-label">设备数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="point-count">0</div>
+                    <div class="stat-label">点位总数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="reading-count">0</div>
+                    <div class="stat-label">数据记录</div>
+                </div>
+            </section>
+
+            <section class="devices-section">
+                <h2>设备列表</h2>
+                <div class="filter-bar">
+                    <input type="text" id="device-filter" placeholder="搜索设备...">
+                    <select id="status-filter">
+                        <option value="">全部状态</option>
+                        <option value="online">在线</option>
+                        <option value="offline">离线</option>
+                    </select>
+                    <button id="refresh-btn" class="btn-primary">刷新</button>
+                </div>
+                <div id="devices-container" class="devices-grid">
+                    <div class="loading">加载中...</div>
+                </div>
+            </section>
+        </main>
+
+        <div id="device-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-device-name">设备详情</h3>
+                    <span class="modal-close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="device-info">
+                        <div class="info-row">
+                            <span class="info-label">设备ID:</span>
+                            <span id="modal-device-id" class="info-value">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">服务名称:</span>
+                            <span id="modal-service-name" class="info-value">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">设备状态:</span>
+                            <span id="modal-device-status" class="info-value">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">最后更新:</span>
+                            <span id="modal-last-update" class="info-value">-</span>
+                        </div>
+                    </div>
+                    <h4>点位数据</h4>
+                    <div id="points-container" class="points-list">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=2"></script>
+</body>
+</html>
