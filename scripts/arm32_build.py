@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from typing import Optional
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -108,7 +109,7 @@ class ARM32Builder:
         return self.shared_python_dir / "bin" / "python3"
 
     @property
-    def pbs_pip_exe(self) -> Path | None:
+    def pbs_pip_exe(self) -> Optional[Path]:
         pip3 = self.shared_python_dir / "bin" / "pip3"
         if pip3.exists():
             return pip3
