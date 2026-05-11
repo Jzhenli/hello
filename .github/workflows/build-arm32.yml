@@ -81,11 +81,6 @@ jobs:
       - name: Build ARM32 Packages
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         uses: uraimo/run-on-arch-action@v3
-        env:
-          BUILD_TYPE: ${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}
-          TARGET_COMPONENT: ${{ steps.tag_info.outputs.COMPONENT_NAME || '' }}
-          TARGET_VERSION: ${{ steps.tag_info.outputs.COMPONENT_VERSION || '' }}
-          ENABLE_NUITKA: ${{ inputs.enable_nuitka || 'true' }}
         with:
           arch: armv7
           distro: ${{ inputs.distro || 'bullseye' }}
@@ -107,14 +102,18 @@ jobs:
             retries=5
             EOF
           run: |
+            BUILD_TYPE="${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}"
+            TARGET_COMPONENT="${{ steps.tag_info.outputs.COMPONENT_NAME || '' }}"
+            TARGET_VERSION="${{ steps.tag_info.outputs.COMPONENT_VERSION || '' }}"
+            ENABLE_NUITKA="${{ inputs.enable_nuitka || 'true' }}"
             echo "📋 环境变量: BUILD_TYPE=${BUILD_TYPE}, TARGET_COMPONENT=${TARGET_COMPONENT}, TARGET_VERSION=${TARGET_VERSION}"
             python3 scripts/arm32_build.py \
-              --build-type "${BUILD_TYPE:-full}" \
-              --target-component "${TARGET_COMPONENT:-}" \
-              --target-version "${TARGET_VERSION:-}" \
+              --build-type "${BUILD_TYPE}" \
+              --target-component "${TARGET_COMPONENT}" \
+              --target-version "${TARGET_VERSION}" \
               --python-version "${{ env.PYTHON_VERSION }}" \
               --pbs-release "${{ env.PBS_RELEASE }}" \
-              --enable-nuitka "${ENABLE_NUITKA:-true}" \
+              --enable-nuitka "${ENABLE_NUITKA}" \
               --strip-stdlib "${{ inputs.strip_stdlib || 'true' }}"
 
       # ══════════════════════════════════════════════════
