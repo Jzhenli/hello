@@ -66,11 +66,18 @@ def check_nuitka(python_exe: str) -> str:
         if result.returncode == 0:
             version_line = result.stdout.strip().split("\n")[0]
             return version_line
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        print("❌ 错误: Nuitka 检查超时或找不到 Python")
+        print(f"  异常: {e}")
+        sys.exit(1)
 
     print("❌ 错误: Nuitka 未安装或不可用")
     print(f"  Python: {python_exe}")
+    print(f"  返回码: {result.returncode}")
+    if result.stdout:
+        print(f"  stdout: {result.stdout[:500]}")
+    if result.stderr:
+        print(f"  stderr: {result.stderr[:500]}")
     print(f"  请运行: {python_exe} -m pip install nuitka ordered-set zstandard")
     sys.exit(1)
 

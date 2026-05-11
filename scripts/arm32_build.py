@@ -140,24 +140,21 @@ class ARM32Builder:
             return
         
         print("  ⚠ Nuitka 验证失败，调试信息:")
+        print(f"  返回码: {result.returncode}")
+        if result.stderr:
+            print(f"  stderr: {result.stderr[:500]}")
         
-        result = subprocess.run(
+        result2 = subprocess.run(
             [str(self.pbs_python_exe), "-c", "import site; print(chr(10).join(site.getsitepackages()))"],
             capture_output=True, text=True
         )
-        print(f"  site-packages: {result.stdout.strip()}")
+        print(f"  site-packages: {result2.stdout.strip()}")
         
-        result = subprocess.run(
-            [str(self.pbs_python_exe), "-c", "import sys; print(chr(10).join(sys.path))"],
-            capture_output=True, text=True
-        )
-        print(f"  sys.path: {result.stdout.strip()}")
-        
-        result = subprocess.run(
+        result3 = subprocess.run(
             [str(self.pbs_python_exe), "-c", "import nuitka; print(nuitka.__file__)"],
             capture_output=True, text=True
         )
-        print(f"  nuitka location: {result.stdout.strip() or result.stderr.strip()}")
+        print(f"  nuitka location: {result3.stdout.strip() or result3.stderr.strip()}")
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
         """安装依赖到指定目录"""
