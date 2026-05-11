@@ -204,6 +204,21 @@ class ARM32Builder:
         self._print_header()
 
         self.dist_dir.mkdir(parents=True, exist_ok=True)
+        
+        if self.build_type == "app-only":
+            for f in self.dist_dir.glob("*.tar.gz"):
+                if f.name != f"{self.target_component}-arm32.tar.gz":
+                    f.unlink()
+                    print(f"  🧹 清理残留: {f.name}")
+            for f in self.dist_dir.glob("checksums.txt"):
+                f.unlink()
+        elif self.build_type == "python-only":
+            for f in self.dist_dir.glob("*-arm32.tar.gz"):
+                if f.name != "shared-python-base-arm32.tar.gz":
+                    f.unlink()
+                    print(f"  🧹 清理残留: {f.name}")
+            for f in self.dist_dir.glob("checksums.txt"):
+                f.unlink()
 
         need_package_python = self.build_type in ("full", "python-only")
         
