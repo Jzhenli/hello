@@ -155,7 +155,7 @@ def compile_module(
         f"--follow-import-to={module_name}",
         "--no-progressbar",
         "--lto=no",
-        "--jobs=auto",
+        "--jobs=2",
     ]
 
     result = subprocess.run(cmd, cwd=str(src_dir))
