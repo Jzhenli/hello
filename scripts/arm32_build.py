@@ -295,10 +295,11 @@ class ARM32Builder:
                 if d.is_dir():
                     shutil.rmtree(d, ignore_errors=True)
 
-        # 删除 include
-        include_dir = self.shared_python_dir / "include"
-        if include_dir.exists():
-            shutil.rmtree(include_dir)
+        # 删除 include (Nuitka 编译需要，仅在禁用 Nuitka 时删除)
+        if not self.enable_nuitka:
+            include_dir = self.shared_python_dir / "include"
+            if include_dir.exists():
+                shutil.rmtree(include_dir)
 
         print("  ✅ stdlib 已裁剪")
 
