@@ -207,26 +207,25 @@ class ARM32Builder:
 
         need_package_python = self.build_type in ("full", "python-only")
         
-        # 1. 下载并准备 Python 环境（暂不裁剪，编译需要完整环境）
-        self._download_pbs_python()
+        # 1. 下载 PBS Python（保留原始目录用于后续打包）
+        pbs_dir = self._download_pbs_python()
+        
+        # 2. 复制到 shared-python 用于编译
+        self._setup_shared_python(pbs_dir)
         self._write_version(need_package_python)
         
-        # 2. 安装 Nuitka（如果启用）
+        # 3. 安装 Nuitka（如果启用）
         if self.enable_nuitka:
             print("\n━━━ 安装 Nuitka ━━━")
             self.pip_install("cffi", "nuitka", "ordered-set", "zstandard")
         
-        # 3. 构建应用（编译）
+        # 4. 构建应用（编译）
         if self.build_type in ("full", "app-only"):
             self.build_apps()
         
-        # 4. 裁剪 stdlib（编译后裁剪，减小最终产物体积）
-        if self.strip_stdlib:
-            self._strip_stdlib()
-        
-        # 5. 打包 shared-python
+        # 5. 打包 shared-python（从原始 PBS 重新复制，确保干净）
         if need_package_python:
-            self._package_shared_python()
+            self._package_clean_shared_python(pbs_dir)
 
         self._fix_dist_permissions()
 
@@ -247,7 +246,8 @@ class ARM32Builder:
 
     # ─── Shared Python ───
 
-    def _download_pbs_python(self):
+    def _download_pbs_python(self) -> Path:
+        """下载 PBS Python，返回原始目录路径"""
         print("\n━━━ 下载 PBS Python ━━━")
         url = PBS_URL_TEMPLATE.format(
             pbs_release=self.pbs_release,
@@ -269,7 +269,14 @@ class ARM32Builder:
             print("❌ 无法找到解压后的 Python 目录")
             sys.exit(1)
 
-        # 复制到 shared-python
+        print(f"  ✅ PBS Python 已下载: {pbs_dir}")
+        return pbs_dir
+
+    def _setup_shared_python(self, pbs_dir: Path):
+        """从原始目录复制到 shared-python"""
+        print("\n━━━ 设置 shared-python 环境 ━━━")
+        if self.shared_python_dir.exists():
+            shutil.rmtree(self.shared_python_dir)
         self.shared_python_dir.mkdir(parents=True, exist_ok=True)
         run_cmd(["cp", "-a", f"{pbs_dir}/.", str(self.shared_python_dir)])
 
@@ -278,10 +285,11 @@ class ARM32Builder:
             print(f"❌ python3 不可执行: {self.pbs_python_exe}")
             sys.exit(1)
 
-        print(f"  ✅ PBS Python 已就绪: {self.pbs_python_exe}")
+        print(f"  ✅ shared-python 已就绪: {self.pbs_python_exe}")
 
     def _strip_stdlib(self):
-        print("\n━━━ 裁剪 stdlib ━━━")
+        """裁剪 stdlib，删除不需要的模块和头文件"""
+        print("  裁剪 stdlib...")
         pylib_dirs = list(self.shared_python_dir.glob("lib/python3.*"))
         if not pylib_dirs:
             print("  ⚠ 未找到 lib/python3.* 目录")
@@ -301,7 +309,7 @@ class ARM32Builder:
                 if d.is_dir():
                     shutil.rmtree(d, ignore_errors=True)
 
-        # 删除 include（编译后不再需要）
+        # 删除 include
         include_dir = self.shared_python_dir / "include"
         if include_dir.exists():
             shutil.rmtree(include_dir)
@@ -317,8 +325,29 @@ class ARM32Builder:
         (self.shared_python_dir / "VERSION").write_text(py_ver, encoding="utf-8")
         print(f"  版本: {py_ver}")
 
-    def _package_shared_python(self):
-        py_ver = (self.shared_python_dir / "VERSION").read_text().strip()
+    def _package_clean_shared_python(self, pbs_dir: Path):
+        """从原始 PBS 目录重新复制干净环境，裁剪后打包"""
+        print("\n━━━ 打包 shared-python ━━━")
+        
+        # 删除旧的 shared-python 目录
+        if self.shared_python_dir.exists():
+            shutil.rmtree(self.shared_python_dir)
+        
+        # 从原始 PBS 目录重新复制
+        self.shared_python_dir.mkdir(parents=True, exist_ok=True)
+        run_cmd(["cp", "-a", f"{pbs_dir}/.", str(self.shared_python_dir)])
+        
+        # 写入版本
+        py_ver = f"{self.pbs_python}-{self.pbs_release}"
+        if self.build_type == "python-only" and self.target_version:
+            py_ver = self.target_version
+        (self.shared_python_dir / "VERSION").write_text(py_ver, encoding="utf-8")
+        
+        # 裁剪 stdlib
+        if self.strip_stdlib:
+            self._strip_stdlib()
+        
+        # 打包
         tar_name = "shared-python-base-arm32.tar.gz"
         tar_path = self.dist_dir / tar_name
 
