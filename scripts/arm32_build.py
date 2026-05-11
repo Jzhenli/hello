@@ -118,9 +118,9 @@ class ARM32Builder:
     def pip_install(self, *args):
         """使用 PBS Python 的 pip 安装包"""
         if self.pbs_pip_exe:
-            cmd = [str(self.pbs_pip_exe), "install"] + list(args)
+            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
         else:
-            cmd = [str(self.pbs_python_exe), "-m", "pip", "install"] + list(args)
+            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
         run_cmd(cmd)
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
@@ -128,12 +128,14 @@ class ARM32Builder:
         if self.pbs_pip_exe:
             cmd = [
                 str(self.pbs_pip_exe), "install",
+                "--extra-index-url=https://www.piwheels.org/simple",
                 "--target", str(target_dir),
                 "-r", str(requirements_file),
             ]
         else:
             cmd = [
                 str(self.pbs_python_exe), "-m", "pip", "install",
+                "--extra-index-url=https://www.piwheels.org/simple",
                 "--target", str(target_dir),
                 "-r", str(requirements_file),
             ]
