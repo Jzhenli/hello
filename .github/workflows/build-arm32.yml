@@ -11,6 +11,14 @@ on:
         description: 'Python version (3.10 / 3.11 / 3.12)'
         required: false
         default: '3.11'
+      distro:
+        description: 'Debian distro (bullseye for older GLIBC 2.31, bookworm for GLIBC 2.36)'
+        required: false
+        type: choice
+        options:
+          - bullseye
+          - bookworm
+        default: 'bullseye'
       strip_stdlib:
         description: 'Strip unused stdlib modules (saves ~3 MB)'
         required: false
@@ -76,7 +84,7 @@ jobs:
           ENABLE_NUITKA: ${{ inputs.enable_nuitka || 'true' }}
         with:
           arch: armv7
-          distro: bookworm
+          distro: ${{ inputs.distro || 'bullseye' }}
           githubToken: ${{ github.token }}
           install: |
             apt-get update -qq
