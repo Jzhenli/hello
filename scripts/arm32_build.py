@@ -127,43 +127,6 @@ class ARM32Builder:
         else:
             cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
         run_cmd(cmd, env=env)
-        
-        self._verify_nuitka_install()
-
-    def _verify_nuitka_install(self):
-        """验证 Nuitka 是否正确安装，打印调试信息"""
-        result = subprocess.run(
-            [str(self.pbs_python_exe), "-m", "nuitka", "--version"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            print(f"  ✅ Nuitka 验证成功: {result.stdout.strip().split(chr(10))[0]}")
-            return
-        
-        print("  ⚠ Nuitka 验证失败，调试信息:")
-        print(f"  返回码: {result.returncode}")
-        if result.stderr:
-            print(f"  stderr:\n{result.stderr}")
-        
-        for pkg in ["ordered_set", "zstandard"]:
-            r = subprocess.run(
-                [str(self.pbs_python_exe), "-c", f"import {pkg}; print({pkg}.__file__)"],
-                capture_output=True, text=True
-            )
-            status = "✅" if r.returncode == 0 else "❌"
-            print(f"  {pkg}: {status} {r.stdout.strip() or r.stderr.strip()}")
-        
-        result2 = subprocess.run(
-            [str(self.pbs_python_exe), "-c", "import site; print(chr(10).join(site.getsitepackages()))"],
-            capture_output=True, text=True
-        )
-        print(f"  site-packages: {result2.stdout.strip()}")
-        
-        result3 = subprocess.run(
-            [str(self.pbs_python_exe), "-c", "import nuitka; print(nuitka.__file__)"],
-            capture_output=True, text=True
-        )
-        print(f"  nuitka location: {result3.stdout.strip() or result3.stderr.strip()}")
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
         """安装依赖到指定目录"""
@@ -494,12 +457,14 @@ class ARM32Builder:
         nuitka_script = self.repo_root / "scripts" / "nuitka_compile.py"
         app_src = build_dir / "usr" / "app"
 
-        run_cmd([
+        cmd = [
             str(self.pbs_python_exe),
             str(nuitka_script),
             str(app_src),
             "--python", str(self.pbs_python_exe),
-        ])
+            "-j", "2",
+        ]
+        run_cmd(cmd)
 
     def _generate_run_sh(self, build_dir: Path, module_name: str, app_version: str):
         """生成启动脚本 run.sh"""
