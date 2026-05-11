@@ -17,6 +17,7 @@ ARM32 构建脚本 — 在 QEMU ARM32 环境中运行
 """
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -116,18 +117,47 @@ class ARM32Builder:
     # ─── pip 封装 ───
 
     def pip_install(self, *args):
-        """使用 PBS Python 的 pip 安装包到 PBS Python 的 site-packages"""
-        result = subprocess.run(
-            [str(self.pbs_python_exe), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
-            capture_output=True, text=True, check=True
-        )
-        site_packages = result.stdout.strip()
+        """使用 PBS Python 的 pip 安装包"""
+        env = os.environ.copy()
+        env["PIP_ROOT_USER_ACTION"] = "ignore"
         
         if self.pbs_pip_exe:
-            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple", "--target", site_packages] + list(args)
+            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
         else:
-            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple", "--target", site_packages] + list(args)
-        run_cmd(cmd)
+            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
+        run_cmd(cmd, env=env)
+        
+        self._verify_nuitka_install()
+
+    def _verify_nuitka_install(self):
+        """验证 Nuitka 是否正确安装，打印调试信息"""
+        result = subprocess.run(
+            [str(self.pbs_python_exe), "-m", "nuitka", "--version"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            print(f"  ✅ Nuitka 验证成功: {result.stdout.strip().split(chr(10))[0]}")
+            return
+        
+        print("  ⚠ Nuitka 验证失败，调试信息:")
+        
+        result = subprocess.run(
+            [str(self.pbs_python_exe), "-c", "import site; print(chr(10).join(site.getsitepackages()))"],
+            capture_output=True, text=True
+        )
+        print(f"  site-packages: {result.stdout.strip()}")
+        
+        result = subprocess.run(
+            [str(self.pbs_python_exe), "-c", "import sys; print(chr(10).join(sys.path))"],
+            capture_output=True, text=True
+        )
+        print(f"  sys.path: {result.stdout.strip()}")
+        
+        result = subprocess.run(
+            [str(self.pbs_python_exe), "-c", "import nuitka; print(nuitka.__file__)"],
+            capture_output=True, text=True
+        )
+        print(f"  nuitka location: {result.stdout.strip() or result.stderr.strip()}")
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
         """安装依赖到指定目录"""
