@@ -1,0 +1,119 @@
+# This project was generated with 0.4.1 using template: https://github.com/beeware/briefcase-template @ v0.4.1
+[tool.briefcase]
+project_name = "XAgent"
+bundle = "com.adveco.xagent"
+version = "0.0.21"
+url = "https://xagent.adveco.com/xagent"
+# license.file = "LICENSE"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+author = "Jzhenli"
+author_email = "zhen.li@adveco.cn"
+
+[tool.briefcase.app.xagent]
+formal_name = "XAgent"
+description = "Iot gateway"
+long_description = """More details about the app should go here.
+"""
+sources = [
+    "src/xagent",
+]
+test_sources = [
+    "tests",
+]
+console_app = false
+ui = "toga"
+
+test_requires = [
+    "pytest",
+]
+
+[tool.briefcase.app.xagent.macOS]
+universal_build = true
+requires = [
+    "toga-cocoa>=0.4.0",
+    "fastapi==0.125.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=1.10.0,<2.0.0",
+    "aiosqlite>=0.19.0",
+    "pyyaml>=6.0.1",
+    "prometheus-client>=0.19.0",
+    "python-multipart>=0.0.6",
+    "pymodbus>=3.5.0",
+    "pyserial>=3.5",
+    "aiomqtt>=0.1.0",
+    "xknx==2.12.2",
+    "protobuf>=4.25.0",
+    "platformdirs>=3.0.0",
+]
+
+[tool.briefcase.app.xagent.linux]
+console_app = true
+requires = [
+    "pydantic_core==2.46.3",
+    "pydantic==2.13.3",
+    "fastapi==0.136.1",
+    "uvicorn>=0.27.0",
+    "aiosqlite>=0.19.0",
+    "pyyaml>=6.0.1",
+    "prometheus-client>=0.19.0",
+    "python-multipart>=0.0.6",
+    "pymodbus>=3.5.0",
+    "pyserial>=3.5",
+    "aiomqtt>=0.1.0",
+    "xknx==2.12.2",
+    "protobuf>=4.25.0",
+    "platformdirs>=3.0.0",
+]
+
+[tool.briefcase.app.xagent.windows]
+requires = [
+    "pydantic_core==2.46.3",
+    "pydantic==2.13.3",
+    "toga-winforms>=0.4.0",
+    "fastapi==0.136.1",
+    "uvicorn>=0.27.0",
+    "aiosqlite>=0.19.0",
+    "pyyaml>=6.0.1",
+    "prometheus-client>=0.19.0",
+    "python-multipart>=0.0.6",
+    "pymodbus>=3.5.0",
+    "pyserial>=3.5",
+    "aiomqtt>=0.1.0",
+    "xknx==2.12.2",
+    "bacpypes3==0.0.106",
+    "protobuf>=4.25.0",
+    "platformdirs>=3.0.0",
+]
+
+# Mobile deployments
+[tool.briefcase.app.xagent.iOS]
+supported = false
+
+[tool.briefcase.app.xagent.android]
+requires = [
+    "pydantic_core==2.46.3",
+    "pydantic==2.13.3",
+    "toga-android>=0.4.0",
+    "fastapi==0.136.1",
+    "uvicorn>=0.27.0",
+    "aiosqlite>=0.19.0",
+    "pyyaml>=6.0.1",
+    "prometheus-client>=0.19.0",
+    "python-multipart>=0.0.6",
+    "pymodbus>=3.5.0",
+    "pyserial>=3.5",
+    "aiomqtt>=0.1.0",
+    "xknx==2.12.2",
+    "bacpypes3==0.0.106",
+    "protobuf>=4.25.0",
+    "platformdirs>=3.0.0",
+]
+requirement_installer_args = [
+    "--find-links", "./wheels/pydantic_core"
+]
+
+# Web deployments
+[tool.briefcase.app.xagent.web]
+supported = false
+
