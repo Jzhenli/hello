@@ -6,7 +6,7 @@ Nuitka 编译脚本 (跨平台: Windows / Linux / macOS)
 并生成入口桩文件，使编译后的模块可通过 `python -m module_name` 运行。
 
 用法:
-    python nuitka_compile.py <src_dir> [--python /path/to/python] [--extension .so] [-j N]
+    python nuitka_compile.py <src_dir> [--python /path/to/python] [--extension .so]
 
 示例:
     # Windows (自动检测 .pyd)
@@ -14,9 +14,6 @@ Nuitka 编译脚本 (跨平台: Windows / Linux / macOS)
 
     # Linux ARM32 (自动检测 .so)
     shared-python/bin/python3 nuitka_compile.py build/weather/usr/app
-
-    # 并行编译 (2 个工作线程)
-    python nuitka_compile.py build/app/src -j 2
 
     # 强制指定扩展名 (跨编译场景)
     python nuitka_compile.py build/app/src --extension .so
@@ -28,10 +25,12 @@ import shutil
 import subprocess
 import platform
 import argparse
-import time
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  平台检测
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 COMPILED_EXTENSIONS = {
     "Windows": ".pyd",
@@ -39,17 +38,9 @@ COMPILED_EXTENSIONS = {
     "Darwin": ".so",
 }
 
-NUITKA_NOFOLLOW = [
-    "--nofollow-import-to=tkinter",
-    "--nofollow-import-to=unittest",
-    "--nofollow-import-to=test",
-    "--nofollow-import-to=tests",
-    "--nofollow-import-to=*.test",
-    "--nofollow-import-to=*.tests",
-]
-
 
 def detect_compiled_extension() -> str:
+    """根据当前平台自动检测编译产物扩展名"""
     system = platform.system()
     ext = COMPILED_EXTENSIONS.get(system)
     if ext is None:
@@ -61,28 +52,45 @@ def detect_compiled_extension() -> str:
     return ext
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  前置检查
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 def check_nuitka(python_exe: str) -> str:
+    """检查 Nuitka 是否可用，返回版本号"""
     try:
         result = subprocess.run(
             [python_exe, "-m", "nuitka", "--version"],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout.strip().split("\n")[0]
+            version_line = result.stdout.strip().split("\n")[0]
+            return version_line
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        print(f"❌ 错误: Nuitka 检查超时或找不到 Python: {e}")
+        print("❌ 错误: Nuitka 检查超时或找不到 Python")
+        print(f"  异常: {e}")
         sys.exit(1)
 
     print("❌ 错误: Nuitka 未安装或不可用")
     print(f"  Python: {python_exe}")
     print(f"  返回码: {result.returncode}")
+    if result.stdout:
+        print(f"  stdout:\n{result.stdout}")
     if result.stderr:
         print(f"  stderr:\n{result.stderr}")
     print(f"  请运行: {python_exe} -m pip install nuitka ordered-set zstandard")
     sys.exit(1)
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  核心逻辑
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 def scan_compilable_modules(src_dir: Path) -> list[str]:
+    """
+    扫描源码目录，返回所有可编译的模块名。
+    可编译 = 包含 __init__.py 的子目录
+    """
     skip_dirs = {"__pycache__", "compiled"}
     modules = []
 
@@ -98,6 +106,10 @@ def scan_compilable_modules(src_dir: Path) -> list[str]:
 
 
 def find_compiled_product(compiled_dir: Path, module_name: str, extension: str) -> Path:
+    """
+    在编译目录中查找编译产物。
+    动态匹配，不硬编码 Python 版本/平台后缀。
+    """
     pattern = f"{module_name}*{extension}"
     matches = list(compiled_dir.glob(pattern))
 
@@ -123,9 +135,12 @@ def compile_module(
     python_exe: str,
     extension: str,
 ) -> str:
+    """
+    使用 Nuitka 编译单个 Python 模块，返回产物文件名。
+    """
     print(f"\n── 编译模块: {module_name} ──")
 
-    compiled_dir = src_dir / f"compiled_{module_name}"
+    compiled_dir = src_dir / "compiled"
     if compiled_dir.exists():
         shutil.rmtree(compiled_dir)
     compiled_dir.mkdir()
@@ -139,11 +154,7 @@ def compile_module(
         "--nofollow-imports",
         f"--follow-import-to={module_name}",
         "--no-progressbar",
-        "--lto=no",
-        "--clang",
-        "--ccache",
-        "--python-flag=-OO",
-    ] + NUITKA_NOFOLLOW
+    ]
 
     result = subprocess.run(cmd, cwd=str(src_dir))
 
@@ -152,31 +163,29 @@ def compile_module(
             f"Nuitka 编译失败: {module_name} (exit code: {result.returncode})"
         )
 
+    # 动态查找编译产物（不硬编码 Python 版本/平台后缀）
     compiled_file = find_compiled_product(compiled_dir, module_name, extension)
     compiled_basename = compiled_file.name
 
+    # 复制到源码根目录
     dest = src_dir / compiled_basename
     shutil.copy2(str(compiled_file), str(dest))
-
-    shutil.rmtree(compiled_dir, ignore_errors=True)
-
     print(f"  ✅ 产物: {compiled_basename}")
+
     return compiled_basename
 
 
-def compile_module_worker(args: tuple) -> tuple[str, bool, str]:
-    module_name, src_dir, python_exe, extension = args
-    try:
-        compiled_basename = compile_module(module_name, src_dir, python_exe, extension)
-        return (module_name, True, compiled_basename)
-    except Exception as e:
-        print(f"  ❌ 编译失败: {module_name} -> {e}")
-        return (module_name, False, "")
-
-
 def inject_stub(module_name: str, compiled_basename: str, src_dir: Path) -> None:
+    """
+    删除原始源码目录，生成 __init__.py 和 __main__.py 入口桩文件。
+    保留非 .py 资源文件（配置、数据、模板等）。
+
+    __init__.py : 通过 importlib 动态加载编译产物，注册到 sys.modules
+    __main__.py : 直接 import 模块并调用 main()（复用 __init__.py 的加载结果）
+    """
     module_dir = src_dir / module_name
 
+    # ─── 保存非 .py 资源文件 ───
     saved_resources: list[tuple[Path, bytes]] = []
     if module_dir.exists():
         for f in module_dir.rglob("*"):
@@ -190,15 +199,18 @@ def inject_stub(module_name: str, compiled_basename: str, src_dir: Path) -> None
     if saved_resources:
         print(f"  保留 {len(saved_resources)} 个非 .py 资源文件")
 
+    # ─── 清理原始源码 ───
     if module_dir.exists():
         shutil.rmtree(module_dir)
     module_dir.mkdir()
 
+    # ─── 恢复非 .py 资源文件 ───
     for rel_path, data in saved_resources:
         dest = module_dir / rel_path
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
 
+    # ─── 生成 __init__.py ───
     init_content = f"""\
 import os
 import sys
@@ -212,6 +224,7 @@ _spec.loader.exec_module(_module)
 """
     (module_dir / "__init__.py").write_text(init_content, encoding="utf-8")
 
+    # ─── 生成 __main__.py ───
     main_content = f"""\
 import sys
 import {module_name}
@@ -227,6 +240,10 @@ else:
     print(f"  ✅ 入口: {module_name}/__init__.py, __main__.py")
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  主流程
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 def main():
     parser = argparse.ArgumentParser(
         description="Nuitka 编译脚本 (跨平台: Windows .pyd / Linux .so)",
@@ -238,9 +255,6 @@ def main():
 
   # Linux ARM32 (自动检测 .so)
   shared-python/bin/python3 nuitka_compile.py build/weather/usr/app
-
-  # 并行编译 (2 个工作线程)
-  python nuitka_compile.py build/app/src -j 2
 
   # 强制指定扩展名 (跨编译场景)
   python nuitka_compile.py build/app/src --extension .so
@@ -264,40 +278,37 @@ def main():
         choices=[".pyd", ".so"],
         help="编译产物扩展名 (默认: 自动检测 - Windows: .pyd, Linux/macOS: .so)",
     )
-    parser.add_argument(
-        "-j", "--parallel",
-        type=int,
-        default=1,
-        metavar="N",
-        help="并行编译线程数 (默认: 1 顺序编译, 0=自动检测CPU核数)",
-    )
 
     args = parser.parse_args()
 
     src_dir = Path(args.src_dir).resolve()
     python_exe = args.python or sys.executable
     extension = args.extension or detect_compiled_extension()
-    parallel = args.parallel
-    if parallel == 0:
-        parallel = os.cpu_count() or 1
 
+    # ─── 打印配置 ───
     print("=" * 55)
     print("  Nuitka 编译 (跨平台)")
     print(f"  平台    : {platform.system()} ({platform.machine()})")
     print(f"  产物类型: {extension}")
     print(f"  Python  : {python_exe}")
     print(f"  SRC_DIR : {src_dir}")
-    if parallel > 1:
-        print(f"  并行    : {parallel} 线程")
     print("=" * 55)
 
+    # ─── 目录校验 ───
     if not src_dir.is_dir():
         print(f"\n❌ 错误: 找不到源码目录 {src_dir}")
+        print("当前目录结构:")
+        cwd = Path(".").resolve()
+        for p in sorted(cwd.rglob("*"))[:30]:
+            if p.is_dir():
+                print(f"  {p.relative_to(cwd)}/")
         sys.exit(1)
 
+    # ─── 检查 Nuitka ───
     nuitka_version = check_nuitka(python_exe)
     print(f"  Nuitka  : {nuitka_version}")
 
+    # ─── 扫描可编译模块 ───
     modules = scan_compilable_modules(src_dir)
 
     if not modules:
@@ -306,57 +317,31 @@ def main():
 
     print(f"\n发现 {len(modules)} 个可编译模块: {', '.join(modules)}")
 
-    start_time = time.time()
-
-    compiled_results: dict[str, tuple[bool, str]] = {}
-
-    if parallel > 1 and len(modules) > 1:
-        print(f"\n🚀 并行编译 ({parallel} 线程)")
-        worker_args = [
-            (m, src_dir, python_exe, extension)
-            for m in modules
-        ]
-        with ThreadPoolExecutor(max_workers=parallel) as executor:
-            futures = {
-                executor.submit(compile_module_worker, arg): arg[0]
-                for arg in worker_args
-            }
-            for future in as_completed(futures):
-                module_name, success, compiled_basename = future.result()
-                compiled_results[module_name] = (success, compiled_basename)
-    else:
-        for module_name in modules:
-            try:
-                compiled_basename = compile_module(
-                    module_name, src_dir, python_exe, extension
-                )
-                compiled_results[module_name] = (True, compiled_basename)
-            except Exception as e:
-                print(f"  ❌ 编译失败: {module_name} -> {e}")
-                compiled_results[module_name] = (False, "")
-
+    # ─── 逐个编译 ───
     compiled_count = 0
     failed_modules = []
 
     for module_name in modules:
-        success, compiled_basename = compiled_results.get(module_name, (False, ""))
-        if success:
+        try:
+            compiled_basename = compile_module(
+                module_name, src_dir, python_exe, extension
+            )
             inject_stub(module_name, compiled_basename, src_dir)
             compiled_count += 1
-        else:
+        except Exception as e:
+            print(f"  ❌ 编译失败: {module_name} -> {e}")
             failed_modules.append(module_name)
+        finally:
+            # 清理临时编译目录
+            compiled_dir = src_dir / "compiled"
+            if compiled_dir.exists():
+                shutil.rmtree(compiled_dir, ignore_errors=True)
 
-    elapsed = time.time() - start_time
-    if elapsed < 60:
-        time_str = f"{elapsed:.1f}s"
-    else:
-        time_str = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"
-
+    # ─── 编译报告 ───
     print()
     print("=" * 55)
     print("  编译完成")
     print(f"  成功: {compiled_count} 个模块")
-    print(f"  耗时: {time_str}")
 
     if failed_modules:
         print(f"  失败: {len(failed_modules)} 个模块")
@@ -367,6 +352,7 @@ def main():
 
     print("=" * 55)
 
+    # 列出编译产物
     compiled_files = [f for f in src_dir.glob(f"*{extension}") if f.is_file()]
     if compiled_files:
         print(f"\n编译产物 ({extension}):")
