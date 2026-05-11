@@ -206,10 +206,27 @@ class ARM32Builder:
         self.dist_dir.mkdir(parents=True, exist_ok=True)
 
         need_package_python = self.build_type in ("full", "python-only")
-        self.prepare_shared_python(need_package_python)
-
+        
+        # 1. 下载并准备 Python 环境（暂不裁剪，编译需要完整环境）
+        self._download_pbs_python()
+        self._write_version(need_package_python)
+        
+        # 2. 安装 Nuitka（如果启用）
+        if self.enable_nuitka:
+            print("\n━━━ 安装 Nuitka ━━━")
+            self.pip_install("cffi", "nuitka", "ordered-set", "zstandard")
+        
+        # 3. 构建应用（编译）
         if self.build_type in ("full", "app-only"):
             self.build_apps()
+        
+        # 4. 裁剪 stdlib（编译后裁剪，减小最终产物体积）
+        if self.strip_stdlib:
+            self._strip_stdlib()
+        
+        # 5. 打包 shared-python
+        if need_package_python:
+            self._package_shared_python()
 
         self._fix_dist_permissions()
 
@@ -230,17 +247,8 @@ class ARM32Builder:
 
     # ─── Shared Python ───
 
-    def prepare_shared_python(self, need_package: bool):
-        print("\n━━━ 准备 shared-python 环境 ━━━")
-
-        self._download_pbs_python()
-        self._strip_stdlib()
-        self._write_version(need_package)
-
-        if need_package:
-            self._package_shared_python()
-
     def _download_pbs_python(self):
+        print("\n━━━ 下载 PBS Python ━━━")
         url = PBS_URL_TEMPLATE.format(
             pbs_release=self.pbs_release,
             pbs_python=self.pbs_python,
@@ -273,10 +281,7 @@ class ARM32Builder:
         print(f"  ✅ PBS Python 已就绪: {self.pbs_python_exe}")
 
     def _strip_stdlib(self):
-        if not self.strip_stdlib:
-            return
-
-        print("  裁剪 stdlib...")
+        print("\n━━━ 裁剪 stdlib ━━━")
         pylib_dirs = list(self.shared_python_dir.glob("lib/python3.*"))
         if not pylib_dirs:
             print("  ⚠ 未找到 lib/python3.* 目录")
@@ -296,16 +301,15 @@ class ARM32Builder:
                 if d.is_dir():
                     shutil.rmtree(d, ignore_errors=True)
 
-        # 删除 include (Nuitka 编译需要，仅在禁用 Nuitka 时删除)
-        if not self.enable_nuitka:
-            include_dir = self.shared_python_dir / "include"
-            if include_dir.exists():
-                shutil.rmtree(include_dir)
+        # 删除 include（编译后不再需要）
+        include_dir = self.shared_python_dir / "include"
+        if include_dir.exists():
+            shutil.rmtree(include_dir)
 
         print("  ✅ stdlib 已裁剪")
 
-    def _write_version(self, need_package: bool):
-        if self.build_type == "python-only" and self.target_version:
+    def _write_version(self, for_package: bool = False):
+        if for_package and self.build_type == "python-only" and self.target_version:
             py_ver = self.target_version
         else:
             py_ver = f"{self.pbs_python}-{self.pbs_release}"
@@ -347,11 +351,6 @@ class ARM32Builder:
         if not app_names:
             print("⚠ 未发现可构建的应用")
             return
-
-        # 安装 Nuitka
-        if self.enable_nuitka:
-            print("\n━━━ 安装 Nuitka ━━━")
-            self.pip_install("cffi","nuitka", "ordered-set", "zstandard")
 
         # 逐个构建
         for app_name in app_names:
@@ -465,6 +464,8 @@ PYTHON="/opt/shared-python/bin/python3"
 if [ ! -x "$PYTHON" ]; then
   echo "错误: 未找到共享 Python" >&2; exit 1
 fi
+export PYTHONEXECUTABLE="$PYTHON"
+export PYTHONHOME="/opt/shared-python"
 export PYTHONPATH="${{SCRIPT_DIR}}/usr/app:${{SCRIPT_DIR}}/usr/app_packages"
 export LD_LIBRARY_PATH="/opt/shared-python/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
 export APP_VERSION="{app_version}"
