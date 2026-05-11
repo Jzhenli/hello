@@ -37,7 +37,7 @@ PBS_PYTHON_VERSIONS = {
 }
 
 STRIPPED_STDLIB_MODULES = [
-    "tkinter", "idlelib", "lib2to3", "unittest",
+    "tkinter", "idlelib", "lib2to3",
     "pydoc_data", "curses", "tty", "webbrowser",
 ]
 
