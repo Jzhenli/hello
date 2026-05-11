@@ -116,11 +116,17 @@ class ARM32Builder:
     # ─── pip 封装 ───
 
     def pip_install(self, *args):
-        """使用 PBS Python 的 pip 安装包"""
+        """使用 PBS Python 的 pip 安装包到 PBS Python 的 site-packages"""
+        result = subprocess.run(
+            [str(self.pbs_python_exe), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+            capture_output=True, text=True, check=True
+        )
+        site_packages = result.stdout.strip()
+        
         if self.pbs_pip_exe:
-            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
+            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple", "--target", site_packages] + list(args)
         else:
-            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
+            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple", "--target", site_packages] + list(args)
         run_cmd(cmd)
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
