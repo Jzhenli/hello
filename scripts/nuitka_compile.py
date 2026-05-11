@@ -141,7 +141,6 @@ def compile_module(
         "--no-progressbar",
         "--lto=no",
         "--clang",
-        "--ccache",
         "--python-flag=-OO",
     ] + NUITKA_NOFOLLOW
 
