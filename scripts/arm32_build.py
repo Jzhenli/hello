@@ -257,6 +257,8 @@ class ARM32Builder:
         print(f"  Python    : {self.python_version} (PBS {self.pbs_python})")
         print(f"  Nuitka    : {'启用' if self.enable_nuitka else '禁用'}")
         print(f"  裁剪stdlib: {'启用' if self.strip_stdlib else '禁用'}")
+        if self.build_type == "app-only":
+            print(f"  目标组件  : '{self.target_component}'")
         print("=" * 55)
 
     # ─── Shared Python ───
@@ -375,8 +377,6 @@ class ARM32Builder:
     # ─── 应用构建 ───
 
     def build_apps(self):
-        # 确定要构建的应用列表
-        # [Fix #1] 不再过滤 src/ 目录，列出所有子目录
         if self.build_type == "full":
             apps_dir = self.repo_root / "apps"
             app_names = [
@@ -384,6 +384,9 @@ class ARM32Builder:
                 if d.is_dir()
             ]
         elif self.build_type == "app-only":
+            if not self.target_component:
+                print("❌ 错误: app-only 模式需要指定 --target-component")
+                sys.exit(1)
             app_dir = self.repo_root / "apps" / self.target_component
             if not app_dir.is_dir():
                 print(f"❌ 错误: 目录 {app_dir} 不存在")

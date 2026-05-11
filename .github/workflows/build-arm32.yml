@@ -65,8 +65,10 @@ jobs:
             echo "COMPONENT_NAME=$COMPONENT_NAME" >> $GITHUB_OUTPUT
             echo "COMPONENT_VERSION=$COMPONENT_VERSION" >> $GITHUB_OUTPUT
             echo "BUILD_TYPE=$BUILD_TYPE" >> $GITHUB_OUTPUT
+            echo "📋 Tag解析: TAG_NAME=$TAG_NAME, COMPONENT_NAME=$COMPONENT_NAME, COMPONENT_VERSION=$COMPONENT_VERSION, BUILD_TYPE=$BUILD_TYPE"
           else
             echo "BUILD_TYPE=full" >> $GITHUB_OUTPUT
+            echo "📋 非tag触发，BUILD_TYPE=full"
           fi
 
       - name: Prepare dist directory
@@ -105,6 +107,7 @@ jobs:
             retries=5
             EOF
           run: |
+            echo "📋 环境变量: BUILD_TYPE=${BUILD_TYPE}, TARGET_COMPONENT=${TARGET_COMPONENT}, TARGET_VERSION=${TARGET_VERSION}"
             python3 scripts/arm32_build.py \
               --build-type "${BUILD_TYPE:-full}" \
               --target-component "${TARGET_COMPONENT:-}" \
