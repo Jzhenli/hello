@@ -142,7 +142,15 @@ class ARM32Builder:
         print("  ⚠ Nuitka 验证失败，调试信息:")
         print(f"  返回码: {result.returncode}")
         if result.stderr:
-            print(f"  stderr: {result.stderr[:500]}")
+            print(f"  stderr:\n{result.stderr}")
+        
+        for pkg in ["ordered_set", "zstandard"]:
+            r = subprocess.run(
+                [str(self.pbs_python_exe), "-c", f"import {pkg}; print({pkg}.__file__)"],
+                capture_output=True, text=True
+            )
+            status = "✅" if r.returncode == 0 else "❌"
+            print(f"  {pkg}: {status} {r.stdout.strip() or r.stderr.strip()}")
         
         result2 = subprocess.run(
             [str(self.pbs_python_exe), "-c", "import site; print(chr(10).join(site.getsitepackages()))"],

@@ -75,9 +75,9 @@ def check_nuitka(python_exe: str) -> str:
     print(f"  Python: {python_exe}")
     print(f"  返回码: {result.returncode}")
     if result.stdout:
-        print(f"  stdout: {result.stdout[:500]}")
+        print(f"  stdout:\n{result.stdout}")
     if result.stderr:
-        print(f"  stderr: {result.stderr[:500]}")
+        print(f"  stderr:\n{result.stderr}")
     print(f"  请运行: {python_exe} -m pip install nuitka ordered-set zstandard")
     sys.exit(1)
 
