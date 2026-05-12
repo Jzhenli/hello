@@ -151,8 +151,7 @@ def compile_module(
         f"--output-dir={compiled_dir}",
         "--remove-output",
         "--assume-yes-for-downloads",
-        "--nofollow-imports",
-        f"--follow-import-to={module_name}",
+        f"--include-package={module_name}",
         "--no-progressbar",
     ]
 
