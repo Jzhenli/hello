@@ -47,6 +47,8 @@ class PluginDiscovery:
         
         logger.info(f"Current discovery.py location: {current_file}")
         
+        self._ensure_submodules_registered()
+        
         try:
             import xagent.plugins
             plugins_package_path = Path(xagent.plugins.__file__).parent
@@ -242,6 +244,48 @@ class PluginDiscovery:
         discovered[key] = obj
         logger.debug(f"Discovered plugin class: {key}")
     
+    def _ensure_submodules_registered(self) -> bool:
+        """确保编译环境下的子模块被注册到 sys.modules
+        
+        当使用 Nuitka --include-package 编译时，子模块被编译进 .pyd
+        但不会自动注册到 sys.modules，导致 import 失败。
+        此方法通过遍历已加载模块的属性来注册子模块。
+        
+        Returns:
+            是否成功注册了 plugins 子模块
+        """
+        if "xagent.plugins" in sys.modules:
+            return True
+        
+        if "xagent" not in sys.modules:
+            try:
+                import xagent
+            except ImportError:
+                return False
+        
+        xagent_module = sys.modules.get("xagent")
+        if xagent_module is None:
+            return False
+        
+        def register_submodules(parent_module, parent_name):
+            for attr_name in dir(parent_module):
+                if attr_name.startswith('_'):
+                    continue
+                try:
+                    attr = getattr(parent_module, attr_name)
+                    if hasattr(attr, '__name__') and hasattr(attr, '__path__'):
+                        full_name = f"{parent_name}.{attr_name}"
+                        if full_name not in sys.modules:
+                            sys.modules[full_name] = attr
+                            logger.debug(f"Registered submodule: {full_name}")
+                        register_submodules(attr, full_name)
+                except Exception:
+                    continue
+        
+        register_submodules(xagent_module, "xagent")
+        
+        return "xagent.plugins" in sys.modules
+
     def _discover_via_import(self, discovered: Dict[str, Type]) -> None:
         """通过导入机制发现插件（用于压缩包环境）
         
@@ -249,7 +293,14 @@ class PluginDiscovery:
             discovered: 已发现的插件字典
         """
         import pkgutil
-        import xagent.plugins
+        
+        self._ensure_submodules_registered()
+        
+        try:
+            import xagent.plugins
+        except ImportError as e:
+            logger.error(f"Failed to import xagent.plugins after registration: {e}")
+            return
         
         logger.info("Starting import-based plugin discovery")
         
