@@ -145,16 +145,9 @@ class PluginLoader(ILifecycle):
         Returns:
             插件信息
         """
-        # DEBUG
-        logger.debug(f"[DEBUG] load_plugin called: plugin_type={plugin_type!r} type={type(plugin_type)} name={name}")
-        logger.debug(f"[DEBUG] registry id={id(self.registry)} _plugin_classes id={id(self.registry._plugin_classes)}")
-        logger.debug(f"[DEBUG] has_plugin_class before: {self.registry.has_plugin_class(plugin_type, name)}")
-        
         # 确保插件类已发现
         if not self.registry.has_plugin_class(plugin_type, name):
-            logger.debug(f"[DEBUG] Plugin not found, calling discover_plugins_async")
             await self.discover_plugins_async()
-            logger.debug(f"[DEBUG] After discover, has_plugin_class: {self.registry.has_plugin_class(plugin_type, name)}")
         
         return await self.lifecycle.load_plugin(plugin_type, name, config)
     
