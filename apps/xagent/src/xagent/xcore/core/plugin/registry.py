@@ -62,7 +62,12 @@ class PluginRegistry:
             type_str = plugin_type.value
         
         key = f"{type_str}:{name}"
-        return self._plugin_classes.get(key)
+        result = self._plugin_classes.get(key)
+        # DEBUG
+        if result is None:
+            logger.debug(f"[DEBUG] get_plugin_class MISS: key={key!r} type(plugin_type)={type(plugin_type).__name__}")
+            logger.debug(f"[DEBUG] _plugin_classes has {len(self._plugin_classes)} keys: {list(self._plugin_classes.keys())[:5]}...")
+        return result
     
     def has_plugin_class(self, plugin_type: Any, name: str) -> bool:
         """检查插件类是否已注册
@@ -82,6 +87,9 @@ class PluginRegistry:
         Args:
             plugin_classes: 插件类字典
         """
+        # DEBUG
+        logger.debug(f"[DEBUG] set_plugin_classes: {len(plugin_classes)} classes, registry_id={id(self)}")
+        logger.debug(f"[DEBUG] keys: {list(plugin_classes.keys())[:5]}...")
         self._plugin_classes = plugin_classes
     
     def register_plugin_instance(self, plugin_info: PluginInfo) -> None:

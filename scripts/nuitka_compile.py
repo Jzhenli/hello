@@ -210,29 +210,38 @@ def inject_stub(module_name: str, compiled_basename: str, src_dir: Path) -> None
         dest.write_bytes(data)
 
     # ─── 生成 __init__.py ───
-    init_content = f"""\
-import os
-import sys
-import importlib.util
+    init_content = """\
+import os, sys, importlib.util as _u
 
-_compiled_path = os.path.join(os.path.dirname(__file__), "..", "{compiled_basename}")
-_spec = importlib.util.spec_from_file_location("{module_name}", _compiled_path)
-_module = importlib.util.module_from_spec(_spec)
-sys.modules["{module_name}"] = _module
-_spec.loader.exec_module(_module)
+_n = __name__
+_d = os.path.dirname(os.path.abspath(__file__))
+_p = os.path.dirname(_d)
+_f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith((".pyd", ".so"))), None)
+if not _f: raise ImportError(f"No {_n} compiled module in {_p}")
+if hasattr(os, "add_dll_directory"): os.add_dll_directory(os.path.dirname(_p))
+
+_s = _u.spec_from_file_location(_n, os.path.join(_p, _f))
+_m = _u.module_from_spec(_s)
+_s.loader.exec_module(_m)
+_m.__path__ = getattr(_m, "__path__", None) or [_d]
+_m.__package__ = _n
+if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
+
+class _F:
+    @staticmethod
+    def find_spec(n, *_):
+        if n == f"{_n}.__main__": return _u.spec_from_file_location(n, os.path.join(_d, "__main__.py"))
+
+sys.meta_path.insert(0, _F)
+sys.modules[_n] = _m
 """
     (module_dir / "__init__.py").write_text(init_content, encoding="utf-8")
 
     # ─── 生成 __main__.py ───
-    main_content = f"""\
-import sys
-import {module_name}
-
-if hasattr({module_name}, "main"):
-    {module_name}.main()
-else:
-    print("Error: No main() function found in {module_name}")
-    sys.exit(1)
+    main_content = """\
+import importlib, sys
+_m = importlib.import_module(__package__)
+_m.main() if hasattr(_m, "main") else sys.exit(f"No main() in {__package__}")
 """
     (module_dir / "__main__.py").write_text(main_content, encoding="utf-8")
 
