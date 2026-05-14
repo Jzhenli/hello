@@ -49,7 +49,7 @@ concurrency:
 env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
   NUITKA_VERSION: '2.7.12'
-  BRIEFCASE_VERSION: '0.3.23'
+  BRIEFCASE_VERSION: '0.4.2'
 
 jobs:
   # ============================================================
