@@ -173,48 +173,62 @@ jobs:
           chmod -R 777 dist
           chmod -R 777 apps/
           
-          cat > build_termux.sh << 'SCRIPT'
+          cat > build_termux.sh << SCRIPT
           #!/data/data/com.termux/files/usr/bin/bash
           set -e
           
           export PREFIX=/data/data/com.termux/files/usr
-          export PATH=$PREFIX/bin:$PATH
+          export PATH=\$PREFIX/bin:\$PATH
           export HOME=/data/data/com.termux/files/home
-          export TMPDIR=$PREFIX/tmp
+          export TMPDIR=\$PREFIX/tmp
           export LANG=en_US.UTF-8
           
           # 1. 修复 DNS
-          echo "nameserver 8.8.8.8" > $PREFIX/etc/resolv.conf
-          echo "nameserver 8.8.4.4" >> $PREFIX/etc/resolv.conf
+          echo "nameserver 8.8.8.8" > \$PREFIX/etc/resolv.conf
+          echo "nameserver 8.8.4.4" >> \$PREFIX/etc/resolv.conf
           
           # 2. 换用 USTC 镜像源
-          if [ -f "$PREFIX/etc/apt/sources.list" ]; then
-            sed -i 's|https://packages-cf.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "$PREFIX/etc/apt/sources.list"
-            sed -i 's|https://packages.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "$PREFIX/etc/apt/sources.list"
+          if [ -f "\$PREFIX/etc/apt/sources.list" ]; then
+            sed -i 's|https://packages-cf.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "\$PREFIX/etc/apt/sources.list"
+            sed -i 's|https://packages.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "\$PREFIX/etc/apt/sources.list"
             echo "✅ APT sources switched to USTC mirror"
           fi
           
-          # 3. 安装依赖
+          # 3. 更新包索引
           apt update -yq
           apt upgrade -yq
+          
+          # 4. 【关键顺序】先安装 tur-repo，再刷新索引，然后才能安装指定版本 Python
           apt install -yq tur-repo
-          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner findutils
+          apt update -yq
+          
+          # 5. 安装指定版本 Python（来自 tur-repo）
           apt install -yq python${PY_VER}
           
-          # 【关键修复】先删除已存在的 python/pip 链接，再重新创建
-          # 避免 "are the same file" 报错
-          rm -f $PREFIX/bin/python $PREFIX/bin/pip
-          ln -sf $PREFIX/bin/python${PY_VER} $PREFIX/bin/python
-          ln -sf $PREFIX/bin/pip${PY_VER} $PREFIX/bin/pip
+          # 6. 动态检测实际安装的 Python 版本，创建符号链接
+          PY_BIN=\$(ls \$PREFIX/bin/python3.* 2>/dev/null | grep -v config | head -1)
+          if [ -z "\$PY_BIN" ]; then
+            echo "::error::未找到 python3 二进制文件"
+            exit 1
+          fi
+          PY_SFX=\$(basename "\$PY_BIN" | sed 's/python//')  # 例如 3.11
+          echo "📋 Python: \$PY_BIN (后缀: \$PY_SFX)"
           
-          # 验证 python 版本
+          rm -f \$PREFIX/bin/python \$PREFIX/bin/pip
+          ln -sf "\$PY_BIN" \$PREFIX/bin/python
+          if [ -f "\$PREFIX/bin/pip\${PY_SFX}" ]; then
+            ln -sf "\$PREFIX/bin/pip\${PY_SFX}" \$PREFIX/bin/pip
+          fi
           python --version
           
-          # 4. 安装 Nuitka
-          pip install --upgrade pip
-          pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${NUITKA_VERSION}
+          # 7. 安装编译工具链
+          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner findutils
           
-          # 5. 执行 Nuitka 编译
+          # 8. 安装 Nuitka
+          pip install --upgrade pip
+          pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}
+          
+          # 9. 执行 Nuitka 编译
           cd /src/apps/${APP_NAME}/src
           python -m nuitka \
             --module ${APP_NAME} \
@@ -227,16 +241,16 @@ jobs:
           cp ./dist/*.so /src/dist/
           cd /src/dist/
           
-          SO_FILE=$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
-          if [ -z "$SO_FILE" ]; then
+          SO_FILE=\$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
+          if [ -z "\$SO_FILE" ]; then
             echo "::error::No .so file produced by Nuitka"
             exit 1
           fi
           
-          mv "$SO_FILE" ${APP_NAME}.so
+          mv "\$SO_FILE" ${APP_NAME}.so
           termux-elf-cleaner ${APP_NAME}.so || true
           patchelf --set-rpath '' ${APP_NAME}.so || true
-          patchelf --replace-needed libpython${PY_VER}.so.1.0 libpython${PY_VER}.so ${APP_NAME}.so || true
+          patchelf --replace-needed libpython\${PY_SFX}.so.1.0 libpython\${PY_SFX}.so ${APP_NAME}.so || true
           
           echo "✅ Compiled: ${APP_NAME}.so"
           SCRIPT
@@ -255,6 +269,7 @@ jobs:
           name: compiled-${{ matrix.android_abi }}
           path: dist/*.so
           retention-days: 1
+
 
   # ============================================================
   # 3. 阶段 2：Briefcase 打包 APK
