@@ -25,7 +25,7 @@ on:
           - '3.12'
         default: '3.11'
       architectures:
-        description: 'Target architectures (comma-separated, no spaces: arm64,arm32)'
+        description: 'Target architectures (arm64 / arm32 / arm64,arm32)'
         required: false
         type: choice
         options:
@@ -98,7 +98,7 @@ jobs:
               exit 1
             fi
           else
-            echo "::error::pyproject.toml not found for app '$APP_NAME'. Please create Briefcase configuration first."
+            echo "::error::pyproject.toml not found for app '$APP_NAME'"
             exit 1
           fi
 
@@ -119,12 +119,10 @@ jobs:
           echo "- **Architectures**: $ARCHITECTURES" >> $GITHUB_STEP_SUMMARY
           echo "- **Nuitka**: $ENABLE_NUITKA" >> $GITHUB_STEP_SUMMARY
 
-      # 根据用户选择的架构，动态生成矩阵 JSON
       - name: Generate matrix
         id: matrix
         run: |
           ARCHS="${{ steps.config.outputs.architectures }}"
-
           COMPILE_ENTRIES=""
           BUILD_ENTRIES=""
 
@@ -138,28 +136,25 @@ jobs:
             BUILD_ENTRIES+='{"arch":"arm32","android_abi":"armeabi-v7a","apk_arch":"arm32"},'
           fi
 
-          # 去掉末尾逗号，包装成 JSON 数组
           COMPILE_MATRIX="[$(echo "$COMPILE_ENTRIES" | sed 's/,$//')]"
           BUILD_MATRIX="[$(echo "$BUILD_ENTRIES" | sed 's/,$//')]"
-          
-          # 验证 JSON 合法性
+
           echo "$COMPILE_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid compile matrix JSON"; exit 1; }
           echo "$BUILD_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid build matrix JSON"; exit 1; }
 
           echo "compile_matrix=$COMPILE_MATRIX" >> $GITHUB_OUTPUT
           echo "build_matrix=$BUILD_MATRIX" >> $GITHUB_OUTPUT
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Generated Matrices" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Compile:** \`${COMPILE_MATRIX}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Build:** \`${BUILD_MATRIX}\`" >> $GITHUB_STEP_SUMMARY
-
   # ============================================================
-  # 2. 阶段 1：Termux Docker 原生编译 .so
+  # 2. 阶段 1：Termux 容器原生编译 .so
+  #    使用 container: 模式（老脚本已验证可行）
+  #    - GHA 托管网络，DNS 正常，无 521 问题
+  #    - pkg 必须用 /entrypoint.sh 包裹（降权到 system 用户）
+  #    - pip/python/nuitka/patchelf 可直接运行（无 root 限制）
   # ============================================================
   compile:
     needs: prepare
+    if: needs.prepare.outputs.enable_nuitka == 'true'
     runs-on: ${{ matrix.runs_on }}
     timeout-minutes: 90
     strategy:
@@ -167,119 +162,137 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.compile_matrix) }}
 
+    container:
+      image: termux/termux-docker:${{ matrix.termux_arch }}
+      volumes:
+        - /tmp/node20:/__e/node20
+      env:
+        TERMUX_MAIN_PACKAGE_FORMAT: debian
+        ANDROID_ROOT: /system
+        ANDROID_DATA: /data
+        PREFIX: /data/data/com.termux/files/usr
+        HOME: /data/data/com.termux/files/home
+        PATH: /data/data/com.termux/files/usr/bin
+        TMPDIR: /data/data/com.termux/files/usr/tmp
+        LANG: en_US.UTF-8
+        TZ: UTC
+
     steps:
+      # ── Termux 容器初始化 ──
+
+      - name: Set mirror
+        run: ln -sf ${PREFIX}/etc/termux/mirrors/default ${PREFIX}/etc/termux/chosen_mirrors
+
+      - name: Upgrade packages
+        run: /entrypoint.sh bash -c "yes | pkg upgrade -y"
+
+      - name: Fix executable bits
+        run: chmod -R o+x ${PREFIX}/bin
+
+      # actions/checkout 和 actions/upload-artifact 需要 Node.js
+      # 安装 Termux 的 nodejs-lts 并映射到 GHA 期望的路径
+      - name: Install nodejs for GHA Actions
+        run: |
+          /entrypoint.sh pkg install -y nodejs-lts
+          ln -sf ${PREFIX}/bin /__e/node20/bin
+
+      # ── 代码检出 ──
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Compile with Nuitka (Termux Docker)
-        if: needs.prepare.outputs.enable_nuitka == 'true'
+      # checkout 以 root 运行，但 /entrypoint.sh 降权到 system(1000)
+      # 需要修复文件所有者，否则后续编译可能无权写文件
+      - name: Fix checkout permissions
+        run: chown -R 1000:1000 .
+
+      # ── 安装编译工具 ──
+
+      - name: Install build tools
         run: |
-          # 1. 准备输出目录，确保容器内 system 用户可写
-          mkdir -p dist/${{ matrix.android_abi }}
-          chmod 777 dist/${{ matrix.android_abi }}
+          /entrypoint.sh pkg install -y ninja clang git patchelf ccache tur-repo
+          /entrypoint.sh pkg install -y python${{ env.PYTHON_VERSION }}
+          ln -sf ${PREFIX}/bin/python${{ env.PYTHON_VERSION }} ${PREFIX}/bin/python
+          ln -sf ${PREFIX}/bin/pip${{ env.PYTHON_VERSION }} ${PREFIX}/bin/pip
 
-          # 2. 把构建脚本写到一个临时文件里
-          cat > /tmp/termux_build.sh <<BUILDEOF
-          #!/bin/bash
-          set -e
-
-          cd /workspace
-
-          echo "📋 编译参数: APP=${{ needs.prepare.outputs.app_name }}, PYTHON=${{ env.PYTHON_VERSION }}, TERMUX_ARCH=${{ matrix.termux_arch }}"
-
-          # 网络诊断（帮助排查）
-          echo "🔍 网络诊断..."
-          cat /etc/resolv.conf || true
-          curl -sI https://packages-cf.termux.dev/apt/termux-main/dists/stable/Release 2>&1 | head -5 || echo "⚠️ 无法连接镜像源"
-
-          # 设置镜像源
-          ln -sf \${PREFIX}/etc/termux/mirrors/default \${PREFIX}/etc/termux/chosen_mirrors
-
-          # 全量升级
-          pkg upgrade -y
-
-          # 安装 tur-repo 及编译工具
-          pkg install -y tur-repo
-          pkg install -y python${{ env.PYTHON_VERSION }} clang ninja patchelf termux-elf-cleaner findutils
-
-          # 建立 Python 软链接
-          ln -sf \${PREFIX}/bin/python${{ env.PYTHON_VERSION }} \${PREFIX}/bin/python
-          ln -sf \${PREFIX}/bin/pip${{ env.PYTHON_VERSION }} \${PREFIX}/bin/pip
-
-          # 安装 Nuitka 及依赖
+      # pip 不像 pkg 有 root 检查，可以直接运行
+      - name: Install Nuitka
+        run: |
+          python --version
           pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}
 
-          # Nuitka 编译
-          cd "apps/${{ needs.prepare.outputs.app_name }}/src"
-          mkdir -p /tmp/compiled
+      # ── Nuitka 编译 ──
+
+      - name: Compile with Nuitka
+        run: |
+          APP_NAME="${{ needs.prepare.outputs.app_name }}"
+          PY_VER="${{ env.PYTHON_VERSION }}"
+
+          mkdir -p dist
+          cd "apps/${APP_NAME}/src"
 
           python -m nuitka \
-            --module ${{ needs.prepare.outputs.app_name }} \
-            --include-package=${{ needs.prepare.outputs.app_name }} \
-            --output-dir=/tmp/compiled \
+            --module ${APP_NAME} \
+            --include-package=${APP_NAME} \
+            --output-dir=dist \
             --remove-output \
             --assume-yes-for-downloads \
             --no-progressbar
 
-          # 拷贝并重命名 .so
-          cd /tmp/compiled
-          SO_FILE=\$(ls ${{ needs.prepare.outputs.app_name }}.*.so 2>/dev/null | head -1)
-          if [ -z "\$SO_FILE" ]; then
-            echo '::error::Nuitka compilation failed - no .so file produced'
+          # 拷贝 .so 到项目 dist 目录
+          cp ./dist/*.so "${GITHUB_WORKSPACE}/dist/"
+
+          # 重命名 + patchelf
+          cd "${GITHUB_WORKSPACE}/dist/"
+          SO_FILE=$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
+          if [ -z "$SO_FILE" ]; then
+            echo "::error::No .so file produced by Nuitka"
             exit 1
           fi
-          mv "\$SO_FILE" ${{ needs.prepare.outputs.app_name }}.so
+          mv "$SO_FILE" ${APP_NAME}.so
 
-          # ELF 清理 & patchelf
-          echo '🧹 ELF 清理...'
-          termux-elf-cleaner ${{ needs.prepare.outputs.app_name }}.so
+          patchelf --set-rpath '' ${APP_NAME}.so || true
+          patchelf --replace-needed libpython${PY_VER}.so.1.0 libpython${PY_VER}.so ${APP_NAME}.so || true
 
-          echo '🔧 修复链接...'
-          patchelf --set-rpath '' ${{ needs.prepare.outputs.app_name }}.so || true
-          patchelf --replace-needed libpython${{ env.PYTHON_VERSION }}.so.1.0 libpython${{ env.PYTHON_VERSION }}.so ${{ needs.prepare.outputs.app_name }}.so || true
+          echo "✅ Compiled: ${APP_NAME}.so ($(du -sh ${APP_NAME}.so | cut -f1))"
 
-          # 拷贝到宿主 dist 目录
-          cp ${{ needs.prepare.outputs.app_name }}.so /workspace/dist/${{ matrix.android_abi }}/
+      # ── 上传产物 ──
 
-          echo '✅ 编译完成: ${{ needs.prepare.outputs.app_name }}.so'
-          BUILDEOF
-
-          chmod +x /tmp/termux_build.sh
-
-          # 3. 用默认入口启动（自动初始化 + 降权到 system 用户）
-          #    关键修复：
-          #    - 不用 --entrypoint，让 /entrypoint.sh 处理初始化和降权
-          #    - --dns 8.8.8.8 绕过 dnsmasq，Docker 层面设置 DNS
-          #    - --security-opt seccomp=unconfined 允许 ARM 容器的系统调用
-          docker run --rm \
-            --dns 8.8.8.8 \
-            --dns 8.8.4.4 \
-            --security-opt seccomp=unconfined \
-            -v "$PWD:/workspace" \
-            -v "/tmp/termux_build.sh:/tmp/termux_build.sh:ro" \
-            termux/termux-docker:${{ matrix.termux_arch }} \
-            bash /tmp/termux_build.sh
-
-
-
-
+      - name: Upload compiled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-${{ matrix.android_abi }}
+          path: dist/*.so
+          retention-days: 1
 
   # ============================================================
   # 3. 阶段 2：Briefcase 打包 APK
+  #    在标准 ubuntu-latest 上运行，不用 container
+  #    enable_nuitka=false 时 compile 被跳过，此 job 仍运行
   # ============================================================
   build:
     needs: [prepare, compile]
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      (needs.prepare.outputs.enable_nuitka != 'true' || needs.compile.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.build_matrix) }}
-    # ✅ 不再需要 job 级 if，矩阵只包含选中的架构
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download compiled artifacts
+        if: needs.prepare.outputs.enable_nuitka == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-${{ matrix.android_abi }}
+          path: dist/${{ matrix.android_abi }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -304,22 +317,17 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Download compiled artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: compiled-${{ matrix.android_abi }}
-          path: dist/${{ matrix.android_abi }}
-
       - name: Prepare app source
+        if: needs.prepare.outputs.enable_nuitka == 'true'
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          ENABLE_NUITKA="${{ needs.prepare.outputs.enable_nuitka }}"
 
           cd "apps/${APP_NAME}/src"
 
-          if [ "$ENABLE_NUITKA" = "true" ] && [ -f "../../../dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
+          if [ -f "../../../dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
             echo "📦 替换源码: ${APP_NAME} -> ${APP_NAME}.so"
 
+            # 保留非 .py 资源文件
             saved_resources=()
             if [ -d "${APP_NAME}" ]; then
               while IFS= read -r -d '' f; do
@@ -345,6 +353,7 @@ jobs:
 
             cp "../../../dist/${{ matrix.android_abi }}/${APP_NAME}.so" .
 
+            # 创建入口桩文件
             cat > "${APP_NAME}/__init__.py" << 'EOF'
           import os, sys, importlib.util as _u
           _n = __name__
@@ -381,7 +390,8 @@ jobs:
 
             echo "✅ 入口桩文件: ${APP_NAME}/__init__.py, __main__.py"
           else
-            echo "⚠️ 使用明文源码"
+            echo "::error::Compiled .so not found at dist/${{ matrix.android_abi }}/${APP_NAME}.so"
+            exit 1
           fi
 
       - name: Create Android project
