@@ -147,7 +147,7 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：使用 sed 绕过 Termux 的 root 运行拦截
+  # 修复：直接重写 apt 包装脚本，彻底绕过 root 限制
   # ============================================================
   compile:
     needs: prepare
@@ -183,18 +183,27 @@ jobs:
           echo "nameserver 8.8.4.4" >> ${PREFIX}/etc/resolv.conf
           echo "✅ Static DNS configured"
 
-      # 2. 【关键修复】强制移除 Termux 对 apt/pkg 的 root 运行限制
+      # 2. 【终极修复】重写 apt 和 pkg 脚本，移除 root 拦截逻辑
       - name: Hack Termux root restriction for package managers
         run: |
-          # 将脚本中的 id -u 检测结果强制替换为 1 (非0)，绕过 root 拦截
-          if [ -f "$PREFIX/bin/apt" ]; then
-            sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/apt
-            echo "✅ Patched $PREFIX/bin/apt"
-          fi
-          if [ -f "$PREFIX/bin/pkg" ]; then
-            sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/pkg
-            echo "✅ Patched $PREFIX/bin/pkg"
-          fi
+          # 备份原始二进制
+          cp $PREFIX/lib/apt/apt $PREFIX/lib/apt/apt.bak
+          
+          # 重写 apt 脚本，删除 root 判断，直接调用底层二进制
+          cat > $PREFIX/bin/apt << 'EOF'
+          #!/data/data/com.termux/files/usr/bin/sh
+          exec /data/data/com.termux/files/usr/lib/apt/apt.bak "$@"
+          EOF
+          chmod +x $PREFIX/bin/apt
+
+          # 重写 pkg 脚本，删除 root 判断，直接调用 apt
+          cat > $PREFIX/bin/pkg << 'EOF'
+          #!/data/data/com.termux/files/usr/bin/sh
+          exec /data/data/com.termux/files/usr/bin/apt "$@"
+          EOF
+          chmod +x $PREFIX/bin/pkg
+          
+          echo "✅ Patched apt & pkg to bypass root check"
 
       # 3. 初始化 Termux 环境 & 安装 Node.js
       - name: Initialize Termux and install Node.js
