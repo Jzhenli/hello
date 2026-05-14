@@ -178,7 +178,7 @@ jobs:
           mkdir -p dist/${{ matrix.android_abi }}
           chmod 777 dist/${{ matrix.android_abi }}
 
-          # 2. 写构建脚本到临时文件
+          # 2. 把构建脚本写到一个临时文件里
           cat > /tmp/termux_build.sh <<BUILDEOF
           #!/bin/bash
           set -e
@@ -187,13 +187,13 @@ jobs:
 
           echo "📋 编译参数: APP=${{ needs.prepare.outputs.app_name }}, PYTHON=${{ env.PYTHON_VERSION }}, TERMUX_ARCH=${{ matrix.termux_arch }}"
 
-          # 手动指定 DNS（临时 workaround）
-          echo "nameserver 8.8.8.8" > /etc/resolv.conf
-          echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+          # 网络诊断（帮助排查）
+          echo "🔍 网络诊断..."
+          cat /etc/resolv.conf || true
+          curl -sI https://packages-cf.termux.dev/apt/termux-main/dists/stable/Release 2>&1 | head -5 || echo "⚠️ 无法连接镜像源"
 
-          # 设置镜像源（手动选一个可用的）
-          mkdir -p /etc/termux/mirrors
-          echo "https://packages-cf.termux.dev/apt/termux-main" > /etc/termux/chosen_mirrors
+          # 设置镜像源
+          ln -sf \${PREFIX}/etc/termux/mirrors/default \${PREFIX}/etc/termux/chosen_mirrors
 
           # 全量升级
           pkg upgrade -y
@@ -246,15 +246,20 @@ jobs:
 
           chmod +x /tmp/termux_build.sh
 
-          # 3. 用官方推荐的 root 入口启动容器
-          #    README: 不要 --user，初始用户必须是 root，否则 DNS 坏掉
-          #    可选加 --privileged 或 --security-opt seccomp:unconfined
+          # 3. 用默认入口启动（自动初始化 + 降权到 system 用户）
+          #    关键修复：
+          #    - 不用 --entrypoint，让 /entrypoint.sh 处理初始化和降权
+          #    - --dns 8.8.8.8 绕过 dnsmasq，Docker 层面设置 DNS
+          #    - --security-opt seccomp=unconfined 允许 ARM 容器的系统调用
           docker run --rm \
-            --entrypoint /entrypoint_root.sh \
+            --dns 8.8.8.8 \
+            --dns 8.8.4.4 \
+            --security-opt seccomp=unconfined \
             -v "$PWD:/workspace" \
             -v "/tmp/termux_build.sh:/tmp/termux_build.sh:ro" \
             termux/termux-docker:${{ matrix.termux_arch }} \
             bash /tmp/termux_build.sh
+
 
 
 
