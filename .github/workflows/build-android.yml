@@ -147,7 +147,7 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：直接重写 apt 包装脚本，彻底绕过 root 限制
+  # 修复：使用 su -l system -c 降权执行 pkg/apt，绕过二进制拦截
   # ============================================================
   compile:
     needs: prepare
@@ -183,57 +183,30 @@ jobs:
           echo "nameserver 8.8.4.4" >> ${PREFIX}/etc/resolv.conf
           echo "✅ Static DNS configured"
 
-      # 2. 【终极修复】重写 apt 和 pkg 脚本，移除 root 拦截逻辑
-      - name: Hack Termux root restriction for package managers
-        run: |
-          # 备份原始二进制
-          cp $PREFIX/lib/apt/apt $PREFIX/lib/apt/apt.bak
-          
-          # 重写 apt 脚本，删除 root 判断，直接调用底层二进制
-          cat > $PREFIX/bin/apt << 'EOF'
-          #!/data/data/com.termux/files/usr/bin/sh
-          exec /data/data/com.termux/files/usr/lib/apt/apt.bak "$@"
-          EOF
-          chmod +x $PREFIX/bin/apt
-
-          # 重写 pkg 脚本，删除 root 判断，直接调用 apt
-          cat > $PREFIX/bin/pkg << 'EOF'
-          #!/data/data/com.termux/files/usr/bin/sh
-          exec /data/data/com.termux/files/usr/bin/apt "$@"
-          EOF
-          chmod +x $PREFIX/bin/pkg
-          
-          echo "✅ Patched apt & pkg to bypass root check"
-
-      # 3. 初始化 Termux 环境 & 安装 Node.js
+      # 2. 初始化 Termux 环境 & 安装 Node.js
       - name: Initialize Termux and install Node.js
         run: |
-          apt update -yq
-          apt upgrade -yq
-          apt install -yq nodejs-lts
+          # 【关键修复】降权到 system 用户执行 pkg，绕过二进制 root 拦截
+          # 外部 shell 会自动将 $PATH 等变量替换为实际值传入
+          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pkg update -yq && pkg upgrade -yq && pkg install -yq nodejs-lts"
           echo "✅ Termux initialized"
 
-      # 4. 安装编译工具链
+      # 3. 安装编译工具链
       - name: Install build tools
         run: |
-          apt install -yq tur-repo
-          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner
-          apt install -yq python${{ env.PYTHON_VERSION }}
-          ln -sf ${PREFIX}/bin/python${{ env.PYTHON_VERSION }} ${PREFIX}/bin/python
-          ln -sf ${PREFIX}/bin/pip${{ env.PYTHON_VERSION }} ${PREFIX}/bin/pip
-          python --version
+          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pkg install -yq tur-repo && pkg install -yq ninja clang git patchelf ccache termux-elf-cleaner && pkg install -yq python${{ env.PYTHON_VERSION }} && ln -sf $PREFIX/bin/python${{ env.PYTHON_VERSION }} $PREFIX/bin/python && ln -sf $PREFIX/bin/pip${{ env.PYTHON_VERSION }} $PREFIX/bin/pip && python --version"
 
-      # 5. 安装 Nuitka 编译器
+      # 4. 安装 Nuitka 编译器
       - name: Install Nuitka
         run: |
-          pip install --upgrade pip
-          pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}
+          # pip 最好也在 system 用户下运行，以免产生 root 权限的缓存导致后续 system 用户使用时权限报错
+          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pip install --upgrade pip && pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}"
 
-      # 6. 检出代码
+      # 5. 检出代码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 7. 执行 Nuitka 编译并修补 ELF
+      # 6. 执行 Nuitka 编译并修补 ELF
       - name: Compile with Nuitka
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
@@ -241,6 +214,7 @@ jobs:
           mkdir -p dist
           cd "apps/${APP_NAME}/src"
 
+          # Nuitka 编译和 patchelf 保留在 root 下运行，防止 GHA 工作区目录权限拒绝写入
           python -m nuitka \
           --module ${APP_NAME} \
           --include-package=${APP_NAME} \
@@ -266,7 +240,7 @@ jobs:
 
           echo "✅ Compiled: ${APP_NAME}.so ($(du -sh ${APP_NAME}.so | cut -f1))"
 
-      # 8. 上传编译产物
+      # 7. 上传编译产物
       - name: Upload compiled artifacts
         uses: actions/upload-artifact@v4
         with:
