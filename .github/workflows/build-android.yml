@@ -416,7 +416,7 @@ jobs:
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
           cd "apps/${APP_NAME}"
-          briefcase package android -p apk
+          briefcase package android --adhoc-sign -p apk
 
       - name: Rename and collect APK
         run: |
