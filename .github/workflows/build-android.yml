@@ -49,11 +49,11 @@ concurrency:
 env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
   NUITKA_VERSION: '2.7.12'
-  BRIEFCASE_VERSION: '0.4.2'
+  BRIEFCASE_VERSION: '0.3.23'
 
 jobs:
   # ============================================================
-  # 1. 准备配置
+  # 1. 准备配置 + 动态矩阵生成
   # ============================================================
   prepare:
     runs-on: ubuntu-latest
@@ -62,6 +62,8 @@ jobs:
       architectures: ${{ steps.config.outputs.architectures }}
       enable_nuitka: ${{ steps.config.outputs.enable_nuitka }}
       app_version: ${{ steps.config.outputs.app_version }}
+      compile_matrix: ${{ steps.matrix.outputs.compile_matrix }}
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
 
     steps:
       - name: Checkout
@@ -117,6 +119,42 @@ jobs:
           echo "- **Architectures**: $ARCHITECTURES" >> $GITHUB_STEP_SUMMARY
           echo "- **Nuitka**: $ENABLE_NUITKA" >> $GITHUB_STEP_SUMMARY
 
+      # 根据用户选择的架构，动态生成矩阵 JSON
+      - name: Generate matrix
+        id: matrix
+        run: |
+          ARCHS="${{ steps.config.outputs.architectures }}"
+
+          COMPILE_ENTRIES=""
+          BUILD_ENTRIES=""
+
+          if [[ "$ARCHS" == *"arm64"* ]]; then
+            COMPILE_ENTRIES+='{"arch":"arm64","runs_on":"ubuntu-24.04-arm","termux_arch":"aarch64","android_abi":"arm64-v8a"},'
+            BUILD_ENTRIES+='{"arch":"arm64","android_abi":"arm64-v8a","apk_arch":"arm64"},'
+          fi
+
+          if [[ "$ARCHS" == *"arm32"* ]]; then
+            COMPILE_ENTRIES+='{"arch":"arm32","runs_on":"ubuntu-24.04-arm","termux_arch":"arm","android_abi":"armeabi-v7a"},'
+            BUILD_ENTRIES+='{"arch":"arm32","android_abi":"armeabi-v7a","apk_arch":"arm32"},'
+          fi
+
+          # 去掉末尾逗号，包装成 JSON 数组
+          COMPILE_MATRIX="[$(echo "$COMPILE_ENTRIES" | sed 's/,$//')]"
+          BUILD_MATRIX="[$(echo "$BUILD_ENTRIES" | sed 's/,$//')]"
+          
+          # 验证 JSON 合法性
+          echo "$COMPILE_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid compile matrix JSON"; exit 1; }
+          echo "$BUILD_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid build matrix JSON"; exit 1; }
+
+          echo "compile_matrix=$COMPILE_MATRIX" >> $GITHUB_OUTPUT
+          echo "build_matrix=$BUILD_MATRIX" >> $GITHUB_OUTPUT
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Generated Matrices" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Compile:** \`${COMPILE_MATRIX}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Build:** \`${BUILD_MATRIX}\`" >> $GITHUB_STEP_SUMMARY
+
   # ============================================================
   # 2. 阶段 1：Termux Docker 原生编译 .so
   # ============================================================
@@ -127,23 +165,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: arm64
-            runs_on: ubuntu-24.04-arm
-            termux_arch: aarch64
-            android_abi: arm64-v8a
-          - arch: arm32
-            runs_on: ubuntu-24.04-arm
-            termux_arch: arm
-            android_abi: armeabi-v7a
-    if: contains(needs.prepare.outputs.architectures, matrix.arch)
+        include: ${{ fromJson(needs.prepare.outputs.compile_matrix) }}
+    # ✅ 不再需要 job 级 if，矩阵只包含选中的架构
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # [P0 修复] 容器侧变量 \${PREFIX}，宿主侧变量 ${PY_VER} 等
-      # [P1 修复] 补充 tur-repo 和 ninja
       - name: Compile with Nuitka (Termux Docker)
         if: needs.prepare.outputs.enable_nuitka == 'true'
         env:
@@ -178,7 +206,7 @@ jobs:
           # 2. 全量升级
           pkg upgrade -y
 
-          # 3. 安装 tur-repo (Python 3.10/3.11 需要) 及编译工具
+          # 3. 安装 tur-repo 及编译工具
           pkg install -y tur-repo
           pkg install -y python${PY_VER} clang ninja patchelf termux-elf-cleaner findutils
 
@@ -260,14 +288,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: arm64
-            android_abi: arm64-v8a
-            apk_arch: arm64
-          - arch: arm32
-            android_abi: armeabi-v7a
-            apk_arch: arm32
-    if: contains(needs.prepare.outputs.architectures, matrix.arch)
+        include: ${{ fromJson(needs.prepare.outputs.build_matrix) }}
+    # ✅ 不再需要 job 级 if，矩阵只包含选中的架构
 
     steps:
       - name: Checkout
@@ -283,14 +305,12 @@ jobs:
           pip install -U setuptools wheel
           pip install briefcase==${{ env.BRIEFCASE_VERSION }}
 
-      # [P1 修复] 只用 setup-java，不再手动覆盖 JAVA_HOME
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # [P2 修复] 删除 android-actions/setup-android，让 Briefcase 自行管理 SDK
       - name: Setup Environment
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -407,7 +427,6 @@ jobs:
           if [ -n "$APK" ]; then
             BASENAME=$(basename "$APK" .apk)
             NEWNAME=$(echo "$BASENAME" | sed -E 's/^([^-]+)-(.+)$/\1-${{ matrix.apk_arch }}-\2/')
-            # fallback: 如果原名没有 '-' 分隔，直接追加架构后缀
             if [ "$NEWNAME" = "$BASENAME" ]; then
               NEWNAME="${BASENAME}-${{ matrix.apk_arch }}"
             fi
