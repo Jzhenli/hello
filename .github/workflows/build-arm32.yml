@@ -4,12 +4,17 @@ on:
   push:
     tags:
       - 'shared-python/v*'
-      - '*/v*'
+      - 'app-*/v*'
   workflow_dispatch:
     inputs:
       python_version:
         description: 'Python version (3.10 / 3.11 / 3.12)'
         required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
         default: '3.11'
       distro:
         description: 'Debian distro (bullseye for older GLIBC 2.31, bookworm for GLIBC 2.36)'
@@ -33,6 +38,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
   PBS_RELEASE: '20260508'
@@ -40,11 +49,19 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: Validate inputs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          PYTHON_VERSION="${{ env.PYTHON_VERSION }}"
+          if [[ ! "$PYTHON_VERSION" =~ ^3\.(10|11|12)$ ]]; then
+            echo "::error::Invalid Python version: $PYTHON_VERSION (supported: 3.10, 3.11, 3.12)"
+            exit 1
+          fi
 
       - name: Extract tag info
         id: tag_info
@@ -54,12 +71,15 @@ jobs:
             COMPONENT_NAME=${TAG_NAME%/*}
             COMPONENT_VERSION=${TAG_NAME#*/v}
             COMPONENT_VERSION=${COMPONENT_VERSION#v}
+            if [[ ! "$COMPONENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "::warning::Invalid version format: $COMPONENT_VERSION"
+            fi
             if [ "$COMPONENT_NAME" = "shared-python" ]; then
               BUILD_TYPE="python-only"
             elif [ -d "apps/$COMPONENT_NAME" ]; then
               BUILD_TYPE="app-only"
             else
-              echo "⚠️ 标签 $TAG_NAME 对应的组件 apps/$COMPONENT_NAME 不存在，跳过构建"
+              echo "::warning::Tag $TAG_NAME: component apps/$COMPONENT_NAME not found, skipping build"
               BUILD_TYPE="skip"
             fi
             echo "COMPONENT_NAME=$COMPONENT_NAME" >> $GITHUB_OUTPUT
@@ -75,9 +95,6 @@ jobs:
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: mkdir -p dist
 
-      # ══════════════════════════════════════════════════
-      #  ARM32 构建 — 调用 Python 脚本替代内联 Bash
-      # ══════════════════════════════════════════════════
       - name: Build ARM32 Packages
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         uses: uraimo/run-on-arch-action@v3
@@ -116,9 +133,6 @@ jobs:
               --enable-nuitka "${ENABLE_NUITKA}" \
               --strip-stdlib "${{ inputs.strip_stdlib || 'true' }}"
 
-      # ══════════════════════════════════════════════════
-      #  部署包组装 — 调用 Python 脚本替代内联 Bash
-      # ══════════════════════════════════════════════════
       - name: Assemble deployment package
         if: steps.tag_info.outputs.BUILD_TYPE != 'skip'
         run: python3 scripts/generate_deploy.py dist/
@@ -135,7 +149,7 @@ jobs:
         run: |
           BUILD_TYPE="${{ steps.tag_info.outputs.BUILD_TYPE || 'full' }}"
           if [ "$BUILD_TYPE" = "skip" ]; then
-            echo "⚠️ 构建已跳过: 标签对应的组件不存在"
+            echo "⚠️ 构建已跳过: 标签对应的组件不存在" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
@@ -147,6 +161,10 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### 产物" >> $GITHUB_STEP_SUMMARY
-          for f in dist/*; do
-            [ -f "$f" ] && echo "- \`${f#dist/}\`: $(du -sh $f | cut -f1)" >> $GITHUB_STEP_SUMMARY
-          done
+          if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+            for f in dist/*; do
+              [ -f "$f" ] && echo "- \`${f#dist/}\`: $(du -sh "$f" | cut -f1)" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "- 无产物生成" >> $GITHUB_STEP_SUMMARY
+          fi
