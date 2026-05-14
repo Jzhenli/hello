@@ -331,22 +331,19 @@ jobs:
         if: needs.prepare.outputs.enable_nuitka == 'true'
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
+          PYTHON_DIR="apps/${APP_NAME}/build/${APP_NAME}/android/gradle/app/src/main/python"
           
-          echo "🔍 查找 chaquopy app 目录..."
-          CHAQUOPY_APP=$(find "apps/${APP_NAME}/build" -type d -path "*/chaquopy/app" 2>/dev/null | head -1)
-          
-          if [ -z "$CHAQUOPY_APP" ]; then
-            echo "::error::chaquopy/app 目录未找到"
-            echo "build 目录结构:"
+          if [ ! -d "$PYTHON_DIR" ]; then
+            echo "::error::Python 目录未找到: $PYTHON_DIR"
             find "apps/${APP_NAME}/build" -type d 2>/dev/null | head -20
             exit 1
           fi
           
-          echo "✅ 找到: $CHAQUOPY_APP"
+          echo "✅ Python 目录: $PYTHON_DIR"
           
           if [ -f "dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
             echo "📦 处理编译模块: ${APP_NAME}.so"
-            cd "$CHAQUOPY_APP"
+            cd "$PYTHON_DIR"
             
             saved_resources=()
             if [ -d "${APP_NAME}" ]; then
