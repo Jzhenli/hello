@@ -331,17 +331,22 @@ jobs:
         if: needs.prepare.outputs.enable_nuitka == 'true'
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          BUILD_BASE="apps/${APP_NAME}/build/${APP_NAME}/android/gradle/app"
           
-          if [ ! -d "$BUILD_BASE" ]; then
-            echo "::error::Build path not found: $BUILD_BASE"
-            find "apps/${APP_NAME}/build" -type d -name "app" 2>/dev/null | head -5
+          echo "🔍 查找 chaquopy app 目录..."
+          CHAQUOPY_APP=$(find "apps/${APP_NAME}/build" -type d -path "*/chaquopy/app" 2>/dev/null | head -1)
+          
+          if [ -z "$CHAQUOPY_APP" ]; then
+            echo "::error::chaquopy/app 目录未找到"
+            echo "build 目录结构:"
+            find "apps/${APP_NAME}/build" -type d 2>/dev/null | head -20
             exit 1
           fi
           
+          echo "✅ 找到: $CHAQUOPY_APP"
+          
           if [ -f "dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
             echo "📦 处理编译模块: ${APP_NAME}.so"
-            cd "$BUILD_BASE/src/main/assets/chaquopy/app"
+            cd "$CHAQUOPY_APP"
             
             saved_resources=()
             if [ -d "${APP_NAME}" ]; then
