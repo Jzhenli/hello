@@ -147,7 +147,8 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：移除自定义 entrypoint 和 volumes，使用 su 降权执行 pkg
+  # 修复：移除 container 指令，在原生 Ubuntu 上运行 CI Action
+  # 然后通过 docker run 挂载代码执行编译
   # ============================================================
   compile:
     needs: prepare
@@ -159,85 +160,94 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.compile_matrix) }}
 
-    container:
-      image: termux/termux-docker:${{ matrix.termux_arch }}
-      # 【关键修复】移除 options 和 volumes 配置，让 GHA 自动处理 Node 挂载和容器启动
-      env:
-        TERMUX_MAIN_PACKAGE_FORMAT: debian
-        ANDROID_ROOT: /system
-        ANDROID_DATA: /data
-        PREFIX: /data/data/com.termux/files/usr
-        HOME: /data/data/com.termux/files/home
-        PATH: /data/data/com.termux/files/usr/bin
-        TMPDIR: /data/data/com.termux/files/usr/tmp
-        LANG: en_US.UTF-8
-        TZ: UTC
-
     steps:
-      # 1. 手动配置 DNS
-      - name: Configure static DNS
-        run: |
-          echo "nameserver 8.8.8.8" > ${PREFIX}/etc/resolv.conf
-          echo "nameserver 8.8.4.4" >> ${PREFIX}/etc/resolv.conf
-          echo "✅ Static DNS configured"
-
-      # 2. 初始化 Termux 环境 & 安装 Node.js
-      - name: Initialize Termux and install Node.js
-        run: |
-          # 降权到 system 用户执行 pkg，绕过二进制 root 拦截
-          # \$PREFIX 会在 system 用户的 shell 中自动展开为正确的路径
-          su -l system -c "pkg update -yq && pkg upgrade -yq && pkg install -yq nodejs-lts"
-          echo "✅ Termux initialized"
-
-      # 3. 安装编译工具链
-      - name: Install build tools
-        run: |
-          su -l system -c "pkg install -yq tur-repo && pkg install -yq ninja clang git patchelf ccache termux-elf-cleaner && pkg install -yq python${{ env.PYTHON_VERSION }} && ln -sf \$PREFIX/bin/python${{ env.PYTHON_VERSION }} \$PREFIX/bin/python && ln -sf \$PREFIX/bin/pip${{ env.PYTHON_VERSION }} \$PREFIX/bin/pip && python --version"
-
-      # 4. 安装 Nuitka 编译器
-      - name: Install Nuitka
-        run: |
-          su -l system -c "pip install --upgrade pip && pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}"
-
-      # 5. 检出代码
+      # 1. 在原生 Ubuntu 环境检出代码，避免 Node.js 兼容性问题
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 6. 执行 Nuitka 编译并修补 ELF
-      - name: Compile with Nuitka
+      # 2. 在 Termux Docker 容器中执行编译逻辑
+      - name: Compile in Termux Docker
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
           PY_VER="${{ env.PYTHON_VERSION }}"
+          TERMUX_ARCH="${{ matrix.termux_arch }}"
+          IMAGE="termux/termux-docker:${TERMUX_ARCH}"
+          
           mkdir -p dist
-          cd "apps/${APP_NAME}/src"
-
-          # Nuitka 编译保留在 root 下运行，防止 GHA 工作区目录权限拒绝写入
+          
+          # 创建编译脚本，该脚本将在 Termux 容器内执行
+          cat > build_termux.sh << 'SCRIPT'
+          #!/data/data/com.termux/files/usr/bin/bash
+          set -e
+          
+          PREFIX=/data/data/com.termux/files/usr
+          export PATH=$PREFIX/bin:$PATH
+          export HOME=/data/data/com.termux/files/home
+          export TMPDIR=$PREFIX/tmp
+          
+          # 1. 修复 DNS
+          echo "nameserver 8.8.8.8" > $PREFIX/etc/resolv.conf
+          echo "nameserver 8.8.4.4" >> $PREFIX/etc/resolv.conf
+          
+          # 2. 绕过 Termux 的 Root 限制
+          # Termux 的 apt/pkg 是 shell 脚本，直接替换里面的 id -u 判断逻辑
+          sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/apt
+          sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/pkg
+          
+          # 3. 安装依赖
+          apt update -yq
+          apt upgrade -yq
+          apt install -yq tur-repo
+          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner nodejs-lts
+          apt install -yq python${PY_VER}
+          ln -sf $PREFIX/bin/python${PY_VER} $PREFIX/bin/python
+          ln -sf $PREFIX/bin/pip${PY_VER} $PREFIX/bin/pip
+          
+          # 4. 安装 Nuitka
+          pip install --upgrade pip
+          pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${NUITKA_VERSION}
+          
+          # 5. 执行 Nuitka 编译
+          cd /src/apps/${APP_NAME}/src
           python -m nuitka \
-          --module ${APP_NAME} \
-          --include-package=${APP_NAME} \
-          --output-dir=dist \
-          --remove-output \
-          --assume-yes-for-downloads \
-          --no-progressbar
-
-          cp ./dist/*.so "${GITHUB_WORKSPACE}/dist/"
-          cd "${GITHUB_WORKSPACE}/dist/"
-
+            --module ${APP_NAME} \
+            --include-package=${APP_NAME} \
+            --output-dir=dist \
+            --remove-output \
+            --assume-yes-for-downloads \
+            --no-progressbar
+          
+          cp ./dist/*.so /src/dist/
+          cd /src/dist/
+          
           SO_FILE=$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
           if [ -z "$SO_FILE" ]; then
             echo "::error::No .so file produced by Nuitka"
             exit 1
           fi
-
-          mv "$SO_FILE" ${APP_NAME}.so
           
+          mv "$SO_FILE" ${APP_NAME}.so
           termux-elf-cleaner ${APP_NAME}.so || true
           patchelf --set-rpath '' ${APP_NAME}.so || true
           patchelf --replace-needed libpython${PY_VER}.so.1.0 libpython${PY_VER}.so ${APP_NAME}.so || true
+          
+          echo "✅ Compiled: ${APP_NAME}.so"
+          SCRIPT
+          
+          # 通过 docker run 执行编译脚本
+          # -v $PWD:/src: 挂载当前工作区
+          # --entrypoint /entrypoint_root.sh: 以 root 身份运行，确保对工作区有写权限
+          # -e: 传入必要的环境变量
+          docker run --rm \
+            -v $PWD:/src \
+            -e APP_NAME="${APP_NAME}" \
+            -e PY_VER="${PY_VER}" \
+            -e NUITKA_VERSION="${{ env.NUITKA_VERSION }}" \
+            --entrypoint /entrypoint_root.sh \
+            ${IMAGE} \
+            bash /src/build_termux.sh
 
-          echo "✅ Compiled: ${APP_NAME}.so ($(du -sh ${APP_NAME}.so | cut -f1))"
-
-      # 7. 上传编译产物
+      # 3. 上传编译产物
       - name: Upload compiled artifacts
         uses: actions/upload-artifact@v4
         with:
