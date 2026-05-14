@@ -321,15 +321,28 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Prepare app source
+      - name: Create Android project
+        run: |
+          APP_NAME="${{ needs.prepare.outputs.app_name }}"
+          cd "apps/${APP_NAME}"
+          briefcase create android -C "build_gradle_extra_content = \"android.defaultConfig.ndk.abiFilters = ['${{ matrix.android_abi }}']\""
+
+      - name: Process compiled module
         if: needs.prepare.outputs.enable_nuitka == 'true'
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          cd "apps/${APP_NAME}/src"
-
-          if [ -f "../../../dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
-            echo "📦 替换源码: ${APP_NAME} -> ${APP_NAME}.so"
-
+          BUILD_PATH="apps/${APP_NAME}/build/${APP_NAME}/android/app/src/main/assets/chaquopy/app"
+          
+          if [ ! -d "$BUILD_PATH" ]; then
+            echo "::error::Build path not found: $BUILD_PATH"
+            find "apps/${APP_NAME}/build" -type d -name "app" 2>/dev/null | head -5
+            exit 1
+          fi
+          
+          if [ -f "dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
+            echo "📦 处理编译模块: ${APP_NAME}.so"
+            cd "$BUILD_PATH"
+            
             saved_resources=()
             if [ -d "${APP_NAME}" ]; then
               while IFS= read -r -d '' f; do
@@ -338,23 +351,23 @@ jobs:
                 fi
               done < <(find "${APP_NAME}" -type f ! -name '*.py' -print0 2>/dev/null)
             fi
-
+            
             if [ ${#saved_resources[@]} -gt 0 ]; then
               echo "  保留 ${#saved_resources[@]} 个非 .py 资源文件"
             fi
-
+            
             rm -rf "${APP_NAME}"
             mkdir -p "${APP_NAME}"
-
+            
             for res in "${saved_resources[@]}"; do
               rel_path=${res#${APP_NAME}/}
               dest_dir="$(dirname "${APP_NAME}/$rel_path")"
               mkdir -p "$dest_dir"
               cp "$res" "${APP_NAME}/$rel_path" 2>/dev/null || true
             done
-
-            cp "../../../dist/${{ matrix.android_abi }}/${APP_NAME}.so" .
-
+            
+            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" .
+            
             cat > "${APP_NAME}/__init__.py" << 'EOF'
           import os, sys, importlib.util as _u
           _n = __name__
@@ -362,14 +375,14 @@ jobs:
           _p = os.path.dirname(_d)
           _f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith(('.pyd', '.so'))), None)
           if not _f: raise ImportError(f'No {_n} compiled module in {_p}')
-          if hasattr(os, 'add_dll_directory'): os.add_dll_directory(os.path.dirname(_p))
+          if hasattr(os, 'add_dll_directory'): os.add_dll_directory(_p)
           _s = _u.spec_from_file_location(_n, os.path.join(_p, _f))
           _m = _u.module_from_spec(_s)
           _s.loader.exec_module(_m)
           _m.__path__ = getattr(_m, '__path__', None) or [_d]
           _m.__package__ = _n
           if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
-
+          
           class _F:
               @staticmethod
               def find_spec(n, *_):
@@ -377,24 +390,19 @@ jobs:
           sys.meta_path.insert(0, _F)
           sys.modules[_n] = _m
           EOF
-
+            
             cat > "${APP_NAME}/__main__.py" << 'EOF'
           import importlib, sys
           _m = importlib.import_module(__package__)
           _m.main() if hasattr(_m, 'main') else sys.exit(f'No main() in {__package__}')
           EOF
-
+            
             echo "✅ 入口桩文件: ${APP_NAME}/__init__.py, __main__.py"
+            echo "✅ 编译模块: ${APP_NAME}.so"
           else
             echo "::error::Compiled .so not found at dist/${{ matrix.android_abi }}/${APP_NAME}.so"
             exit 1
           fi
-
-      - name: Create Android project
-        run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          cd "apps/${APP_NAME}"
-          briefcase create android -C "build_gradle_extra_content = \"android.defaultConfig.ndk.abiFilters = ['${{ matrix.android_abi }}']\""
 
       - name: Build Android APK
         run: |
