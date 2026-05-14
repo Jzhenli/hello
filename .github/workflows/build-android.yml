@@ -147,8 +147,7 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：移除 container 指令，在原生 Ubuntu 上运行 CI Action
-  # 然后通过 docker run 挂载代码执行编译
+  # 修复：移除自定义 entrypoint，依赖镜像默认降权，解决 root 拦截
   # ============================================================
   compile:
     needs: prepare
@@ -173,41 +172,40 @@ jobs:
           TERMUX_ARCH="${{ matrix.termux_arch }}"
           IMAGE="termux/termux-docker:${TERMUX_ARCH}"
           
+          # 创建输出目录并赋予写权限，让容器内的 system 用户可以写出产物
           mkdir -p dist
+          chmod -R 777 dist
+          chmod -R 777 apps/
           
           # 创建编译脚本，该脚本将在 Termux 容器内执行
           cat > build_termux.sh << 'SCRIPT'
           #!/data/data/com.termux/files/usr/bin/bash
           set -e
           
-          PREFIX=/data/data/com.termux/files/usr
+          export PREFIX=/data/data/com.termux/files/usr
           export PATH=$PREFIX/bin:$PATH
           export HOME=/data/data/com.termux/files/home
           export TMPDIR=$PREFIX/tmp
+          export LANG=en_US.UTF-8
           
           # 1. 修复 DNS
           echo "nameserver 8.8.8.8" > $PREFIX/etc/resolv.conf
           echo "nameserver 8.8.4.4" >> $PREFIX/etc/resolv.conf
           
-          # 2. 绕过 Termux 的 Root 限制
-          # Termux 的 apt/pkg 是 shell 脚本，直接替换里面的 id -u 判断逻辑
-          sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/apt
-          sed -i 's/"$(id -u)"/"1"/g' $PREFIX/bin/pkg
-          
-          # 3. 安装依赖
+          # 2. 安装依赖 (此时以 system 用户运行，不会触发 root 拦截)
           apt update -yq
           apt upgrade -yq
           apt install -yq tur-repo
-          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner nodejs-lts
+          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner findutils rust
           apt install -yq python${PY_VER}
           ln -sf $PREFIX/bin/python${PY_VER} $PREFIX/bin/python
           ln -sf $PREFIX/bin/pip${PY_VER} $PREFIX/bin/pip
           
-          # 4. 安装 Nuitka
+          # 3. 安装 Nuitka
           pip install --upgrade pip
-          pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${NUITKA_VERSION}
+          pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${NUITKA_VERSION}
           
-          # 5. 执行 Nuitka 编译
+          # 4. 执行 Nuitka 编译
           cd /src/apps/${APP_NAME}/src
           python -m nuitka \
             --module ${APP_NAME} \
@@ -234,16 +232,13 @@ jobs:
           echo "✅ Compiled: ${APP_NAME}.so"
           SCRIPT
           
-          # 通过 docker run 执行编译脚本
-          # -v $PWD:/src: 挂载当前工作区
-          # --entrypoint /entrypoint_root.sh: 以 root 身份运行，确保对工作区有写权限
-          # -e: 传入必要的环境变量
+          # 【关键修复】不使用 --entrypoint /entrypoint_root.sh
+          # 容器默认入口点会自动将权限降为 system 用户执行，完美避开 Termux 的 root 限制
           docker run --rm \
             -v $PWD:/src \
             -e APP_NAME="${APP_NAME}" \
             -e PY_VER="${PY_VER}" \
             -e NUITKA_VERSION="${{ env.NUITKA_VERSION }}" \
-            --entrypoint /entrypoint_root.sh \
             ${IMAGE} \
             bash /src/build_termux.sh
 
