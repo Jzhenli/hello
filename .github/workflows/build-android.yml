@@ -183,6 +183,8 @@ jobs:
           #!/bin/bash
           set -e
 
+          cd /workspace
+
           echo "📋 编译参数: APP=${{ needs.prepare.outputs.app_name }}, PYTHON=${{ env.PYTHON_VERSION }}, TERMUX_ARCH=${{ matrix.termux_arch }}"
 
           # 设置镜像源
@@ -239,16 +241,15 @@ jobs:
 
           chmod +x /tmp/termux_build.sh
 
-          # 3. 用官方推荐的 root entrypoint 启动容器
-          #    - 容器内以 root 身份执行 bash /tmp/termux_build.sh
-          #    - entrypoint_root.sh 会启动 dnsmasq 并 exec "$@"
-          #    - 不需要手动传一堆 -e TERMUX_xxx，镜像内部已初始化
+          # 3. 用默认入口启动（自动初始化 + 降权到 system 用户）
+          #    去掉 --entrypoint /entrypoint_root.sh
+          #    默认 /entrypoint.sh → 初始化 Termux → su system → 执行 CMD
           docker run --rm \
-            --entrypoint /entrypoint_root.sh \
             -v "$PWD:/workspace" \
             -v "/tmp/termux_build.sh:/tmp/termux_build.sh:ro" \
             termux/termux-docker:${{ matrix.termux_arch }} \
             bash /tmp/termux_build.sh
+
 
 
   # ============================================================
