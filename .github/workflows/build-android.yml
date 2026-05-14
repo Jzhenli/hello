@@ -147,7 +147,7 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：移除自定义 entrypoint，依赖镜像默认降权，解决 root 拦截
+  # 修复：换用 USTC 镜像源，避开 packages-cf.termux.dev 的 521 错误
   # ============================================================
   compile:
     needs: prepare
@@ -192,7 +192,15 @@ jobs:
           echo "nameserver 8.8.8.8" > $PREFIX/etc/resolv.conf
           echo "nameserver 8.8.4.4" >> $PREFIX/etc/resolv.conf
           
-          # 2. 安装依赖 (此时以 system 用户运行，不会触发 root 拦截)
+          # 2. 换用 USTC Termux APT 镜像，避开 packages-cf.termux.dev 的 521 限制
+          # 参考：https://mirrors.ustc.edu.cn/help/termux.html
+          if [ -f "$PREFIX/etc/apt/sources.list" ]; then
+            sed -i 's|https://packages-cf.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "$PREFIX/etc/apt/sources.list"
+            sed -i 's|https://packages.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "$PREFIX/etc/apt/sources.list"
+            echo "✅ APT sources switched to USTC mirror"
+          fi
+          
+          # 3. 安装依赖 (此时以 system 用户运行，不会触发 root 拦截)
           apt update -yq
           apt upgrade -yq
           apt install -yq tur-repo
@@ -201,11 +209,11 @@ jobs:
           ln -sf $PREFIX/bin/python${PY_VER} $PREFIX/bin/python
           ln -sf $PREFIX/bin/pip${PY_VER} $PREFIX/bin/pip
           
-          # 3. 安装 Nuitka
+          # 4. 安装 Nuitka
           pip install --upgrade pip
           pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${NUITKA_VERSION}
           
-          # 4. 执行 Nuitka 编译
+          # 5. 执行 Nuitka 编译
           cd /src/apps/${APP_NAME}/src
           python -m nuitka \
             --module ${APP_NAME} \
@@ -232,8 +240,8 @@ jobs:
           echo "✅ Compiled: ${APP_NAME}.so"
           SCRIPT
           
-          # 【关键修复】不使用 --entrypoint /entrypoint_root.sh
-          # 容器默认入口点会自动将权限降为 system 用户执行，完美避开 Termux 的 root 限制
+          # 【关键修复】使用默认入口点，容器自动以 system 用户运行，避免 root 拦截
+          # 同时挂载代码，让脚本在容器内执行
           docker run --rm \
             -v $PWD:/src \
             -e APP_NAME="${APP_NAME}" \
@@ -249,6 +257,7 @@ jobs:
           name: compiled-${{ matrix.android_abi }}
           path: dist/*.so
           retention-days: 1
+
 
   # ============================================================
   # 3. 阶段 2：Briefcase 打包 APK
