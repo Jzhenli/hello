@@ -147,7 +147,7 @@ jobs:
 
   # ============================================================
   # 2. 阶段 1：Termux 容器原生编译 .so
-  # 修复：使用 su -l system -c 降权执行 pkg/apt，绕过二进制拦截
+  # 修复：移除自定义 entrypoint 和 volumes，使用 su 降权执行 pkg
   # ============================================================
   compile:
     needs: prepare
@@ -161,9 +161,7 @@ jobs:
 
     container:
       image: termux/termux-docker:${{ matrix.termux_arch }}
-      options: --entrypoint /entrypoint_root.sh
-      volumes:
-        - /tmp/node20:/__e/node20
+      # 【关键修复】移除 options 和 volumes 配置，让 GHA 自动处理 Node 挂载和容器启动
       env:
         TERMUX_MAIN_PACKAGE_FORMAT: debian
         ANDROID_ROOT: /system
@@ -186,21 +184,20 @@ jobs:
       # 2. 初始化 Termux 环境 & 安装 Node.js
       - name: Initialize Termux and install Node.js
         run: |
-          # 【关键修复】降权到 system 用户执行 pkg，绕过二进制 root 拦截
-          # 外部 shell 会自动将 $PATH 等变量替换为实际值传入
-          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pkg update -yq && pkg upgrade -yq && pkg install -yq nodejs-lts"
+          # 降权到 system 用户执行 pkg，绕过二进制 root 拦截
+          # \$PREFIX 会在 system 用户的 shell 中自动展开为正确的路径
+          su -l system -c "pkg update -yq && pkg upgrade -yq && pkg install -yq nodejs-lts"
           echo "✅ Termux initialized"
 
       # 3. 安装编译工具链
       - name: Install build tools
         run: |
-          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pkg install -yq tur-repo && pkg install -yq ninja clang git patchelf ccache termux-elf-cleaner && pkg install -yq python${{ env.PYTHON_VERSION }} && ln -sf $PREFIX/bin/python${{ env.PYTHON_VERSION }} $PREFIX/bin/python && ln -sf $PREFIX/bin/pip${{ env.PYTHON_VERSION }} $PREFIX/bin/pip && python --version"
+          su -l system -c "pkg install -yq tur-repo && pkg install -yq ninja clang git patchelf ccache termux-elf-cleaner && pkg install -yq python${{ env.PYTHON_VERSION }} && ln -sf \$PREFIX/bin/python${{ env.PYTHON_VERSION }} \$PREFIX/bin/python && ln -sf \$PREFIX/bin/pip${{ env.PYTHON_VERSION }} \$PREFIX/bin/pip && python --version"
 
       # 4. 安装 Nuitka 编译器
       - name: Install Nuitka
         run: |
-          # pip 最好也在 system 用户下运行，以免产生 root 权限的缓存导致后续 system 用户使用时权限报错
-          su -l system -c "export PATH=$PATH PREFIX=$PREFIX HOME=$HOME TMPDIR=$TMPDIR && pip install --upgrade pip && pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}"
+          su -l system -c "pip install --upgrade pip && pip install MarkupSafe==3.0.2 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}"
 
       # 5. 检出代码
       - name: Checkout
@@ -214,7 +211,7 @@ jobs:
           mkdir -p dist
           cd "apps/${APP_NAME}/src"
 
-          # Nuitka 编译和 patchelf 保留在 root 下运行，防止 GHA 工作区目录权限拒绝写入
+          # Nuitka 编译保留在 root 下运行，防止 GHA 工作区目录权限拒绝写入
           python -m nuitka \
           --module ${APP_NAME} \
           --include-package=${APP_NAME} \
