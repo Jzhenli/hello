@@ -373,30 +373,34 @@ jobs:
               cp "$res" "${APP_NAME}/$rel_path" 2>/dev/null || true
             done
             
-            # 将 .so 复制为 __init__.cpython-310.so，Python 会优先加载扩展模块
-            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/__init__.cpython-310.so"
-            echo "  已创建 ${APP_NAME}/__init__.cpython-310.so"
+            # 将 .so 复制为 _${APP_NAME}.so（内部模块）
+            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/_${APP_NAME}.so"
+            echo "  已创建 ${APP_NAME}/_${APP_NAME}.so"
             
-            # 创建一个简单的桩文件作为后备
+            # 创建 __init__.py，从内部模块导入
             cat > "${APP_NAME}/__init__.py" << 'EOF'
-          # Nuitka compiled module stub - .so should be loaded first
           import sys
           import os
-          _n = __name__
-          _d = os.path.dirname(os.path.abspath(__file__))
-          _so_file = os.path.join(_d, '__init__.cpython-310.so')
+          import importlib.util as _u
           
-          if os.path.exists(_so_file):
-              import importlib.machinery as _mach
-              import importlib.util as _u
-              _loader = _mach.ExtensionFileLoader(_n, _so_file)
-              _spec = _mach.ModuleSpec(_n, _loader, origin=_so_file)
-              _m = _u.module_from_spec(_spec)
-              sys.modules[_n] = _m
-              _loader.exec_module(_m)
-              globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-          else:
-              raise ImportError(f"No compiled module found at {_so_file}")
+          _d = os.path.dirname(os.path.abspath(__file__))
+          _so_path = os.path.join(_d, '_xagent.so')
+          
+          # 加载 .so 模块，指定正确的模块名
+          _spec = _u.spec_from_file_location('xagent', _so_path)
+          _m = _u.module_from_spec(_spec)
+          sys.modules['xagent._xagent'] = _m
+          _spec.loader.exec_module(_m)
+          
+          # 导出所有公共属性
+          _globals = globals()
+          for _k in dir(_m):
+              if not _k.startswith('_'):
+                  _globals[_k] = getattr(_m, _k)
+          
+          # 导出 __version__
+          if hasattr(_m, '__version__'):
+              _globals['__version__'] = _m.__version__
           EOF
 
             cat > "${APP_NAME}/__main__.py" << 'EOF'
