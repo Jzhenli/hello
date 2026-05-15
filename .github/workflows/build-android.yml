@@ -373,66 +373,30 @@ jobs:
               cp "$res" "${APP_NAME}/$rel_path" 2>/dev/null || true
             done
             
-            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" .
+            # 将 .so 复制为 __init__.cpython-310.so，Python 会优先加载扩展模块
+            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/__init__.cpython-310.so"
+            echo "  已创建 ${APP_NAME}/__init__.cpython-310.so"
             
+            # 创建一个简单的桩文件作为后备
             cat > "${APP_NAME}/__init__.py" << 'EOF'
+          # Nuitka compiled module stub - .so should be loaded first
           import sys
+          import os
           _n = __name__
-          print(f"[STUB] {_n}.__init__ starting")
+          _d = os.path.dirname(os.path.abspath(__file__))
+          _so_file = os.path.join(_d, '__init__.cpython-310.so')
           
-          if _n in sys.modules and hasattr(sys.modules[_n], '_nuitka_loaded'):
-              print(f"[STUB] {_n} already loaded")
-              _existing = sys.modules[_n]
-              globals().update({k: v for k, v in vars(_existing).items() if not k.startswith('_')})
+          if os.path.exists(_so_file):
+              import importlib.machinery as _mach
+              import importlib.util as _u
+              _loader = _mach.ExtensionFileLoader(_n, _so_file)
+              _spec = _mach.ModuleSpec(_n, _loader, origin=_so_file)
+              _m = _u.module_from_spec(_spec)
+              sys.modules[_n] = _m
+              _loader.exec_module(_m)
+              globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
           else:
-              print(f"[STUB] {_n} first time load")
-              import os
-              _d = os.path.dirname(os.path.abspath(__file__))
-              _p = os.path.dirname(_d)
-              _f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith(('.pyd', '.so'))), None)
-              print(f"[STUB] .so file: {_f}")
-              
-              if _f:
-                  if hasattr(os, 'add_dll_directory'): 
-                      os.add_dll_directory(_p)
-                  
-                  _so_path = os.path.join(_p, _f)
-                  print(f"[STUB] .so path: {_so_path}")
-                  
-                  # 方法: 使用 Python 的内置导入机制，但指定完整路径
-                  # 先将 .so 所在目录添加到 sys.path
-                  _old_path = list(sys.path)
-                  try:
-                      if _p not in sys.path:
-                          sys.path.insert(0, _p)
-                      
-                      # 移除当前的 xagent 模块，让 Python 重新导入
-                      if _n in sys.modules:
-                          del sys.modules[_n]
-                      
-                      # 导入 .so 模块
-                      print(f"[STUB] Importing {_n} from {_p}...")
-                      import importlib
-                      _m = importlib.import_module(_n)
-                      
-                      print(f"[STUB] Imported module: {_m}")
-                      print(f"[STUB] Module attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
-                      
-                      if hasattr(_m, '__version__'):
-                          print(f"[STUB] __version__ = {_m.__version__}")
-                      if hasattr(_m, 'main'):
-                          print(f"[STUB] main = {_m.main}")
-                      
-                      _m._nuitka_loaded = True
-                      globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-                      
-                  finally:
-                      # 恢复 sys.path
-                      sys.path[:] = _old_path
-                  
-                  print(f"[STUB] Loaded to globals: {[k for k in globals() if not k.startswith('_')]}")
-              else:
-                  raise ImportError(f"No .so file for {_n}")
+              raise ImportError(f"No compiled module found at {_so_file}")
           EOF
 
             cat > "${APP_NAME}/__main__.py" << 'EOF'
