@@ -396,48 +396,57 @@ jobs:
                   if hasattr(os, 'add_dll_directory'): 
                       os.add_dll_directory(_p)
                   
-                  import importlib.util as _u
                   _so_path = os.path.join(_p, _f)
+                  print(f"[STUB] .so path: {_so_path}")
                   
-                  # 创建模块对象并设置包属性
+                  # 使用 ctypes 直接加载 .so
+                  import ctypes
+                  print(f"[STUB] Loading .so with ctypes...")
+                  try:
+                      _lib = ctypes.CDLL(_so_path)
+                      print(f"[STUB] .so loaded with ctypes: {_lib}")
+                  except Exception as e:
+                      print(f"[STUB] ctypes load failed: {e}")
+                      # 尝试使用 ctypes.PyDLL
+                      try:
+                          _lib = ctypes.PyDLL(_so_path)
+                          print(f"[STUB] .so loaded with PyDLL: {_lib}")
+                      except Exception as e2:
+                          print(f"[STUB] PyDLL load failed: {e2}")
+                          raise
+                  
+                  # 使用 importlib 加载为 Python 模块
+                  import importlib.machinery as _mach
+                  import importlib.util as _u
+                  
+                  print(f"[STUB] Creating extension spec...")
+                  _spec = _mach.ModuleSpec(_n, None, origin=_so_path)
+                  _spec.loader_state = _so_path
+                  _spec.loader = _mach.ExtensionFileLoader(_n, _so_path)
+                  
                   _m = sys.modules[_n]
                   _m.__path__ = [_d]
                   _m.__package__ = _n
                   _m.__file__ = _so_path
+                  _m.__spec__ = _spec
                   _m._nuitka_loaded = True
                   
-                  print(f"[STUB] Module before .so load: {list(_m.__dict__.keys())}")
-                  
-                  # 使用 spec 加载
-                  _s = _u.spec_from_file_location(_n, _so_path, submodule_search_locations=[_d])
-                  print(f"[STUB] Loading .so with submodule_search_locations=[{_d}]")
-                  
-                  # 执行模块
-                  _loader = _s.loader
-                  print(f"[STUB] Loader: {_loader}")
-                  
+                  print(f"[STUB] Executing extension module...")
                   try:
-                      _result = _loader.exec_module(_m)
-                      print(f"[STUB] exec_module returned: {_result}")
+                      _spec.loader.exec_module(_m)
+                      print(f"[STUB] Extension executed successfully")
                   except Exception as e:
-                      print(f"[STUB] ERROR during exec_module: {type(e).__name__}: {e}")
+                      print(f"[STUB] Extension exec failed: {type(e).__name__}: {e}")
                       import traceback
                       traceback.print_exc()
                       raise
                   
-                  print(f"[STUB] Module after .so load: {list(_m.__dict__.keys())}")
-                  print(f"[STUB] .so non-private attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
+                  print(f"[STUB] Module attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
                   
-                  # 检查是否有 __version__ 或 main
                   if hasattr(_m, '__version__'):
                       print(f"[STUB] __version__ = {_m.__version__}")
-                  else:
-                      print(f"[STUB] WARNING: __version__ not found")
-                  
                   if hasattr(_m, 'main'):
                       print(f"[STUB] main = {_m.main}")
-                  else:
-                      print(f"[STUB] WARNING: main not found")
                   
                   globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
                   print(f"[STUB] Loaded to globals: {[k for k in globals() if not k.startswith('_')]}")
