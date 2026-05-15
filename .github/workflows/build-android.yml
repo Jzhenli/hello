@@ -380,10 +380,10 @@ jobs:
           if hasattr(os, 'add_dll_directory'): os.add_dll_directory(_p)
           _s = _u.spec_from_file_location(_n, os.path.join(_p, _f))
           _m = _u.module_from_spec(_s)
+          _m.__path__ = [_d]
+          _m.__package__ = _n
           sys.modules[_n] = _m
           _s.loader.exec_module(_m)
-          _m.__path__ = getattr(_m, '__path__', None) or [_d]
-          _m.__package__ = _n
           if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
 
           class _F:
