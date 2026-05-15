@@ -406,21 +406,41 @@ jobs:
                   _m.__file__ = _so_path
                   _m._nuitka_loaded = True
                   
+                  print(f"[STUB] Module before .so load: {list(_m.__dict__.keys())}")
+                  
                   # 使用 spec 加载
                   _s = _u.spec_from_file_location(_n, _so_path, submodule_search_locations=[_d])
                   print(f"[STUB] Loading .so with submodule_search_locations=[{_d}]")
-                  print(f"[STUB] __package__ = {_n}")
                   
                   # 执行模块
                   _loader = _s.loader
-                  _code = _loader.create_module(_s)
-                  if _code is not None:
-                      print(f"[STUB] create_module returned: {_code}")
-                  _loader.exec_module(_m)
+                  print(f"[STUB] Loader: {_loader}")
                   
-                  print(f"[STUB] .so attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
+                  try:
+                      _result = _loader.exec_module(_m)
+                      print(f"[STUB] exec_module returned: {_result}")
+                  except Exception as e:
+                      print(f"[STUB] ERROR during exec_module: {type(e).__name__}: {e}")
+                      import traceback
+                      traceback.print_exc()
+                      raise
+                  
+                  print(f"[STUB] Module after .so load: {list(_m.__dict__.keys())}")
+                  print(f"[STUB] .so non-private attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
+                  
+                  # 检查是否有 __version__ 或 main
+                  if hasattr(_m, '__version__'):
+                      print(f"[STUB] __version__ = {_m.__version__}")
+                  else:
+                      print(f"[STUB] WARNING: __version__ not found")
+                  
+                  if hasattr(_m, 'main'):
+                      print(f"[STUB] main = {_m.main}")
+                  else:
+                      print(f"[STUB] WARNING: main not found")
+                  
                   globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-                  print(f"[STUB] Loaded: {[k for k in globals() if not k.startswith('_')]}")
+                  print(f"[STUB] Loaded to globals: {[k for k in globals() if not k.startswith('_')]}")
               else:
                   raise ImportError(f"No .so file for {_n}")
           EOF
