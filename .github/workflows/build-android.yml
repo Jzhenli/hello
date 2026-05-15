@@ -380,19 +380,19 @@ jobs:
           if hasattr(os, 'add_dll_directory'): os.add_dll_directory(_p)
           _s = _u.spec_from_file_location(_n, os.path.join(_p, _f))
           _m = _u.module_from_spec(_s)
+          sys.modules[_n] = _m
           _s.loader.exec_module(_m)
           _m.__path__ = getattr(_m, '__path__', None) or [_d]
           _m.__package__ = _n
           if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
-          
+
           class _F:
               @staticmethod
               def find_spec(n, *_):
                   if n == f'{_n}.__main__': return _u.spec_from_file_location(n, os.path.join(_d, '__main__.py'))
           sys.meta_path.insert(0, _F)
-          sys.modules[_n] = _m
           EOF
-            
+
             cat > "${APP_NAME}/__main__.py" << 'EOF'
           import importlib, sys
           _m = importlib.import_module(__package__)
@@ -416,7 +416,7 @@ jobs:
         run: |
           APP_NAME="${{ needs.prepare.outputs.app_name }}"
           cd "apps/${APP_NAME}"
-          briefcase package android --adhoc-sign -p apk
+          briefcase package android --adhoc-sign -p debug-apk
 
       - name: Rename and collect APK
         run: |
