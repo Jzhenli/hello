@@ -233,12 +233,17 @@ jobs:
           python -m nuitka \
             --module ${APP_NAME} \
             --include-package=${APP_NAME} \
+            --nofollow-imports \
             --output-dir=dist \
             --remove-output \
             --assume-yes-for-downloads \
             --no-progressbar
           
-          cp ./dist/*.so /src/dist/
+          echo "📦 Nuitka output files:"
+          ls -la ./dist/ || true
+          find ./dist/ -name "*.so" -o -name "*.pyd" || true
+          
+          cp ./dist/*.so /src/dist/ 2>/dev/null || true
           cd /src/dist/
           
           SO_FILE=\$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
@@ -373,70 +378,51 @@ jobs:
             cat > "${APP_NAME}/__init__.py" << 'EOF'
           import sys
           _n = __name__
-          print(f"[STUB] {_n}.__init__ starting, sys.modules has {_n}: {_n in sys.modules}")
-          if _n in sys.modules:
-              _existing = sys.modules[_n]
-              print(f"[STUB] {_n} in sys.modules, _nuitka_loaded: {hasattr(_existing, '_nuitka_loaded')}, _nuitka_executing: {hasattr(_existing, '_nuitka_executing')}")
+          print(f"[STUB] {_n}.__init__ starting")
           
           if _n in sys.modules and hasattr(sys.modules[_n], '_nuitka_loaded'):
+              print(f"[STUB] {_n} already loaded")
               _existing = sys.modules[_n]
-              if hasattr(_existing, '_nuitka_executing'):
-                  print(f"[STUB] {_n} is executing, returning the module object")
-              else:
-                  print(f"[STUB] {_n} already loaded, copying attributes")
-                  globals().update({k: v for k, v in vars(_existing).items() if not k.startswith('_')})
-                  print(f"[STUB] {_n} attributes copied: {[k for k in globals() if not k.startswith('_')]}")
+              globals().update({k: v for k, v in vars(_existing).items() if not k.startswith('_')})
           else:
               print(f"[STUB] {_n} first time load")
               import os
               _d = os.path.dirname(os.path.abspath(__file__))
               _p = os.path.dirname(_d)
-              print(f"[STUB] _d={_d}, _p={_p}")
-              print(f"[STUB] listing _p: {os.listdir(_p)}")
               _f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith(('.pyd', '.so'))), None)
-              print(f"[STUB] found .so file: {_f}")
+              print(f"[STUB] .so file: {_f}")
+              
               if _f:
                   if hasattr(os, 'add_dll_directory'): 
                       os.add_dll_directory(_p)
-                      print(f"[STUB] added dll directory: {_p}")
+                  
                   import importlib.util as _u
                   _so_path = os.path.join(_p, _f)
-                  print(f"[STUB] loading .so from: {_so_path}")
-                  _s = _u.spec_from_file_location(_n, _so_path, submodule_search_locations=[_d])
-                  _m = _u.module_from_spec(_s)
+                  
+                  # 创建模块对象并设置包属性
+                  _m = sys.modules[_n]
                   _m.__path__ = [_d]
                   _m.__package__ = _n
+                  _m.__file__ = _so_path
                   _m._nuitka_loaded = True
-                  _m._nuitka_executing = True
-                  _m._so_path = _so_path
-                  sys.modules[_n] = _m
                   
-                  print(f"[STUB] executing .so module...")
-                  try:
-                      _s.loader.exec_module(_m)
-                  except Exception as e:
-                      print(f"[STUB] ERROR during .so execution: {type(e).__name__}: {e}")
-                      import traceback
-                      traceback.print_exc()
-                      raise
-                  finally:
-                      if hasattr(_m, '_nuitka_executing'):
-                          delattr(_m, '_nuitka_executing')
+                  # 使用 spec 加载
+                  _s = _u.spec_from_file_location(_n, _so_path, submodule_search_locations=[_d])
+                  print(f"[STUB] Loading .so with submodule_search_locations=[{_d}]")
+                  print(f"[STUB] __package__ = {_n}")
                   
-                  # 检查 .so 模块的所有属性
-                  print(f"[STUB] .so executed, all attributes: {dir(_m)}")
-                  print(f"[STUB] .so non-private attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
-                  print(f"[STUB] .so __dict__ keys: {list(_m.__dict__.keys())}")
+                  # 执行模块
+                  _loader = _s.loader
+                  _code = _loader.create_module(_s)
+                  if _code is not None:
+                      print(f"[STUB] create_module returned: {_code}")
+                  _loader.exec_module(_m)
                   
-                  # 检查是否有子模块相关的属性
-                  for _attr in dir(_m):
-                      if 'main' in _attr.lower() or 'module' in _attr.lower():
-                          print(f"[STUB] Found relevant attr: {_attr} = {getattr(_m, _attr, 'N/A')}")
-                  
+                  print(f"[STUB] .so attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
                   globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-                  print(f"[STUB] {_n} load complete, globals: {[k for k in globals() if not k.startswith('_')]}")
+                  print(f"[STUB] Loaded: {[k for k in globals() if not k.startswith('_')]}")
               else:
-                  print(f"[STUB] ERROR: no .so file found for {_n}")
+                  raise ImportError(f"No .so file for {_n}")
           EOF
 
             cat > "${APP_NAME}/__main__.py" << 'EOF'
