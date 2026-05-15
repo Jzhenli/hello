@@ -2,8 +2,6 @@
 
 __version__ = "0.0.20"
 
-def main():
-    from .main import main as _main
-    return _main()
+from .main import main
 
 __all__ = ["main", "__version__"]

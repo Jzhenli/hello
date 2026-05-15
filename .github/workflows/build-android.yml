@@ -381,7 +381,7 @@ jobs:
           if _n in sys.modules and hasattr(sys.modules[_n], '_nuitka_loaded'):
               _existing = sys.modules[_n]
               if hasattr(_existing, '_nuitka_executing'):
-                  print(f"[STUB] {_n} is executing, skip copy (will copy after execution)")
+                  print(f"[STUB] {_n} is executing, returning the module object")
               else:
                   print(f"[STUB] {_n} already loaded, copying attributes")
                   globals().update({k: v for k, v in vars(_existing).items() if not k.startswith('_')})
@@ -408,11 +408,31 @@ jobs:
                   _m.__package__ = _n
                   _m._nuitka_loaded = True
                   _m._nuitka_executing = True
+                  _m._so_path = _so_path
                   sys.modules[_n] = _m
+                  
                   print(f"[STUB] executing .so module...")
-                  _s.loader.exec_module(_m)
-                  delattr(_m, '_nuitka_executing')
-                  print(f"[STUB] .so executed, attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
+                  try:
+                      _s.loader.exec_module(_m)
+                  except Exception as e:
+                      print(f"[STUB] ERROR during .so execution: {type(e).__name__}: {e}")
+                      import traceback
+                      traceback.print_exc()
+                      raise
+                  finally:
+                      if hasattr(_m, '_nuitka_executing'):
+                          delattr(_m, '_nuitka_executing')
+                  
+                  # 检查 .so 模块的所有属性
+                  print(f"[STUB] .so executed, all attributes: {dir(_m)}")
+                  print(f"[STUB] .so non-private attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
+                  print(f"[STUB] .so __dict__ keys: {list(_m.__dict__.keys())}")
+                  
+                  # 检查是否有子模块相关的属性
+                  for _attr in dir(_m):
+                      if 'main' in _attr.lower() or 'module' in _attr.lower():
+                          print(f"[STUB] Found relevant attr: {_attr} = {getattr(_m, _attr, 'N/A')}")
+                  
                   globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
                   print(f"[STUB] {_n} load complete, globals: {[k for k in globals() if not k.startswith('_')]}")
               else:
