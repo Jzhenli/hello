@@ -402,54 +402,64 @@ jobs:
                   # 使用 ctypes 直接加载 .so
                   import ctypes
                   print(f"[STUB] Loading .so with ctypes...")
+                  _lib = ctypes.CDLL(_so_path)
+                  print(f"[STUB] .so loaded: {_lib}")
+                  
+                  # 查找 PyInit 函数
+                  _init_func_name = f'PyInit_{_n}'
+                  print(f"[STUB] Looking for {_init_func_name}...")
                   try:
-                      _lib = ctypes.CDLL(_so_path)
-                      print(f"[STUB] .so loaded with ctypes: {_lib}")
-                  except Exception as e:
-                      print(f"[STUB] ctypes load failed: {e}")
-                      # 尝试使用 ctypes.PyDLL
+                      _init_func = getattr(_lib, _init_func_name)
+                      print(f"[STUB] Found {_init_func_name}: {_init_func}")
+                  except AttributeError:
+                      print(f"[STUB] {_init_func_name} not found, listing symbols...")
+                      # 尝试列出 .so 中的符号
                       try:
-                          _lib = ctypes.PyDLL(_so_path)
-                          print(f"[STUB] .so loaded with PyDLL: {_lib}")
-                      except Exception as e2:
-                          print(f"[STUB] PyDLL load failed: {e2}")
+                          import ctypes.util
+                          _syms = []
+                          # 常见的 PyInit 函数名
+                          for _sym in ['PyInit_' + _n, 'init' + _n, 'PyInit_module']:
+                              try:
+                                  _func = getattr(_lib, _sym)
+                                  print(f"[STUB] Found symbol: {_sym}")
+                                  _syms.append((_sym, _func))
+                              except AttributeError:
+                                  pass
+                          if _syms:
+                              _init_func = _syms[0][1]
+                          else:
+                              raise ImportError(f"No init function found in {_so_path}")
+                      except Exception as e:
+                          print(f"[STUB] Error finding symbols: {e}")
                           raise
                   
-                  # 使用 importlib 加载为 Python 模块
-                  import importlib.machinery as _mach
-                  import importlib.util as _u
+                  # 设置函数签名
+                  _init_func.restype = ctypes.py_object
+                  _init_func.argtypes = []
                   
-                  print(f"[STUB] Creating extension spec...")
-                  _spec = _mach.ModuleSpec(_n, None, origin=_so_path)
-                  _spec.loader_state = _so_path
-                  _spec.loader = _mach.ExtensionFileLoader(_n, _so_path)
-                  
-                  _m = sys.modules[_n]
-                  _m.__path__ = [_d]
-                  _m.__package__ = _n
-                  _m.__file__ = _so_path
-                  _m.__spec__ = _spec
-                  _m._nuitka_loaded = True
-                  
-                  print(f"[STUB] Executing extension module...")
+                  print(f"[STUB] Calling {_init_func_name}...")
                   try:
-                      _spec.loader.exec_module(_m)
-                      print(f"[STUB] Extension executed successfully")
+                      _result = _init_func()
+                      print(f"[STUB] Init function returned: {_result}, type: {type(_result)}")
                   except Exception as e:
-                      print(f"[STUB] Extension exec failed: {type(e).__name__}: {e}")
+                      print(f"[STUB] Init function failed: {type(e).__name__}: {e}")
                       import traceback
                       traceback.print_exc()
                       raise
                   
-                  print(f"[STUB] Module attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
-                  
-                  if hasattr(_m, '__version__'):
-                      print(f"[STUB] __version__ = {_m.__version__}")
-                  if hasattr(_m, 'main'):
-                      print(f"[STUB] main = {_m.main}")
-                  
-                  globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-                  print(f"[STUB] Loaded to globals: {[k for k in globals() if not k.startswith('_')]}")
+                  # 检查返回的模块对象
+                  if _result is not None:
+                      print(f"[STUB] Module from init: {dir(_result)}")
+                      print(f"[STUB] Module attributes: {[k for k in dir(_result) if not k.startswith('_')]}")
+                      
+                      # 更新 sys.modules 和 globals
+                      sys.modules[_n] = _result
+                      globals().update({k: v for k, v in vars(_result).items() if not k.startswith('_')})
+                      globals()['_nuitka_loaded'] = True
+                      print(f"[STUB] Loaded to globals: {[k for k in globals() if not k.startswith('_')]}")
+                  else:
+                      print(f"[STUB] Init function returned None")
+                      raise ImportError(f"Init function returned None")
               else:
                   raise ImportError(f"No .so file for {_n}")
           EOF
