@@ -375,12 +375,17 @@ jobs:
           _n = __name__
           print(f"[STUB] {_n}.__init__ starting, sys.modules has {_n}: {_n in sys.modules}")
           if _n in sys.modules:
-              print(f"[STUB] {_n} in sys.modules, _nuitka_loaded: {hasattr(sys.modules[_n], '_nuitka_loaded')}")
+              _existing = sys.modules[_n]
+              print(f"[STUB] {_n} in sys.modules, _nuitka_loaded: {hasattr(_existing, '_nuitka_loaded')}, _nuitka_executing: {hasattr(_existing, '_nuitka_executing')}")
           
           if _n in sys.modules and hasattr(sys.modules[_n], '_nuitka_loaded'):
-              print(f"[STUB] {_n} already loaded, copying attributes")
-              globals().update({k: v for k, v in vars(sys.modules[_n]).items() if not k.startswith('_')})
-              print(f"[STUB] {_n} attributes copied: {[k for k in globals() if not k.startswith('_')]}")
+              _existing = sys.modules[_n]
+              if hasattr(_existing, '_nuitka_executing'):
+                  print(f"[STUB] {_n} is executing, skip copy (will copy after execution)")
+              else:
+                  print(f"[STUB] {_n} already loaded, copying attributes")
+                  globals().update({k: v for k, v in vars(_existing).items() if not k.startswith('_')})
+                  print(f"[STUB] {_n} attributes copied: {[k for k in globals() if not k.startswith('_')]}")
           else:
               print(f"[STUB] {_n} first time load")
               import os
@@ -402,12 +407,14 @@ jobs:
                   _m.__path__ = [_d]
                   _m.__package__ = _n
                   _m._nuitka_loaded = True
+                  _m._nuitka_executing = True
                   sys.modules[_n] = _m
                   print(f"[STUB] executing .so module...")
                   _s.loader.exec_module(_m)
+                  delattr(_m, '_nuitka_executing')
                   print(f"[STUB] .so executed, attributes: {[k for k in dir(_m) if not k.startswith('_')]}")
                   globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
-                  print(f"[STUB] {_n} load complete")
+                  print(f"[STUB] {_n} load complete, globals: {[k for k in globals() if not k.startswith('_')]}")
               else:
                   print(f"[STUB] ERROR: no .so file found for {_n}")
           EOF
