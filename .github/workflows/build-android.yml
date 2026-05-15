@@ -371,26 +371,26 @@ jobs:
             cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" .
             
             cat > "${APP_NAME}/__init__.py" << 'EOF'
-          import os, sys, importlib.util as _u
+          import sys
           _n = __name__
-          _d = os.path.dirname(os.path.abspath(__file__))
-          _p = os.path.dirname(_d)
-          _f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith(('.pyd', '.so'))), None)
-          if not _f: raise ImportError(f'No {_n} compiled module in {_p}')
-          if hasattr(os, 'add_dll_directory'): os.add_dll_directory(_p)
-          _s = _u.spec_from_file_location(_n, os.path.join(_p, _f))
-          _m = _u.module_from_spec(_s)
-          _m.__path__ = [_d]
-          _m.__package__ = _n
-          sys.modules[_n] = _m
-          _s.loader.exec_module(_m)
-          if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
-
-          class _F:
-              @staticmethod
-              def find_spec(n, *_):
-                  if n == f'{_n}.__main__': return _u.spec_from_file_location(n, os.path.join(_d, '__main__.py'))
-          sys.meta_path.insert(0, _F)
+          if _n in sys.modules and hasattr(sys.modules[_n], '_nuitka_loaded'):
+              globals().update({k: v for k, v in vars(sys.modules[_n]).items() if not k.startswith('_')})
+          else:
+              import os
+              _d = os.path.dirname(os.path.abspath(__file__))
+              _p = os.path.dirname(_d)
+              _f = next((f for f in os.listdir(_p) if f.startswith(_n) and f.endswith(('.pyd', '.so'))), None)
+              if _f:
+                  if hasattr(os, 'add_dll_directory'): os.add_dll_directory(_p)
+                  import importlib.util as _u
+                  _s = _u.spec_from_file_location(_n, os.path.join(_p, _f), submodule_search_locations=[_d])
+                  _m = _u.module_from_spec(_s)
+                  _m.__path__ = [_d]
+                  _m.__package__ = _n
+                  _m._nuitka_loaded = True
+                  sys.modules[_n] = _m
+                  _s.loader.exec_module(_m)
+                  globals().update({k: v for k, v in vars(_m).items() if not k.startswith('_')})
           EOF
 
             cat > "${APP_NAME}/__main__.py" << 'EOF'
