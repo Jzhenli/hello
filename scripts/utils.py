@@ -31,7 +31,8 @@ def extract_version_from_init(init_file: Path) -> str:
     return match.group(1) if match else "0.0.0"
 
 
-def extract_version_from_pyproject(pyproject_file: Path) -> str:
+def extract_version_from_pyproject(pyproject_file) -> str:
+    pyproject_file = Path(pyproject_file)
     if not pyproject_file.exists():
         return "0.0.0"
     content = pyproject_file.read_text(encoding="utf-8", errors="ignore")
@@ -39,7 +40,8 @@ def extract_version_from_pyproject(pyproject_file: Path) -> str:
     return match.group(1) if match else "0.0.0"
 
 
-def set_version_in_pyproject(pyproject_file: Path, version: str) -> None:
+def set_version_in_pyproject(pyproject_file, version: str) -> None:
+    pyproject_file = Path(pyproject_file)
     content = pyproject_file.read_text(encoding="utf-8")
     content = re.sub(r'^version\s*=\s*["\'][^"\']*["\']', f'version = "{version}"', content, count=1, flags=re.MULTILINE)
     pyproject_file.write_text(content, encoding="utf-8")

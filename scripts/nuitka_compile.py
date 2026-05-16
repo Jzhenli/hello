@@ -26,6 +26,9 @@ import platform
 import argparse
 from pathlib import Path
 
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 
