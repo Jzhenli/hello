@@ -25,6 +25,7 @@ import tempfile
 import platform
 import argparse
 from pathlib import Path
+from typing import List, Optional
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -86,7 +87,7 @@ def check_nuitka(python_exe: str) -> str:
     )
 
 
-def scan_compilable_modules(src_dir: Path, module_filter: list[str] | None = None) -> list[str]:
+def scan_compilable_modules(src_dir: Path, module_filter: Optional[List[str]] = None) -> List[str]:
     skip_dirs = {"__pycache__", "compiled", "app_packages"}
     modules = []
 
@@ -170,7 +171,7 @@ def compile_module(
     return compiled_basename
 
 
-def inject_stub(module_name: str, src_dir: Path, mod_file: str | None = None) -> None:
+def inject_stub(module_name: str, src_dir: Path, mod_file: Optional[str] = None) -> None:
     module_dir = src_dir / module_name
 
     _tmpdir = Path(tempfile.mkdtemp())

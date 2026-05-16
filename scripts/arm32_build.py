@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 from config import PBS_PYTHON_VERSIONS, PBS_RELEASE, PIWHEELS_URL, STRIPPED_STDLIB_MODULES
@@ -57,11 +58,11 @@ class ARM32Builder:
         return self.shared_python_dir / "bin" / "python3"
 
     @property
-    def pbs_pip_exe(self) -> Path | None:
+    def pbs_pip_exe(self) -> Optional[Path]:
         pip3 = self.shared_python_dir / "bin" / "pip3"
         return pip3 if pip3.exists() else None
 
-    def _pip_cmd_base(self) -> list[str]:
+    def _pip_cmd_base(self) -> List[str]:
         if self.pbs_pip_exe:
             return [str(self.pbs_pip_exe), "install", f"--extra-index-url={PIWHEELS_URL}"]
         return [str(self.pbs_python_exe), "-m", "pip", "install", f"--extra-index-url={PIWHEELS_URL}"]
