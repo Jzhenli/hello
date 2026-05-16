@@ -85,9 +85,9 @@ def main():
     elif force_desktop:
         from .desktop import main as desktop_main
         desktop_main()
-    elif platform.system() == "Windows":
-        from .xcore.run import main as cli_main
-        cli_main()
+    # elif platform.system() == "Windows":
+    #     from .xcore.run import main as cli_main
+    #     cli_main()
     else:
         from .desktop import main as desktop_main
         desktop_main()
