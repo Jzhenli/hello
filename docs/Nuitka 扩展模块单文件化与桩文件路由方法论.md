@@ -98,15 +98,15 @@ def get_resource_dir() -> Path:
     """获取资源目录路径（兼容编译后与开发模式）"""
     mod = sys.modules.get(__package__ or __name__.split(".")[0])
     if mod and hasattr(mod, "_RESOURCE_DIR"):
-        return Path(mod._RESOURCE_DIR)
-    return Path(__file__).parent
+        return Path(mod._RESOURCE_DIR) / "resources"
+    return Path(__file__).parent / "resources"
 ```
 
 **使用示例**：
 
 ```python
 # 读取配置文件
-config_path = get_resource_dir() / "resources" / "config.txt"
+config_path = get_resource_dir() / "config.txt"
 content = config_path.read_text(encoding="utf-8")
 
 # 加载静态资源
