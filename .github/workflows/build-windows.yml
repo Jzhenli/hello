@@ -1,4 +1,4 @@
-name: Build Windows App (Briefcase)
+name: Build Windows App
 
 on:
   push:
@@ -7,22 +7,20 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'Application to build (e.g., weather, hello, xagent)'
+        description: 'Application to build'
         required: true
         default: 'weather'
-        type: string
+        type: choice
+        options: [hello, weather, xagent]
       version:
         description: 'Version (e.g., 1.0.0)'
         required: false
         default: ''
       python_version:
-        description: 'Python version (3.10 / 3.11 / 3.12)'
+        description: 'Python version'
         required: false
         type: choice
-        options:
-          - '3.10'
-          - '3.11'
-          - '3.12'
+        options: ['3.10', '3.11', '3.12']
         default: '3.11'
       enable_nuitka:
         description: 'Enable Nuitka compilation'
@@ -37,176 +35,122 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
-
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    timeout-minutes: 60
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      app_name: ${{ steps.vars.outputs.app_name }}
+      version: ${{ steps.vars.outputs.version }}
+      enable_nuitka: ${{ steps.vars.outputs.enable_nuitka }}
+      briefcase_version: ${{ steps.versions.outputs.briefcase }}
+      nuitka_version: ${{ steps.versions.outputs.nuitka }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        if: startsWith(github.ref, 'refs/tags/')
-        id: tag_info
-        shell: bash
+      - name: Read versions from config
+        id: versions
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          APP_NAME="${TAG_NAME%-windows/*}"
-          VERSION="${TAG_NAME#*/v}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "::warning::Invalid version format: $VERSION"
-          fi
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          BV=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from config import BRIEFCASE_VERSION; print(BRIEFCASE_VERSION)")
+          NV=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from config import NUITKA_VERSION; print(NUITKA_VERSION)")
+          echo "briefcase=$BV" >> $GITHUB_OUTPUT
+          echo "nuitka=$NV" >> $GITHUB_OUTPUT
 
-      - name: Set build variables
+      - name: Resolve variables
         id: vars
-        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             APP_NAME="${{ inputs.app_name }}"
             VERSION="${{ inputs.version }}"
             ENABLE_NUITKA="${{ inputs.enable_nuitka }}"
           else
-            APP_NAME="${{ steps.tag_info.outputs.APP_NAME }}"
-            VERSION="${{ steps.tag_info.outputs.VERSION }}"
+            TAG="${GITHUB_REF#refs/tags/}"
+            APP_NAME="${TAG%-windows/*}"
+            VERSION="${TAG#*/v}"
             ENABLE_NUITKA="true"
           fi
           [ -z "$VERSION" ] && VERSION="dev"
+          [ ! -d "apps/$APP_NAME" ] && { echo "::error::App '$APP_NAME' not found"; exit 1; }
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "enable_nuitka=$ENABLE_NUITKA" >> $GITHUB_OUTPUT
 
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "ENABLE_NUITKA=$ENABLE_NUITKA" >> $GITHUB_OUTPUT
+  build:
+    needs: config
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHON_VERSION: ${{ inputs.python_version || '3.11' }}
+    steps:
+      - uses: actions/checkout@v4
 
-          echo "=== 构建变量 ==="
-          echo "APP_NAME: $APP_NAME"
-          echo "VERSION: $VERSION"
-          echo "ENABLE_NUITKA: $ENABLE_NUITKA"
-
-      - name: Validate app name
-        shell: bash
-        run: |
-          APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
-          if [ ! -d "apps/$APP_NAME" ]; then
-            echo "::error::Application '$APP_NAME' not found in apps directory"
-            echo "Available apps:"
-            ls -d apps/*/ 2>/dev/null | xargs -n1 basename || echo "No apps found"
-            exit 1
-          fi
-          echo "Building app: $APP_NAME"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/pip/Cache
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
-
       - name: Install Briefcase
         run: |
-          python -m pip install --upgrade pip
-          pip install briefcase
+          pip install --upgrade pip
+          pip install briefcase==${{ needs.config.outputs.briefcase_version }}
 
-      - name: Install Nuitka and dependencies
-        if: steps.vars.outputs.ENABLE_NUITKA == 'true'
-        run: |
-          pip install nuitka ordered-set zstandard
-          pip install imageio
+      - name: Install Nuitka
+        if: needs.config.outputs.enable_nuitka == 'true'
+        run: pip install nuitka==${{ needs.config.outputs.nuitka_version }} ordered-set zstandard imageio
 
-      - name: Setup MSVC for Nuitka
-        if: steps.vars.outputs.ENABLE_NUITKA == 'true'
+      - name: Setup MSVC
+        if: needs.config.outputs.enable_nuitka == 'true'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Update version in pyproject.toml
-        if: steps.vars.outputs.VERSION != 'dev'
+      - name: Update version
+        if: needs.config.outputs.version != 'dev'
         shell: bash
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
+        working-directory: apps/${{ needs.config.outputs.app_name }}
         run: |
-          VERSION="${{ steps.vars.outputs.VERSION }}"
-          if [ -f pyproject.toml ]; then
-            python -c "
-            import re, sys
-            v = sys.argv[1]
-            with open('pyproject.toml', 'r', encoding='utf-8') as f:
-                content = f.read()
-            content = re.sub(r'^version = .*', f'version = \"{v}\"', content, count=1, flags=re.M)
-            with open('pyproject.toml', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print(f'Updated version to {v}')
-            " "$VERSION"
-          fi
+          python -c "
+          import sys; sys.path.insert(0, '$GITHUB_WORKSPACE/scripts')
+          from utils import set_version_in_pyproject
+          set_version_in_pyproject('pyproject.toml', '${{ needs.config.outputs.version }}')
+          "
 
       - name: Create Briefcase project
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
+        working-directory: apps/${{ needs.config.outputs.app_name }}
         run: briefcase create windows
 
-      - name: Compile Python modules with Nuitka
-        if: steps.vars.outputs.ENABLE_NUITKA == 'true'
+      - name: Compile with Nuitka
+        if: needs.config.outputs.enable_nuitka == 'true'
         shell: bash
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
-        env:
-          PYTHONIOENCODING: utf-8
+        working-directory: apps/${{ needs.config.outputs.app_name }}
         run: |
-          SCRIPT_PATH="$GITHUB_WORKSPACE/scripts/nuitka_compile.py"
-          BUILD_PATH="build/${{ steps.vars.outputs.APP_NAME }}/windows/app/src/app"
-          python "$SCRIPT_PATH" "$BUILD_PATH"
+          python "$GITHUB_WORKSPACE/scripts/nuitka_compile.py" \
+            "build/${{ needs.config.outputs.app_name }}/windows/app/src/app"
 
-      - name: Build Windows app
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
-        run: briefcase build windows
+      - name: Build & Package
+        working-directory: apps/${{ needs.config.outputs.app_name }}
+        run: |
+          briefcase build windows
+          briefcase package windows --adhoc-sign -p zip
 
-      - name: Package Windows app
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
-        run: briefcase package windows --adhoc-sign -p zip
-
-      - name: Prepare distribution
+      - name: Collect artifacts
         shell: bash
-        working-directory: apps/${{ steps.vars.outputs.APP_NAME }}
+        working-directory: apps/${{ needs.config.outputs.app_name }}
         run: |
           mkdir -p dist
-          APP_NAME="${{ steps.vars.outputs.APP_NAME }}"
-          VERSION="${{ steps.vars.outputs.VERSION }}"
-          APP_TITLE="$(echo ${APP_NAME:0:1} | tr a-z A-Z)${APP_NAME:1}"
+          APP="${{ needs.config.outputs.app_name }}"
+          VER="${{ needs.config.outputs.version }}"
+          TITLE="$(echo ${APP:0:1} | tr a-z A-Z)${APP:1}"
+          [ -d "build/${APP}/windows/app/${TITLE}" ] && cp -r "build/${APP}/windows/app/${TITLE}" "dist/${APP}-${VER}-windows"
+          [ -f "build/${APP}/windows/app/${TITLE}.zip" ] && cp "build/${APP}/windows/app/${TITLE}.zip" "dist/${APP}-${VER}-windows.zip"
 
-          if [ -d "build/${APP_NAME}/windows/app/${APP_TITLE}" ]; then
-            cp -r "build/${APP_NAME}/windows/app/${APP_TITLE}" "dist/${APP_NAME}-${VERSION}-windows"
-          fi
-          if [ -f "build/${APP_NAME}/windows/app/${APP_TITLE}.zip" ]; then
-            cp "build/${APP_NAME}/windows/app/${APP_TITLE}.zip" "dist/${APP_NAME}-${VERSION}-windows.zip"
-          fi
-
-      - name: Upload artifacts
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ steps.vars.outputs.APP_NAME }}-${{ steps.vars.outputs.VERSION }}
-          path: apps/${{ steps.vars.outputs.APP_NAME }}/dist/
+          name: windows-${{ needs.config.outputs.app_name }}-${{ needs.config.outputs.version }}
+          path: apps/${{ needs.config.outputs.app_name }}/dist/
 
-      - name: Build summary
+      - name: Summary
         if: always()
         shell: bash
         run: |
-          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **App**: ${{ steps.vars.outputs.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.vars.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platform**: Windows" >> $GITHUB_STEP_SUMMARY
-          echo "- **Python**: ${{ env.PYTHON_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Nuitka**: ${{ steps.vars.outputs.ENABLE_NUITKA }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Artifacts" >> $GITHUB_STEP_SUMMARY
-          DIST_DIR="apps/${{ steps.vars.outputs.APP_NAME }}/dist"
-          if [ -d "$DIST_DIR" ] && [ "$(ls -A "$DIST_DIR" 2>/dev/null)" ]; then
-            ls -la "$DIST_DIR" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No artifacts found" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### Windows Build" >> $GITHUB_STEP_SUMMARY
+          echo "- **App**: ${{ needs.config.outputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.config.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Nuitka**: ${{ needs.config.outputs.enable_nuitka }}" >> $GITHUB_STEP_SUMMARY

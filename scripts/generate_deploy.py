@@ -11,33 +11,15 @@
     python3 scripts/generate_deploy.py dist/
 """
 
-import hashlib
 import shutil
 import sys
 from pathlib import Path
 
-
-def sha256_file(filepath: Path) -> str:
-    """计算文件的 SHA256 哈希"""
-    h = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def format_size(size_bytes: int) -> str:
-    """格式化文件大小"""
-    if size_bytes >= 1024 * 1024:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
-    elif size_bytes >= 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    else:
-        return f"{size_bytes} B"
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import sha256_file, format_size
 
 
 def detect_package_type(dist_dir: Path) -> tuple[str, int]:
-    """检测部署包类型"""
     has_python = (dist_dir / "shared-python-base-arm32.tar.gz").exists()
     app_tars = [
         t for t in dist_dir.glob("*-arm32.tar.gz")
@@ -75,7 +57,6 @@ def main():
 
     scripts_dir = Path(__file__).parent
 
-    # ─── 复制 install.sh ───
     install_sh_src = scripts_dir / "install.sh"
     install_sh_dst = dist_dir / "install.sh"
     if install_sh_src.exists():
@@ -85,8 +66,6 @@ def main():
     else:
         print(f"⚠ 未找到: {install_sh_src}")
 
-    # ─── 生成 checksums.txt ───
-    # [Fix #8] 包含 install.sh 在校验范围内
     checksum_files = sorted(dist_dir.glob("*.tar.gz"))
     install_sh = dist_dir / "install.sh"
     if install_sh.exists():
@@ -102,7 +81,6 @@ def main():
     else:
         print("⚠ 未找到需要校验的文件")
 
-    # ─── 打印摘要 ───
     pkg_type, app_count = detect_package_type(dist_dir)
     label_template = PACKAGE_TYPE_LABELS.get(pkg_type, "未知")
     label = label_template.format(app_count) if "{}" in label_template else label_template

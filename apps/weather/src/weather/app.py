@@ -85,7 +85,7 @@ async def health_check():
 
 
 def _get_resource_dir() -> Path:
-    mod = sys.modules.get("weather")
+    mod = sys.modules.get(__package__ or __name__.split(".")[0])
     if mod and hasattr(mod, "_RESOURCE_DIR"):
         return Path(mod._RESOURCE_DIR)
     return Path(__file__).parent

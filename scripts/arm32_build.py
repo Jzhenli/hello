@@ -11,36 +11,22 @@ ARM32 构建脚本 — 在 QEMU ARM32 环境中运行
     python3 arm32_build.py \
         --build-type full \
         --python-version 3.11 \
-        --pbs-release 20260508 \
         --enable-nuitka true \
         --strip-stdlib true
 """
 
 import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tarfile
 from pathlib import Path
-from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).parent))
+from config import PBS_PYTHON_VERSIONS, PBS_RELEASE, PIWHEELS_URL, STRIPPED_STDLIB_MODULES
+from utils import run_cmd, parse_bool, format_size, extract_version_from_init
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  常量
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PBS_PYTHON_VERSIONS = {
-    "3.10": "3.10.16",
-    "3.11": "3.11.15",
-    "3.12": "3.12.13",
-}
-
-STRIPPED_STDLIB_MODULES = [
-    "tkinter", "idlelib", "lib2to3",
-    "pydoc_data", "curses", "tty", "webbrowser",
-]
 
 PBS_URL_TEMPLATE = (
     "https://github.com/astral-sh/python-build-standalone/releases/download/"
@@ -48,44 +34,6 @@ PBS_URL_TEMPLATE = (
     "-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"
 )
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  工具函数
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def run_cmd(cmd, **kwargs):
-    """运行命令，失败时抛异常"""
-    print(f"  $ {' '.join(str(c) for c in cmd)}")
-    return subprocess.run(cmd, check=True, **kwargs)
-
-
-def parse_bool(value: str) -> bool:
-    """将字符串转为布尔值"""
-    return value.lower() in ("true", "1", "yes")
-
-
-def extract_version_from_init(init_file: Path) -> str:
-    """从 __init__.py 提取 __version__"""
-    if not init_file.exists():
-        return "0.0.0"
-    content = init_file.read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-    return match.group(1) if match else "0.0.0"
-
-
-def format_size(size_bytes: int) -> str:
-    """格式化文件大小"""
-    if size_bytes >= 1024 * 1024:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
-    elif size_bytes >= 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    else:
-        return f"{size_bytes} B"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  核心构建器
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class ARM32Builder:
     def __init__(self, args):
@@ -109,29 +57,23 @@ class ARM32Builder:
         return self.shared_python_dir / "bin" / "python3"
 
     @property
-    def pbs_pip_exe(self) -> Optional[Path]:
+    def pbs_pip_exe(self) -> Path | None:
         pip3 = self.shared_python_dir / "bin" / "pip3"
-        if pip3.exists():
-            return pip3
-        return None
+        return pip3 if pip3.exists() else None
 
-    # ─── pip 封装 ───
+    def _pip_cmd_base(self) -> list[str]:
+        if self.pbs_pip_exe:
+            return [str(self.pbs_pip_exe), "install", f"--extra-index-url={PIWHEELS_URL}"]
+        return [str(self.pbs_python_exe), "-m", "pip", "install", f"--extra-index-url={PIWHEELS_URL}"]
 
-    def pip_install(self, *args):
-        """使用 PBS Python 的 pip 安装包"""
+    def pip_install(self, *args, verify_nuitka=False):
         env = os.environ.copy()
         env["PIP_ROOT_USER_ACTION"] = "ignore"
-        
-        if self.pbs_pip_exe:
-            cmd = [str(self.pbs_pip_exe), "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
-        else:
-            cmd = [str(self.pbs_python_exe), "-m", "pip", "install", "--extra-index-url=https://www.piwheels.org/simple"] + list(args)
-        run_cmd(cmd, env=env)
-        
-        self._verify_nuitka_install()
+        run_cmd(self._pip_cmd_base() + list(args), env=env)
+        if verify_nuitka:
+            self._verify_nuitka_install()
 
     def _verify_nuitka_install(self):
-        """验证 Nuitka 是否正确安装，打印调试信息"""
         result = subprocess.run(
             [str(self.pbs_python_exe), "-m", "nuitka", "--version"],
             capture_output=True, text=True
@@ -139,12 +81,12 @@ class ARM32Builder:
         if result.returncode == 0:
             print(f"  ✅ Nuitka 验证成功: {result.stdout.strip().split(chr(10))[0]}")
             return
-        
+
         print("  ⚠ Nuitka 验证失败，调试信息:")
         print(f"  返回码: {result.returncode}")
         if result.stderr:
             print(f"  stderr:\n{result.stderr}")
-        
+
         for pkg in ["ordered_set", "zstandard"]:
             r = subprocess.run(
                 [str(self.pbs_python_exe), "-c", f"import {pkg}; print({pkg}.__file__)"],
@@ -152,13 +94,13 @@ class ARM32Builder:
             )
             status = "✅" if r.returncode == 0 else "❌"
             print(f"  {pkg}: {status} {r.stdout.strip() or r.stderr.strip()}")
-        
+
         result2 = subprocess.run(
             [str(self.pbs_python_exe), "-c", "import site; print(chr(10).join(site.getsitepackages()))"],
             capture_output=True, text=True
         )
         print(f"  site-packages: {result2.stdout.strip()}")
-        
+
         result3 = subprocess.run(
             [str(self.pbs_python_exe), "-c", "import nuitka; print(nuitka.__file__)"],
             capture_output=True, text=True
@@ -166,24 +108,9 @@ class ARM32Builder:
         print(f"  nuitka location: {result3.stdout.strip() or result3.stderr.strip()}")
 
     def pip_install_target(self, target_dir: Path, requirements_file: Path):
-        """安装依赖到指定目录"""
-        if self.pbs_pip_exe:
-            cmd = [
-                str(self.pbs_pip_exe), "install",
-                "--extra-index-url=https://www.piwheels.org/simple",
-                "--target", str(target_dir),
-                "-r", str(requirements_file),
-            ]
-        else:
-            cmd = [
-                str(self.pbs_python_exe), "-m", "pip", "install",
-                "--extra-index-url=https://www.piwheels.org/simple",
-                "--target", str(target_dir),
-                "-r", str(requirements_file),
-            ]
+        cmd = self._pip_cmd_base() + ["--target", str(target_dir), "-r", str(requirements_file)]
         try:
             result = run_cmd(cmd, capture_output=True, text=True)
-            # 只显示最后几行，与原始 tail -5 行为一致
             if result.stdout:
                 lines = result.stdout.strip().split("\n")
                 for line in lines[-5:]:
@@ -191,54 +118,43 @@ class ARM32Builder:
         except subprocess.CalledProcessError as e:
             print(f"  ❌ pip install 失败:")
             if e.stdout:
-                tail = e.stdout[-500:] if len(e.stdout) > 500 else e.stdout
-                print(tail)
+                print(e.stdout[-500:] if len(e.stdout) > 500 else e.stdout)
             if e.stderr:
-                tail = e.stderr[-500:] if len(e.stderr) > 500 else e.stderr
-                print(tail)
+                print(e.stderr[-500:] if len(e.stderr) > 500 else e.stderr)
             raise
-
-    # ─── 主入口 ───
 
     def run(self):
         self._print_header()
 
         self.dist_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if self.build_type == "app-only":
             for f in self.dist_dir.glob("*.tar.gz"):
                 if f.name != f"{self.target_component}-arm32.tar.gz":
                     f.unlink()
-                    print(f"  🧹 清理残留: {f.name}")
             for f in self.dist_dir.glob("checksums.txt"):
                 f.unlink()
         elif self.build_type == "python-only":
             for f in self.dist_dir.glob("*-arm32.tar.gz"):
                 if f.name != "shared-python-base-arm32.tar.gz":
                     f.unlink()
-                    print(f"  🧹 清理残留: {f.name}")
             for f in self.dist_dir.glob("checksums.txt"):
                 f.unlink()
 
         need_package_python = self.build_type in ("full", "python-only")
-        
-        # 1. 下载 PBS Python（保留原始目录用于后续打包）
+
         pbs_dir = self._download_pbs_python()
-        
-        # 2. 复制到 shared-python 用于编译
+
         self._setup_shared_python(pbs_dir)
         self._write_version(need_package_python)
-        
-        # 3. 安装 Nuitka（如果启用）
+
         if self.enable_nuitka:
             print("\n━━━ 安装 Nuitka ━━━")
-            self.pip_install("cffi", "nuitka", "ordered-set", "zstandard")
-        
-        # 4. 构建应用（编译）
+            self.pip_install("cffi", "nuitka", "ordered-set", "zstandard", verify_nuitka=True)
+
         if self.build_type in ("full", "app-only"):
             self.build_apps()
-        
-        # 5. 打包 shared-python（从原始 PBS 重新复制，确保干净）
+
         if need_package_python:
             self._package_clean_shared_python(pbs_dir)
 
@@ -261,10 +177,7 @@ class ARM32Builder:
             print(f"  目标组件  : '{self.target_component}'")
         print("=" * 55)
 
-    # ─── Shared Python ───
-
     def _download_pbs_python(self) -> Path:
-        """下载 PBS Python，返回原始目录路径"""
         print("\n━━━ 下载 PBS Python ━━━")
         url = PBS_URL_TEMPLATE.format(
             pbs_release=self.pbs_release,
@@ -276,7 +189,6 @@ class ARM32Builder:
         run_cmd(["wget", "-q", url, "-O", str(tar_path)])
         run_cmd(["tar", "xzf", str(tar_path), "-C", "/tmp/"])
 
-        # 查找解压目录
         pbs_dir = Path("/tmp/python")
         if not pbs_dir.is_dir():
             candidates = sorted(Path("/tmp").glob("cpython*"))
@@ -290,14 +202,12 @@ class ARM32Builder:
         return pbs_dir
 
     def _setup_shared_python(self, pbs_dir: Path):
-        """从原始目录复制到 shared-python"""
         print("\n━━━ 设置 shared-python 环境 ━━━")
         if self.shared_python_dir.exists():
             shutil.rmtree(self.shared_python_dir)
         self.shared_python_dir.mkdir(parents=True, exist_ok=True)
         run_cmd(["cp", "-a", f"{pbs_dir}/.", str(self.shared_python_dir)])
 
-        # 验证
         if not self.pbs_python_exe.exists():
             print(f"❌ python3 不可执行: {self.pbs_python_exe}")
             sys.exit(1)
@@ -305,7 +215,6 @@ class ARM32Builder:
         print(f"  ✅ shared-python 已就绪: {self.pbs_python_exe}")
 
     def _strip_stdlib(self):
-        """裁剪 stdlib，删除不需要的模块和头文件"""
         print("  裁剪 stdlib...")
         pylib_dirs = list(self.shared_python_dir.glob("lib/python3.*"))
         if not pylib_dirs:
@@ -314,19 +223,16 @@ class ARM32Builder:
 
         pylib = pylib_dirs[0]
 
-        # 删除指定模块
         for mod in STRIPPED_STDLIB_MODULES:
             mod_path = pylib / mod
             if mod_path.exists():
                 shutil.rmtree(mod_path, ignore_errors=True)
 
-        # 删除 __pycache__, test, tests 目录
         for pattern in ["__pycache__", "test", "tests"]:
             for d in pylib.rglob(pattern):
                 if d.is_dir():
                     shutil.rmtree(d, ignore_errors=True)
 
-        # 删除 include
         include_dir = self.shared_python_dir / "include"
         if include_dir.exists():
             shutil.rmtree(include_dir)
@@ -343,28 +249,22 @@ class ARM32Builder:
         print(f"  版本: {py_ver}")
 
     def _package_clean_shared_python(self, pbs_dir: Path):
-        """从原始 PBS 目录重新复制干净环境，裁剪后打包"""
         print("\n━━━ 打包 shared-python ━━━")
-        
-        # 删除旧的 shared-python 目录
+
         if self.shared_python_dir.exists():
             shutil.rmtree(self.shared_python_dir)
-        
-        # 从原始 PBS 目录重新复制
+
         self.shared_python_dir.mkdir(parents=True, exist_ok=True)
         run_cmd(["cp", "-a", f"{pbs_dir}/.", str(self.shared_python_dir)])
-        
-        # 写入版本
+
         py_ver = f"{self.pbs_python}-{self.pbs_release}"
         if self.build_type == "python-only" and self.target_version:
             py_ver = self.target_version
         (self.shared_python_dir / "VERSION").write_text(py_ver, encoding="utf-8")
-        
-        # 裁剪 stdlib
+
         if self.strip_stdlib:
             self._strip_stdlib()
-        
-        # 打包
+
         tar_name = "shared-python-base-arm32.tar.gz"
         tar_path = self.dist_dir / tar_name
 
@@ -373,8 +273,6 @@ class ARM32Builder:
             tar.add(str(self.shared_python_dir), arcname="shared-python")
 
         print(f"  ✅ shared-python ({py_ver}) → dist/{tar_name}")
-
-    # ─── 应用构建 ───
 
     def build_apps(self):
         if self.build_type == "full":
@@ -399,7 +297,6 @@ class ARM32Builder:
             print("⚠ 未发现可构建的应用")
             return
 
-        # 逐个构建
         for app_name in app_names:
             self.build_app(app_name)
 
@@ -411,14 +308,11 @@ class ARM32Builder:
         app_dir = self.repo_root / "apps" / app_name
         build_dir = self.repo_root / "build" / app_name
 
-        # 清理 & 创建目录
         if build_dir.exists():
             shutil.rmtree(build_dir)
         (build_dir / "usr" / "app").mkdir(parents=True)
         (build_dir / "usr" / "app_packages").mkdir(parents=True)
 
-        # 复制源码
-        # [Fix #5] 使用纯 Python 复制，不再依赖 cp -a
         app_src = app_dir / "src"
         if app_src.is_dir():
             self._copy_tree(app_src, build_dir / "usr" / "app")
@@ -426,30 +320,23 @@ class ARM32Builder:
             for py_file in app_dir.glob("*.py"):
                 shutil.copy2(str(py_file), str(build_dir / "usr" / "app"))
 
-        # 安装依赖
         req_file = app_dir / "requirements.txt"
         if req_file.exists():
             print("  安装依赖...")
             self.pip_install_target(build_dir / "usr" / "app_packages", req_file)
 
-        # 检测模块名 & 版本
         module_name = self._detect_module_name(build_dir, app_name)
         app_version = self._resolve_version(app_dir, module_name, app_name)
 
         (build_dir / "VERSION").write_text(app_version, encoding="utf-8")
         print(f"  模块: {module_name}, 版本: {app_version}")
 
-        # Nuitka 编译
         if self.enable_nuitka:
             self._run_nuitka(build_dir)
 
-        # 生成启动脚本
         self._generate_run_sh(build_dir, module_name, app_version)
-
-        # 清理
         self._cleanup_build(build_dir)
 
-        # 打包
         tar_path = self.dist_dir / f"{app_name}-arm32.tar.gz"
         with tarfile.open(str(tar_path), "w:gz") as tar:
             tar.add(str(build_dir), arcname=app_name)
@@ -457,39 +344,26 @@ class ARM32Builder:
         print(f"  ✅ {app_name} ({app_version}) → dist/{tar_path.name}")
 
     def _detect_module_name(self, build_dir: Path, app_name: str) -> str:
-        """检测主模块名"""
         app_dir = build_dir / "usr" / "app"
 
-        # 优先: 与应用同名的目录 + __main__.py
         if (app_dir / app_name / "__main__.py").exists():
             return app_name
 
-        # 其次: 任何含 __main__.py 的子目录 (深度 1)
-        for main_file in sorted(app_dir.rglob("__main__.py")):
-            if main_file.parent.parent == app_dir:
-                return main_file.parent.name
-
-        # [Fix #9] 根级 __main__.py 存在时，查找任意含 __main__.py 的深层子目录
-        if (app_dir / "__main__.py").exists():
-            for main_file in sorted(app_dir.rglob("__main__.py")):
-                if main_file.parent != app_dir:
-                    return main_file.parent.name
+        for main_file in sorted(app_dir.iterdir()):
+            if main_file.is_dir() and (main_file / "__main__.py").exists():
+                return main_file.name
 
         return app_name
 
     def _resolve_version(self, app_dir: Path, module_name: str, app_name: str) -> str:
-        """解析应用版本号"""
-        # app-only 模式优先使用 tag 版本
         if self.build_type == "app-only" and self.target_version:
             return self.target_version
 
-        # 从 __init__.py 读取
         init_file = app_dir / "src" / module_name / "__init__.py"
         version = extract_version_from_init(init_file)
         return version or "0.0.0"
 
     def _run_nuitka(self, build_dir: Path):
-        """调用跨平台 nuitka_compile.py 脚本"""
         print("  Nuitka 编译...")
         nuitka_script = self.repo_root / "scripts" / "nuitka_compile.py"
         app_src = build_dir / "usr" / "app"
@@ -502,7 +376,6 @@ class ARM32Builder:
         ])
 
     def _generate_run_sh(self, build_dir: Path, module_name: str, app_version: str):
-        """生成启动脚本 run.sh"""
         run_sh = build_dir / "run.sh"
         content = f"""\
 #!/bin/bash
@@ -523,15 +396,12 @@ exec -a "{module_name}" "$PYTHON" -s -m {module_name} "$@"
         print(f"  ✅ 启动脚本: run.sh")
 
     def _cleanup_build(self, build_dir: Path):
-        """清理构建目录中的冗余文件"""
         app_packages = build_dir / "usr" / "app_packages"
-        cleanup_patterns_dirs = ["*.dist-info", "*.egg-info", "tests", "test"]
-        for pattern in cleanup_patterns_dirs:
+        for pattern in ["*.dist-info", "*.egg-info", "tests", "test"]:
             for d in app_packages.rglob(pattern):
                 if d.is_dir():
                     shutil.rmtree(d, ignore_errors=True)
 
-        # 全局清理
         for d in build_dir.rglob("__pycache__"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
@@ -541,7 +411,6 @@ exec -a "{module_name}" "$PYTHON" -s -m {module_name} "$@"
             f.unlink(missing_ok=True)
 
     def _copy_tree(self, src: Path, dst: Path):
-        """递归复制目录内容（纯 Python 实现）"""
         if not dst.exists():
             dst.mkdir(parents=True)
         for item in src.iterdir():
@@ -552,7 +421,6 @@ exec -a "{module_name}" "$PYTHON" -s -m {module_name} "$@"
                 shutil.copy2(str(item), str(dest_item))
 
     def _fix_dist_permissions(self):
-        """修正 dist 目录权限"""
         if not self.dist_dir.exists():
             return
         for f in self.dist_dir.rglob("*"):
@@ -560,15 +428,10 @@ exec -a "{module_name}" "$PYTHON" -s -m {module_name} "$@"
                 f.chmod(0o755)
             elif f.is_file():
                 f.chmod(0o644)
-        # install.sh 需要可执行
         install_sh = self.dist_dir / "install.sh"
         if install_sh.exists():
             install_sh.chmod(0o755)
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  入口
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def main():
     parser = argparse.ArgumentParser(
@@ -576,22 +439,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--build-type", required=True,
-                        choices=["full", "python-only", "app-only"],
-                        help="构建类型")
-    parser.add_argument("--target-component", default="",
-                        help="目标组件名 (app-only 模式)")
-    parser.add_argument("--target-version", default="",
-                        help="目标版本号")
-    parser.add_argument("--python-version", default="3.11",
-                        help="Python 主版本 (3.10/3.11/3.12)")
-    parser.add_argument("--pbs-release", default="20260508",
-                        help="python-build-standalone release 标签")
-    parser.add_argument("--enable-nuitka", default="true",
-                        help="启用 Nuitka 编译 (true/false)")
-    parser.add_argument("--strip-stdlib", default="true",
-                        help="裁剪 stdlib (true/false)")
-    parser.add_argument("--repo-root", default=".",
-                        help="仓库根目录")
+                        choices=["full", "python-only", "app-only"])
+    parser.add_argument("--target-component", default="")
+    parser.add_argument("--target-version", default="")
+    parser.add_argument("--python-version", default="3.11")
+    parser.add_argument("--pbs-release", default=PBS_RELEASE)
+    parser.add_argument("--enable-nuitka", default="true")
+    parser.add_argument("--strip-stdlib", default="true")
+    parser.add_argument("--repo-root", default=".")
 
     args = parser.parse_args()
     builder = ARM32Builder(args)

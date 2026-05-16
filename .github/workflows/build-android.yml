@@ -7,34 +7,25 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'App to build (hello / weather / xagent)'
+        description: 'App to build'
         required: true
         type: choice
-        options:
-          - hello
-          - weather
-          - xagent
+        options: [hello, weather, xagent]
         default: 'xagent'
       python_version:
-        description: 'Python version (3.10 / 3.11 / 3.12)'
+        description: 'Python version'
         required: false
         type: choice
-        options:
-          - '3.10'
-          - '3.11'
-          - '3.12'
+        options: ['3.10', '3.11', '3.12']
         default: '3.10'
       architectures:
-        description: 'Target architectures (arm64 / arm32 / arm64,arm32)'
+        description: 'Target architectures'
         required: false
         type: choice
-        options:
-          - 'arm64'
-          - 'arm32'
-          - 'arm64,arm32'
+        options: [arm64, arm32, 'arm64,arm32']
         default: 'arm64'
       enable_nuitka:
-        description: 'Enable Nuitka compilation for source protection'
+        description: 'Enable Nuitka compilation'
         required: false
         type: boolean
         default: true
@@ -46,435 +37,194 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: ${{ inputs.python_version || '3.10' }}
-  NUITKA_VERSION: '2.7.12'
-  BRIEFCASE_VERSION: '0.4.2'
-
 jobs:
-  # ============================================================
-  # 1. 准备配置 + 动态矩阵生成
-  # ============================================================
-  prepare:
+  config:
     runs-on: ubuntu-latest
     outputs:
-      app_name: ${{ steps.config.outputs.app_name }}
-      architectures: ${{ steps.config.outputs.architectures }}
-      enable_nuitka: ${{ steps.config.outputs.enable_nuitka }}
-      app_version: ${{ steps.config.outputs.app_version }}
+      app_name: ${{ steps.vars.outputs.app_name }}
+      enable_nuitka: ${{ steps.vars.outputs.enable_nuitka }}
+      app_version: ${{ steps.vars.outputs.app_version }}
+      briefcase_version: ${{ steps.versions.outputs.briefcase }}
+      nuitka_version: ${{ steps.versions.outputs.nuitka }}
       compile_matrix: ${{ steps.matrix.outputs.compile_matrix }}
       build_matrix: ${{ steps.matrix.outputs.build_matrix }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Extract configuration
-        id: config
+      - name: Read versions from config
+        id: versions
+        run: |
+          BV=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from config import BRIEFCASE_VERSION; print(BRIEFCASE_VERSION)")
+          NV=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from config import NUITKA_VERSION; print(NUITKA_VERSION)")
+          echo "briefcase=$BV" >> $GITHUB_OUTPUT
+          echo "nuitka=$NV" >> $GITHUB_OUTPUT
+
+      - name: Resolve variables
+        id: vars
         run: |
           if [[ "$GITHUB_REF" == refs/tags/android-*/v* ]]; then
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-            APP_NAME=${TAG_NAME#android-}
-            APP_NAME=${APP_NAME%/v*}
-            APP_VERSION=${TAG_NAME#*/v}
-            echo "📋 Tag解析: APP_NAME=$APP_NAME, APP_VERSION=$APP_VERSION"
+            TAG=${GITHUB_REF#refs/tags/android-}
+            APP_NAME=${TAG%/v*}
+            APP_VERSION=${TAG#*/v}
           else
             APP_NAME="${{ inputs.app_name || 'xagent' }}"
             APP_VERSION=""
           fi
 
-          if [ ! -d "apps/$APP_NAME" ]; then
-            echo "::error::App '$APP_NAME' not found in apps/ directory"
-            exit 1
-          fi
-
-          if [ -f "apps/$APP_NAME/pyproject.toml" ]; then
-            if [ -z "$APP_VERSION" ]; then
-              APP_VERSION=$(grep -Po 'version\s*=\s*"\K[^"]+' "apps/$APP_NAME/pyproject.toml" | head -1)
-            fi
-            if ! grep -q "\[tool.briefcase.app.${APP_NAME}.android\]" "apps/$APP_NAME/pyproject.toml" && \
-               ! grep -q "\[tool.briefcase.app.${APP_NAME}\]" "apps/$APP_NAME/pyproject.toml"; then
-              echo "::error::App '$APP_NAME' does not have Briefcase Android configuration in pyproject.toml"
-              exit 1
-            fi
-          else
-            echo "::error::pyproject.toml not found for app '$APP_NAME'"
-            exit 1
-          fi
-
-          ARCHITECTURES="${{ inputs.architectures || 'arm64' }}"
-          ARCHITECTURES=$(echo "$ARCHITECTURES" | tr -d ' ')
-          ENABLE_NUITKA="${{ inputs.enable_nuitka || 'true' }}"
+          [ ! -d "apps/$APP_NAME" ] && { echo "::error::App '$APP_NAME' not found"; exit 1; }
+          [ -z "$APP_VERSION" ] && APP_VERSION=$(python3 -c "
+          import sys; sys.path.insert(0,'scripts')
+          from utils import extract_version_from_pyproject
+          print(extract_version_from_pyproject('apps/$APP_NAME/pyproject.toml'))
+          ")
 
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "architectures=$ARCHITECTURES" >> $GITHUB_OUTPUT
-          echo "enable_nuitka=$ENABLE_NUITKA" >> $GITHUB_OUTPUT
+          echo "enable_nuitka=${{ inputs.enable_nuitka || 'true' }}" >> $GITHUB_OUTPUT
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
-
-          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **App**: $APP_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: $APP_VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "- **Python**: ${{ env.PYTHON_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Architectures**: $ARCHITECTURES" >> $GITHUB_STEP_SUMMARY
-          echo "- **Nuitka**: $ENABLE_NUITKA" >> $GITHUB_STEP_SUMMARY
 
       - name: Generate matrix
         id: matrix
         run: |
-          ARCHS="${{ steps.config.outputs.architectures }}"
-          COMPILE_ENTRIES=""
-          BUILD_ENTRIES=""
+          ARCHS="${{ inputs.architectures || 'arm64' }}"
+          ARCHS=$(echo "$ARCHS" | tr -d ' ')
+          COMPILE=""
+          BUILD=""
 
-          if [[ "$ARCHS" == *"arm64"* ]]; then
-            COMPILE_ENTRIES+='{"arch":"arm64","runs_on":"ubuntu-24.04-arm","termux_arch":"aarch64","android_abi":"arm64-v8a"},'
-            BUILD_ENTRIES+='{"arch":"arm64","android_abi":"arm64-v8a","apk_arch":"arm64"},'
-          fi
+          [[ "$ARCHS" == *"arm64"* ]] && COMPILE+='{"arch":"arm64","runs_on":"ubuntu-24.04-arm","termux_arch":"aarch64","android_abi":"arm64-v8a"},' && BUILD+='{"arch":"arm64","android_abi":"arm64-v8a","apk_arch":"arm64"},'
+          [[ "$ARCHS" == *"arm32"* ]] && COMPILE+='{"arch":"arm32","runs_on":"ubuntu-24.04-arm","termux_arch":"arm","android_abi":"armeabi-v7a"},' && BUILD+='{"arch":"arm32","android_abi":"armeabi-v7a","apk_arch":"arm32"},'
 
-          if [[ "$ARCHS" == *"arm32"* ]]; then
-            COMPILE_ENTRIES+='{"arch":"arm32","runs_on":"ubuntu-24.04-arm","termux_arch":"arm","android_abi":"armeabi-v7a"},'
-            BUILD_ENTRIES+='{"arch":"arm32","android_abi":"armeabi-v7a","apk_arch":"arm32"},'
-          fi
+          echo "compile_matrix=[${COMPILE%,}]" >> $GITHUB_OUTPUT
+          echo "build_matrix=[${BUILD%,}]" >> $GITHUB_OUTPUT
 
-          COMPILE_MATRIX="[$(echo "$COMPILE_ENTRIES" | sed 's/,$//')]"
-          BUILD_MATRIX="[$(echo "$BUILD_ENTRIES" | sed 's/,$//')]"
-
-          echo "$COMPILE_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid compile matrix JSON"; exit 1; }
-          echo "$BUILD_MATRIX" | python3 -m json.tool > /dev/null || { echo "::error::Invalid build matrix JSON"; exit 1; }
-
-          echo "compile_matrix=$COMPILE_MATRIX" >> $GITHUB_OUTPUT
-          echo "build_matrix=$BUILD_MATRIX" >> $GITHUB_OUTPUT
-
-  # ============================================================
-  # 2. 阶段 1：Termux 容器原生编译 .so
-  # ============================================================
   compile:
-    needs: prepare
-    if: needs.prepare.outputs.enable_nuitka == 'true'
+    needs: config
+    if: needs.config.outputs.enable_nuitka == 'true'
     runs-on: ${{ matrix.runs_on }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.prepare.outputs.compile_matrix) }}
+        include: ${{ fromJson(needs.config.outputs.compile_matrix) }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Compile in Termux Docker
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          PY_VER="${{ env.PYTHON_VERSION }}"
-          TERMUX_ARCH="${{ matrix.termux_arch }}"
-          IMAGE="termux/termux-docker:${TERMUX_ARCH}"
-          
-          mkdir -p dist
-          chmod -R 777 dist
-          chmod -R 777 apps/
-          
-          cat > build_termux.sh << SCRIPT
-          #!/data/data/com.termux/files/usr/bin/bash
-          set -e
-          
-          export PREFIX=/data/data/com.termux/files/usr
-          export PATH=\$PREFIX/bin:\$PATH
-          export HOME=/data/data/com.termux/files/home
-          export TMPDIR=\$PREFIX/tmp
-          export LANG=en_US.UTF-8
-          
-          # 1. 修复 DNS
-          echo "nameserver 8.8.8.8" > \$PREFIX/etc/resolv.conf
-          echo "nameserver 8.8.4.4" >> \$PREFIX/etc/resolv.conf
-          
-          # 2. 换用 USTC 镜像源
-          if [ -f "\$PREFIX/etc/apt/sources.list" ]; then
-            sed -i 's|https://packages-cf.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "\$PREFIX/etc/apt/sources.list"
-            sed -i 's|https://packages.termux.dev/apt/termux-main|https://mirrors.ustc.edu.cn/termux/apt/termux-main|g' "\$PREFIX/etc/apt/sources.list"
-            echo "✅ APT sources switched to USTC mirror"
-          fi
-          
-          # 3. 更新包索引
-          apt update -yq
-          apt upgrade -yq
-          
-          # 4. 【关键顺序】先安装 tur-repo，再刷新索引，然后才能安装指定版本 Python
-          apt install -yq tur-repo
-          apt update -yq
-          
-          # 5. 安装指定版本 Python（来自 tur-repo）
-          apt install -yq python${PY_VER}
-          
-          # 6. 动态检测实际安装的 Python 版本，创建符号链接
-          PY_BIN=\$(ls \$PREFIX/bin/python3.* 2>/dev/null | grep -v config | head -1)
-          if [ -z "\$PY_BIN" ]; then
-            echo "::error::未找到 python3 二进制文件"
-            exit 1
-          fi
-          PY_SFX=\$(basename "\$PY_BIN" | sed 's/python//')  # 例如 3.11
-          echo "📋 Python: \$PY_BIN (后缀: \$PY_SFX)"
-          
-          rm -f \$PREFIX/bin/python \$PREFIX/bin/pip
-          ln -sf "\$PY_BIN" \$PREFIX/bin/python
-          if [ -f "\$PREFIX/bin/pip\${PY_SFX}" ]; then
-            ln -sf "\$PREFIX/bin/pip\${PY_SFX}" \$PREFIX/bin/pip
-          fi
-          python --version
-          
-          # 7. 安装编译工具链
-          apt install -yq ninja clang git patchelf ccache termux-elf-cleaner findutils
-          
-          # 8. 安装 Nuitka
-          pip install --upgrade pip
-          pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==${{ env.NUITKA_VERSION }}
-          
-          # 9. 执行 Nuitka 编译
-          cd /src/apps/${APP_NAME}/src
-          python -m nuitka \
-            --module ${APP_NAME} \
-            --include-package=${APP_NAME} \
-            --nofollow-imports \
-            --output-dir=dist \
-            --remove-output \
-            --assume-yes-for-downloads \
-            --no-progressbar
-          
-          echo "📦 Nuitka output files:"
-          ls -la ./dist/ || true
-          find ./dist/ -name "*.so" -o -name "*.pyd" || true
-          
-          cp ./dist/*.so /src/dist/ 2>/dev/null || true
-          cd /src/dist/
-          
-          SO_FILE=\$(ls ${APP_NAME}.*.so 2>/dev/null | head -1)
-          if [ -z "\$SO_FILE" ]; then
-            echo "::error::No .so file produced by Nuitka"
-            exit 1
-          fi
-          
-          mv "\$SO_FILE" ${APP_NAME}.so
-          termux-elf-cleaner ${APP_NAME}.so || true
-          patchelf --set-rpath '' ${APP_NAME}.so || true
-          patchelf --replace-needed libpython\${PY_SFX}.so.1.0 libpython\${PY_SFX}.so ${APP_NAME}.so || true
-          
-          echo "✅ Compiled: ${APP_NAME}.so"
-          SCRIPT
-          
-          docker run --rm \
-            -v $PWD:/src \
-            -e APP_NAME="${APP_NAME}" \
-            -e PY_VER="${PY_VER}" \
-            -e NUITKA_VERSION="${{ env.NUITKA_VERSION }}" \
-            ${IMAGE} \
-            bash /src/build_termux.sh
+          APP_NAME="${{ needs.config.outputs.app_name }}"
+          PY_VER="${{ inputs.python_version || '3.10' }}"
+          NUITKA_VER="${{ needs.config.outputs.nuitka_version }}"
+          IMAGE="termux/termux-docker:${{ matrix.termux_arch }}"
 
-      - name: Upload compiled artifacts
-        uses: actions/upload-artifact@v4
+          mkdir -p dist && chmod -R 777 dist apps/
+
+          sed -e "s/APP_NAME/$APP_NAME/g" \
+              -e "s/APP_PY_VER/$PY_VER/g" \
+              -e "s/NUITKA_VER/$NUITKA_VER/g" \
+              scripts/termux_compile.sh > build_termux.sh
+
+          docker run --rm -v $PWD:/src "$IMAGE" bash /src/build_termux.sh
+
+      - uses: actions/upload-artifact@v4
         with:
           name: compiled-${{ matrix.android_abi }}
           path: dist/*.so
           retention-days: 1
 
-
-  # ============================================================
-  # 3. 阶段 2：Briefcase 打包 APK
-  # ============================================================
   build:
-    needs: [prepare, compile]
+    needs: [config, compile]
     if: >-
-      always() && 
-      needs.prepare.result == 'success' && 
-      (needs.prepare.outputs.enable_nuitka != 'true' || needs.compile.result == 'success')
+      always() &&
+      needs.config.result == 'success' &&
+      (needs.config.outputs.enable_nuitka != 'true' || needs.compile.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.prepare.outputs.build_matrix) }}
+        include: ${{ fromJson(needs.config.outputs.build_matrix) }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download compiled artifacts
-        if: needs.prepare.outputs.enable_nuitka == 'true'
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        if: needs.config.outputs.enable_nuitka == 'true'
         with:
           name: compiled-${{ matrix.android_abi }}
           path: dist/${{ matrix.android_abi }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ inputs.python_version || '3.10' }}
 
       - name: Install Briefcase
         run: |
           pip install -U setuptools wheel
-          pip install briefcase==${{ env.BRIEFCASE_VERSION }}
+          pip install briefcase==${{ needs.config.outputs.briefcase_version }}
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Setup Environment
+      - name: Setup KVM
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
 
       - name: Create Android project
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          cd "apps/${APP_NAME}"
+          cd "apps/${{ needs.config.outputs.app_name }}"
           briefcase create android -C "build_gradle_extra_content = \"android.defaultConfig.ndk.abiFilters = ['${{ matrix.android_abi }}']\""
 
       - name: Process compiled module
-        if: needs.prepare.outputs.enable_nuitka == 'true'
+        if: needs.config.outputs.enable_nuitka == 'true'
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
+          APP_NAME="${{ needs.config.outputs.app_name }}"
           PYTHON_DIR="apps/${APP_NAME}/build/${APP_NAME}/android/gradle/app/src/main/python"
-          
-          if [ ! -d "$PYTHON_DIR" ]; then
-            echo "::error::Python 目录未找到: $PYTHON_DIR"
-            find "apps/${APP_NAME}/build" -type d 2>/dev/null | head -20
-            exit 1
-          fi
-          
-          echo "✅ Python 目录: $PYTHON_DIR"
-          
-          if [ -f "dist/${{ matrix.android_abi }}/${APP_NAME}.so" ]; then
-            echo "📦 处理编译模块: ${APP_NAME}.so"
-            cd "$PYTHON_DIR"
-            
-            _tmpdir=$(mktemp -d)
-            if [ -d "${APP_NAME}" ]; then
-              while IFS= read -r -d '' f; do
-                if [ -f "$f" ]; then
-                  rel_path=${f#${APP_NAME}/}
-                  mkdir -p "${_tmpdir}/$(dirname "$rel_path")"
-                  cp "$f" "${_tmpdir}/${rel_path}"
-                fi
-              done < <(find "${APP_NAME}" -type f ! -name '*.py' -print0 2>/dev/null)
-            fi
-            
-            _res_count=$(find "$_tmpdir" -type f 2>/dev/null | wc -l)
-            if [ "$_res_count" -gt 0 ]; then
-              echo "  保留 ${_res_count} 个非 .py 资源文件"
-            fi
-            
-            rm -rf "${APP_NAME}"
-            mkdir -p "${APP_NAME}"
-            
-            if [ -d "$_tmpdir" ] && [ "$(ls -A "$_tmpdir" 2>/dev/null)" ]; then
-              cp -r "${_tmpdir}/"* "${APP_NAME}/"
-            fi
-            rm -rf "$_tmpdir"
-            
-            # 将 .so 复制到包目录内（与 __init__.py 同级）
-            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/${APP_NAME}.so"
-            echo "  已创建 ${APP_NAME}/${APP_NAME}.so"
-            
-            # 生成 __init__.py 桩文件（遵循桩文件路由方法论）
-            cat > "${APP_NAME}/__init__.py" << 'INITEOF'
-          import sys, importlib.util as _u, os
+          SO_FILE="dist/${{ matrix.android_abi }}/${APP_NAME}.so"
 
-          _n = __name__
-          _d = os.path.dirname(os.path.abspath(__file__))
-          _so = os.path.join(_d, '__APP_SO__')
+          [ ! -d "$PYTHON_DIR" ] && { echo "::error::Python dir not found: $PYTHON_DIR"; exit 1; }
+          [ ! -f "$SO_FILE" ] && { echo "::error::.so not found: $SO_FILE"; exit 1; }
 
-          _m, _s = sys.modules[_n], sys.modules[_n].__spec__
-          _sp = _u.spec_from_file_location(_n, _so)
-          _lib = _u.module_from_spec(_sp)
-          _sp.loader.exec_module(_lib)
+          cp "$SO_FILE" "$PYTHON_DIR/${APP_NAME}.so"
+          python scripts/nuitka_compile.py "$PYTHON_DIR" --stub-only --module "$APP_NAME"
 
-          sys.meta_path.sort(key=lambda f: type(f).__name__ == "nuitka_module_loader")
-
-          _m.__dict__.update({k: v for k, v in vars(_lib).items() if k[:2] != "__"})
-          _m.__spec__, _m.__file__, _m._RESOURCE_DIR = _s, __file__, _d
-          _lib._RESOURCE_DIR = _d
-
-          sys.modules[_n] = _m
-          INITEOF
-            sed -i "s/__APP_SO__/${APP_NAME}.so/g" "${APP_NAME}/__init__.py"
-
-            cat > "${APP_NAME}/__main__.py" << 'EOF'
-          import importlib, sys
-          _m = importlib.import_module(__package__)
-          _m.main() if hasattr(_m, 'main') else sys.exit(f'No main() in {__package__}')
-          EOF
-            
-            echo "✅ 入口桩文件: ${APP_NAME}/__init__.py, __main__.py"
-            echo "✅ 编译模块: ${APP_NAME}.so"
-          else
-            echo "::error::Compiled .so not found at dist/${{ matrix.android_abi }}/${APP_NAME}.so"
-            exit 1
-          fi
-
-      - name: Build Android APK
+      - name: Build & Package APK
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          cd "apps/${APP_NAME}"
+          cd "apps/${{ needs.config.outputs.app_name }}"
           briefcase build android
-
-      - name: Package Android APK
-        run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          cd "apps/${APP_NAME}"
           briefcase package android --adhoc-sign -p debug-apk
 
-      - name: Rename and collect APK
+      - name: Collect APK
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
+          APP_NAME="${{ needs.config.outputs.app_name }}"
           cd "apps/${APP_NAME}"
           mkdir -p ../../final_dist
-
-          APK=$(ls dist/*.apk 2>/dev/null | head -n 1)
+          APK=$(ls dist/*.apk 2>/dev/null | head -1)
           if [ -n "$APK" ]; then
-            BASENAME=$(basename "$APK" .apk)
-            NEWNAME=$(echo "$BASENAME" | sed -E 's/^([^-]+)-(.+)$/\1-${{ matrix.apk_arch }}-\2/')
-            if [ "$NEWNAME" = "$BASENAME" ]; then
-              NEWNAME="${BASENAME}-${{ matrix.apk_arch }}"
-            fi
-            mv "$APK" "../../final_dist/${NEWNAME}.apk"
-            echo "✅ APK: ${NEWNAME}.apk"
+            BASE=$(basename "$APK" .apk)
+            NEW=$(echo "$BASE" | sed -E "s/^([^-]+)-(.+)$/\1-${{ matrix.apk_arch }}-\2/")
+            [ "$NEW" = "$BASE" ] && NEW="${BASE}-${{ matrix.apk_arch }}"
+            mv "$APK" "../../final_dist/${NEW}.apk"
           else
-            echo "::warning::APK not found in dist/*.apk, attempting deep search..."
             find . -name "*.apk" -exec cp {} ../../final_dist/ \;
           fi
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: apk-${{ matrix.android_abi }}
           path: final_dist/
 
-      - name: Upload Log on Failure
+      - uses: actions/upload-artifact@v4
         if: failure()
-        uses: actions/upload-artifact@v4
         with:
           name: log-failure-${{ matrix.android_abi }}
-          path: apps/${{ needs.prepare.outputs.app_name }}/logs/*
+          path: apps/${{ needs.config.outputs.app_name }}/logs/*
 
-      - name: Build summary
+      - name: Summary
         run: |
-          APP_NAME="${{ needs.prepare.outputs.app_name }}"
-          APP_VERSION="${{ needs.prepare.outputs.app_version }}"
-          echo "### Build Summary (${{ matrix.android_abi }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **App**: ${APP_NAME}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${APP_VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Architecture**: ${{ matrix.android_abi }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Nuitka**: ${{ needs.prepare.outputs.enable_nuitka }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Artifacts" >> $GITHUB_STEP_SUMMARY
-          if [ -d "final_dist" ] && [ "$(ls -A final_dist 2>/dev/null)" ]; then
-            for f in final_dist/*; do
-              [ -f "$f" ] && echo "- \`${f#final_dist/}\`: $(du -sh "$f" | cut -f1)" >> $GITHUB_STEP_SUMMARY
-            done
-          else
-            echo "- No artifacts generated" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### Android Build (${{ matrix.android_abi }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **App**: ${{ needs.config.outputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.config.outputs.app_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Nuitka**: ${{ needs.config.outputs.enable_nuitka }}" >> $GITHUB_STEP_SUMMARY
