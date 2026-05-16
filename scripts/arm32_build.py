@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import PBS_PYTHON_VERSIONS, PBS_RELEASE, PIWHEELS_URL, STRIPPED_STDLIB_MODULES
+from config import PBS_PYTHON_VERSIONS, PBS_RELEASE, PIWHEELS_URL, STRIPPED_STDLIB_MODULES, NUITKA_VERSION
 from utils import run_cmd, parse_bool, format_size, extract_version_from_init
 
 
@@ -151,7 +151,7 @@ class ARM32Builder:
 
         if self.enable_nuitka:
             print("\n━━━ 安装 Nuitka ━━━")
-            self.pip_install("cffi", "nuitka", "ordered-set", "zstandard", verify_nuitka=True)
+            self.pip_install("cffi", f"nuitka=={NUITKA_VERSION}", "ordered-set", "zstandard", verify_nuitka=True)
 
         if self.build_type in ("full", "app-only"):
             self.build_apps()
