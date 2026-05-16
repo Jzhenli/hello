@@ -14,18 +14,23 @@ logger = logging.getLogger(__name__)
 def get_resource_dir() -> Path:
     """获取资源目录路径（兼容编译后与开发模式）
     
-    编译后：从桩文件注入的 _RESOURCE_DIR 获取
+    编译后：从桩文件注入的 _RESOURCE_DIR 获取模块目录，然后拼接 resources
     开发模式：回退到 Path(__file__).parent
     """
     mod = sys.modules.get("xagent")
     if mod and hasattr(mod, "_RESOURCE_DIR"):
-        return Path(mod._RESOURCE_DIR)
+        return Path(mod._RESOURCE_DIR) / "resources"
     
-    fallback = Path(__file__).parent.parent.parent / "resources"
-    if fallback.exists():
-        return fallback
+    base_path = Path(__file__).parent
     
-    logger.warning(f"Resource directory not found at {fallback}, using current directory")
+    if (base_path / "resources").exists():
+        return base_path / "resources"
+    
+    src_layout_path = base_path.parent.parent / "resources"
+    if src_layout_path.exists():
+        return src_layout_path
+    
+    logger.warning(f"Resource directory not found, using current directory")
     return Path.cwd() / "resources"
 
 
