@@ -350,28 +350,29 @@ jobs:
             echo "📦 处理编译模块: ${APP_NAME}.so"
             cd "$PYTHON_DIR"
             
-            saved_resources=()
+            _tmpdir=$(mktemp -d)
             if [ -d "${APP_NAME}" ]; then
               while IFS= read -r -d '' f; do
                 if [ -f "$f" ]; then
-                  saved_resources+=("$f")
+                  rel_path=${f#${APP_NAME}/}
+                  mkdir -p "${_tmpdir}/$(dirname "$rel_path")"
+                  cp "$f" "${_tmpdir}/${rel_path}"
                 fi
               done < <(find "${APP_NAME}" -type f ! -name '*.py' -print0 2>/dev/null)
             fi
             
-            if [ ${#saved_resources[@]} -gt 0 ]; then
-              echo "  保留 ${#saved_resources[@]} 个非 .py 资源文件"
+            _res_count=$(find "$_tmpdir" -type f 2>/dev/null | wc -l)
+            if [ "$_res_count" -gt 0 ]; then
+              echo "  保留 ${_res_count} 个非 .py 资源文件"
             fi
             
             rm -rf "${APP_NAME}"
             mkdir -p "${APP_NAME}"
             
-            for res in "${saved_resources[@]}"; do
-              rel_path=${res#${APP_NAME}/}
-              dest_dir="$(dirname "${APP_NAME}/$rel_path")"
-              mkdir -p "$dest_dir"
-              cp "$res" "${APP_NAME}/$rel_path" 2>/dev/null || true
-            done
+            if [ -d "$_tmpdir" ] && [ "$(ls -A "$_tmpdir" 2>/dev/null)" ]; then
+              cp -r "${_tmpdir}/"* "${APP_NAME}/"
+            fi
+            rm -rf "$_tmpdir"
             
             # 将 .so 复制到包目录内（与 __init__.py 同级）
             cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/${APP_NAME}.so"

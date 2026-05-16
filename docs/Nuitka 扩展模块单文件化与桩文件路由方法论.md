@@ -20,7 +20,7 @@
 ├── __init__.py                  ← [核心] 桩文件：加载二进制，修复环境，注入资源路径
 ├── __main__.py                  ← [入口] 桩文件：支持 `python -m <pkg>` 执行
 ├── <pkg>.cpython-3XX-<plat>.pyd← [产物] Nuitka 编译的单个二进制核心模块 (Linux为.so)
-└── assets/                      ← [资源] 静态资源文件夹 (不被编译，原样保留)
+└── resources/                    ← [资源] 静态资源文件夹 (不被编译，原样保留)
 ```
 ## 四、 编译策略：将包内聚为单文件
 遵循 Nuitka 官方包编译规范，使用 `--module` 与 `--include-package` 组合，确保包内所有子模块合并入单一产物。
@@ -75,7 +75,7 @@ mod_file = os.path.basename(mod_files[0]) if mod_files else None
 if not mod_file: raise Exception("Compilation failed or product not found")
 # 3. 组装发布目录
 os.makedirs(RELEASE_DIR, exist_ok=True)
-shutil.copytree(f"{PKG_NAME}/assets", f"{RELEASE_DIR}/assets", dirs_exist_ok=True) # 拷贝资源
+shutil.copytree(f"{PKG_NAME}/resources", f"{RELEASE_DIR}/resources", dirs_exist_ok=True)
 shutil.copy(f"dist/{mod_file}", f"{RELEASE_DIR}/{mod_file}")                       # 拷贝二进制
 # 4. 动态渲染并写入桩文件
 with open(f"{RELEASE_DIR}/__init__.py", "w", encoding="utf-8") as f:
