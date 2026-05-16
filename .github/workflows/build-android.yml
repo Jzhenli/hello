@@ -79,7 +79,7 @@ jobs:
           ")
 
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "enable_nuitka=${{ inputs.enable_nuitka || 'true' }}" >> $GITHUB_OUTPUT
+          echo "enable_nuitka=${{ inputs.enable_nuitka != false }}" >> $GITHUB_OUTPUT
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Generate matrix
