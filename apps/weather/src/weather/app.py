@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from pathlib import Path
+import sys
 
 app = FastAPI(
     title="示例 API",
@@ -80,3 +82,19 @@ async def delete_item(item_id: int):
 @app.get("/health", tags=["健康检查"])
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+def _get_resource_dir() -> Path:
+    mod = sys.modules.get("weather")
+    if mod and hasattr(mod, "_RESOURCE_DIR"):
+        return Path(mod._RESOURCE_DIR)
+    return Path(__file__).parent
+
+
+@app.get("/config", tags=["配置"])
+async def get_config():
+    config_path = _get_resource_dir() / "resources" / "config.txt"
+    if not config_path.exists():
+        raise HTTPException(status_code=404, detail="Config file not found")
+    content = config_path.read_text(encoding="utf-8")
+    return {"config": content}

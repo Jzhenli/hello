@@ -373,35 +373,32 @@ jobs:
               cp "$res" "${APP_NAME}/$rel_path" 2>/dev/null || true
             done
             
-            # 将 .so 复制为 _${APP_NAME}.so（内部模块）
-            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/_${APP_NAME}.so"
-            echo "  已创建 ${APP_NAME}/_${APP_NAME}.so"
+            # 将 .so 复制到包目录内（与 __init__.py 同级）
+            cp "${GITHUB_WORKSPACE}/dist/${{ matrix.android_abi }}/${APP_NAME}.so" "${APP_NAME}/${APP_NAME}.so"
+            echo "  已创建 ${APP_NAME}/${APP_NAME}.so"
             
-            # 创建 __init__.py，从内部模块导入
-            cat > "${APP_NAME}/__init__.py" << 'EOF'
-          import sys
-          import os
-          import importlib.util as _u
-          
+            # 生成 __init__.py 桩文件（遵循桩文件路由方法论）
+            cat > "${APP_NAME}/__init__.py" << 'INITEOF'
+          import sys, importlib.util as _u, os
+
+          _n = __name__
           _d = os.path.dirname(os.path.abspath(__file__))
-          _so_path = os.path.join(_d, '_xagent.so')
-          
-          # 加载 .so 模块，指定正确的模块名
-          _spec = _u.spec_from_file_location('xagent', _so_path)
-          _m = _u.module_from_spec(_spec)
-          sys.modules['xagent._xagent'] = _m
-          _spec.loader.exec_module(_m)
-          
-          # 导出所有公共属性
-          _globals = globals()
-          for _k in dir(_m):
-              if not _k.startswith('_'):
-                  _globals[_k] = getattr(_m, _k)
-          
-          # 导出 __version__
-          if hasattr(_m, '__version__'):
-              _globals['__version__'] = _m.__version__
-          EOF
+          _so = os.path.join(_d, '__APP_SO__')
+
+          _m, _s = sys.modules[_n], sys.modules[_n].__spec__
+          _sp = _u.spec_from_file_location(_n, _so)
+          _lib = _u.module_from_spec(_sp)
+          _sp.loader.exec_module(_lib)
+
+          sys.meta_path.sort(key=lambda f: type(f).__name__ == "nuitka_module_loader")
+
+          _m.__dict__.update({k: v for k, v in vars(_lib).items() if k[:2] != "__"})
+          _m.__spec__, _m.__file__, _m._RESOURCE_DIR = _s, __file__, _d
+          _lib._RESOURCE_DIR = _d
+
+          sys.modules[_n] = _m
+          INITEOF
+            sed -i "s/__APP_SO__/${APP_NAME}.so/g" "${APP_NAME}/__init__.py"
 
             cat > "${APP_NAME}/__main__.py" << 'EOF'
           import importlib, sys

@@ -35,3 +35,14 @@ requires = [
 [tool.briefcase.app.weather.windows]
 supports = "win32"
 console_app = true
+
+[tool.briefcase.app.weather.android]
+requires = [
+    "pydantic_core==2.46.3",
+    "pydantic==2.13.3",
+    "fastapi==0.136.1",
+    "uvicorn>=0.27.0",
+]
+requirement_installer_args = [
+    "--find-links", "./wheels/pydantic_core"
+]

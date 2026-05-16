@@ -226,6 +226,7 @@ _s.loader.exec_module(_m)
 _m.__path__ = getattr(_m, "__path__", None) or [_d]
 _m.__package__ = _n
 if _m.__spec__: _m.__spec__.submodule_search_locations = list(_m.__path__)
+_m._RESOURCE_DIR = _d
 
 class _F:
     @staticmethod
