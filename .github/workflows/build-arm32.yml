@@ -59,15 +59,22 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
-            COMPONENT=${TAG%/*}
+            PREFIX=${TAG%/*}
             VERSION=${TAG#*/v}
             VERSION=${VERSION#v}
-            if [ "$COMPONENT" = "shared-python" ]; then
+            if [ "$PREFIX" = "shared-python" ]; then
               BUILD_TYPE="python-only"
-            elif [ -d "apps/$COMPONENT" ]; then
-              BUILD_TYPE="app-only"
+              COMPONENT="shared-python"
+            elif [[ "$PREFIX" == app-* ]]; then
+              COMPONENT=${PREFIX#app-}
+              if [ -d "apps/$COMPONENT" ]; then
+                BUILD_TYPE="app-only"
+              else
+                BUILD_TYPE="skip"
+              fi
             else
               BUILD_TYPE="skip"
+              COMPONENT=""
             fi
             echo "component=$COMPONENT" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
