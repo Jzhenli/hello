@@ -123,7 +123,10 @@ jobs:
 
       - name: Assemble deployment
         if: needs.config.outputs.build_type != 'skip'
-        run: python3 scripts/generate_deploy.py dist/
+        run: |
+          sudo chown -R $(whoami):$(id -gn) dist/ 2>/dev/null || true
+          chmod -R u+rw dist/ 2>/dev/null || true
+          python3 scripts/generate_deploy.py dist/
 
       - uses: actions/upload-artifact@v4
         if: needs.config.outputs.build_type != 'skip'
