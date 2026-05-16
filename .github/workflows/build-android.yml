@@ -187,7 +187,8 @@ jobs:
           [ ! -d "$PYTHON_DIR" ] && { echo "::error::Python dir not found: $PYTHON_DIR"; exit 1; }
           [ ! -f "$SO_FILE" ] && { echo "::error::.so not found: $SO_FILE"; exit 1; }
 
-          cp "$SO_FILE" "$PYTHON_DIR/${APP_NAME}.so"
+          mkdir -p "$PYTHON_DIR/${APP_NAME}"
+          cp "$SO_FILE" "$PYTHON_DIR/${APP_NAME}/${APP_NAME}.so"
           python scripts/nuitka_compile.py "$PYTHON_DIR" --stub-only --module "$APP_NAME"
 
       - name: Build & Package APK
