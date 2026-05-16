@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
+from ..paths import get_plugins_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,42 +45,14 @@ class PluginDiscovery:
         Returns:
             默认插件目录的绝对路径
         """
-        current_file = Path(__file__)
+        plugins_dir = get_plugins_dir()
+        logger.info(f"Plugin directory: {plugins_dir}")
         
-        logger.info(f"Current discovery.py location: {current_file}")
+        if plugins_dir.exists() and plugins_dir.is_dir():
+            return str(plugins_dir)
         
-        try:
-            import xagent.plugins
-            plugins_package_path = Path(xagent.plugins.__file__).parent
-            logger.info(f"Found plugins package via import: {plugins_package_path}")
-            return str(plugins_package_path)
-        except Exception as e:
-            logger.warning(f"Could not import xagent.plugins: {e}")
-        
-        possible_paths = [
-            current_file.parent.parent.parent.parent / "plugins",
-            current_file.parent.parent.parent.parent.parent / "plugins",
-            current_file.parent.parent.parent / "plugins",
-        ]
-        
-        logger.info(f"Searching for plugin directories...")
-        
-        for path in possible_paths:
-            try:
-                logger.info(f"  Checking: {path}")
-                if path.exists() and path.is_dir():
-                    logger.info(f"Found plugin directory: {path}")
-                    return str(path)
-            except PermissionError:
-                logger.warning(f"No permission to access: {path}")
-                continue
-            except Exception as e:
-                logger.warning(f"Error checking path {path}: {e}")
-                continue
-        
-        default_path = possible_paths[0]
-        logger.warning(f"Plugin directory not found, using default: {default_path}")
-        return str(default_path)
+        logger.warning(f"Plugin directory not found: {plugins_dir}")
+        return str(plugins_dir)
     
     def discover_plugins(self) -> Dict[str, Type]:
         """发现所有插件类

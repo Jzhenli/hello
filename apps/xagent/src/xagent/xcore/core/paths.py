@@ -2,12 +2,39 @@
 
 import logging
 import shutil
+import sys
 import warnings
 from pathlib import Path
 from typing import Optional, Dict
 from platformdirs import PlatformDirs
 
 logger = logging.getLogger(__name__)
+
+
+def get_resource_dir() -> Path:
+    """获取资源目录路径（兼容编译后与开发模式）
+    
+    编译后：从桩文件注入的 _RESOURCE_DIR 获取
+    开发模式：回退到 Path(__file__).parent
+    """
+    mod = sys.modules.get("xagent")
+    if mod and hasattr(mod, "_RESOURCE_DIR"):
+        return Path(mod._RESOURCE_DIR)
+    
+    fallback = Path(__file__).parent.parent.parent / "resources"
+    if fallback.exists():
+        return fallback
+    
+    logger.warning(f"Resource directory not found at {fallback}, using current directory")
+    return Path.cwd() / "resources"
+
+
+def get_plugins_dir() -> Path:
+    """获取插件目录路径（兼容编译后与开发模式）
+    
+    插件目录与资源目录同级：xagent/plugins/
+    """
+    return get_resource_dir().parent / "plugins"
 
 
 class AppPaths:
@@ -132,7 +159,7 @@ class AppPaths:
     @property
     def packaged_resources_dir(self) -> Path:
         """打包资源目录（包含默认配置模板）"""
-        return Path(__file__).parent.parent.parent / "resources"
+        return get_resource_dir()
     
     @property
     def site_config_dir(self) -> Optional[Path]:

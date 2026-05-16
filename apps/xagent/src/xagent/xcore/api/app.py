@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .dependencies import get_app_state
+from ..core.paths import get_resource_dir
 from .routers import (
     system_router,
     data_router,
@@ -73,7 +74,7 @@ app.include_router(metadata_router)
 app.include_router(rules_router)
 app.include_router(devices_router)
 
-_static_dir = Path(__file__).parent.parent.parent / "resources" / "static"
+_static_dir = get_resource_dir() / "static"
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 

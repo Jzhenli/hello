@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from .core.container import Container
 from .core.config import ConfigManager
+from .core.paths import get_plugins_dir
 from .core.plugin_loader import PluginLoader, PluginType
 from .core.interfaces import ILifecycle
 from .core.scheduler import Scheduler, TaskType
@@ -159,7 +160,7 @@ class Gateway(ILifecycle):
         
         event_bus = self.container.try_resolve(EventBus)
         
-        base_path = Path(__file__).parent.parent / "plugins"
+        base_path = get_plugins_dir()
         plugin_dirs = [
             str(base_path / "rule"),
             str(base_path / "filter"),

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 import yaml
 from enum import Enum
 
-from .paths import AppPaths, get_paths
+from .paths import AppPaths, get_paths, get_resource_dir
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class ConfigManager:
                 continue
         
         # 如果都不存在，检查打包的默认配置
-        packaged_config = Path(__file__).parent.parent.parent / 'resources' / 'config' / 'config.yaml'
+        packaged_config = get_resource_dir() / 'config' / 'config.yaml'
         if packaged_config.exists():
             # 复制打包的默认配置到用户配置目录
             default_path = self.paths.config_file
