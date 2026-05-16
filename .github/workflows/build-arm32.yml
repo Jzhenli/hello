@@ -4,9 +4,25 @@ on:
   push:
     tags:
       - 'shared-python/v*'
-      - 'app-*/v*'
+      - '*-linux/v*'
   workflow_dispatch:
     inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        type: choice
+        options: [app-only, python-only, full]
+        default: 'app-only'
+      app_name:
+        description: 'Application to build (for app-only mode)'
+        required: false
+        type: choice
+        options: [hello, weather, xagent]
+        default: 'weather'
+      version:
+        description: 'Version (e.g., 1.0.0)'
+        required: false
+        default: ''
       python_version:
         description: 'Python version'
         required: false
@@ -41,9 +57,9 @@ jobs:
   config:
     runs-on: ubuntu-latest
     outputs:
-      build_type: ${{ steps.tag.outputs.build_type }}
-      component: ${{ steps.tag.outputs.component }}
-      version: ${{ steps.tag.outputs.version }}
+      build_type: ${{ steps.vars.outputs.build_type }}
+      component: ${{ steps.vars.outputs.component }}
+      version: ${{ steps.vars.outputs.version }}
       pbs_release: ${{ steps.versions.outputs.pbs_release }}
     steps:
       - uses: actions/checkout@v4
@@ -54,10 +70,15 @@ jobs:
           PR=$(python3 -c "import sys; sys.path.insert(0,'scripts'); from config import PBS_RELEASE; print(PBS_RELEASE)")
           echo "pbs_release=$PR" >> $GITHUB_OUTPUT
 
-      - name: Extract tag info
-        id: tag
+      - name: Resolve variables
+        id: vars
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BUILD_TYPE="${{ inputs.build_type }}"
+            COMPONENT="${{ inputs.app_name }}"
+            VERSION="${{ inputs.version }}"
+            [ "$BUILD_TYPE" = "python-only" ] && COMPONENT="shared-python"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
             PREFIX=${TAG%/*}
             VERSION=${TAG#*/v}
@@ -65,8 +86,8 @@ jobs:
             if [ "$PREFIX" = "shared-python" ]; then
               BUILD_TYPE="python-only"
               COMPONENT="shared-python"
-            elif [[ "$PREFIX" == app-* ]]; then
-              COMPONENT=${PREFIX#app-}
+            elif [[ "$PREFIX" == *-linux ]]; then
+              COMPONENT=${PREFIX%-linux}
               if [ -d "apps/$COMPONENT" ]; then
                 BUILD_TYPE="app-only"
               else
@@ -76,14 +97,18 @@ jobs:
               BUILD_TYPE="skip"
               COMPONENT=""
             fi
-            echo "component=$COMPONENT" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
           else
             BUILD_TYPE="full"
-            echo "component=" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
+            COMPONENT=""
+            VERSION=""
           fi
+          
+          [ -z "$VERSION" ] && VERSION="dev"
+          [ "$BUILD_TYPE" = "app-only" ] && [ ! -d "apps/$COMPONENT" ] && { echo "::error::App '$COMPONENT' not found"; BUILD_TYPE="skip"; }
+          
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "component=$COMPONENT" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
   build:
     needs: config
@@ -113,23 +138,21 @@ jobs:
             EOF
           run: |
             python3 scripts/arm32_build.py \
-              --build-type "${{ needs.config.outputs.build_type || 'full' }}" \
-              --target-component "${{ needs.config.outputs.component || '' }}" \
-              --target-version "${{ needs.config.outputs.version || '' }}" \
+              --build-type "${{ needs.config.outputs.build_type }}" \
+              --target-component "${{ needs.config.outputs.component }}" \
+              --target-version "${{ needs.config.outputs.version }}" \
               --python-version "${{ inputs.python_version || '3.11' }}" \
               --pbs-release "${{ needs.config.outputs.pbs_release }}" \
               --enable-nuitka "${{ inputs.enable_nuitka || 'true' }}" \
               --strip-stdlib "${{ inputs.strip_stdlib || 'true' }}"
 
       - name: Assemble deployment
-        if: needs.config.outputs.build_type != 'skip'
         run: |
           sudo chown -R $(whoami):$(id -gn) dist/ 2>/dev/null || true
           chmod -R u+rw dist/ 2>/dev/null || true
           python3 scripts/generate_deploy.py dist/
 
       - uses: actions/upload-artifact@v4
-        if: needs.config.outputs.build_type != 'skip'
         with:
           name: arm32-deployment
           path: dist/
@@ -137,7 +160,8 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          [ "${{ needs.config.outputs.build_type }}" = "skip" ] && echo "⚠️ Skipped: component not found" >> $GITHUB_STEP_SUMMARY && exit 0
           echo "### ARM32 Build" >> $GITHUB_STEP_SUMMARY
-          echo "- **Type**: ${{ needs.config.outputs.build_type || 'full' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type**: ${{ needs.config.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Component**: ${{ needs.config.outputs.component }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.config.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Nuitka**: ${{ inputs.enable_nuitka || 'true' }}" >> $GITHUB_STEP_SUMMARY
