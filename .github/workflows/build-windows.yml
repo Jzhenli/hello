@@ -94,7 +94,7 @@ jobs:
 
       - name: Install Nuitka
         if: needs.config.outputs.enable_nuitka == 'true'
-        run: pip install nuitka==${{ needs.config.outputs.nuitka_version }} ordered-set zstandard imageio
+        run: pip install nuitka==${{ needs.config.outputs.nuitka_version }} ordered-set zstandard
 
       - name: Setup MSVC
         if: needs.config.outputs.enable_nuitka == 'true'
@@ -130,15 +130,28 @@ jobs:
           briefcase package windows --adhoc-sign -p zip
 
       - name: Collect artifacts
+        if: always()
         shell: bash
-        working-directory: apps/${{ needs.config.outputs.app_name }}
         run: |
-          mkdir -p dist
+          set -x
           APP="${{ needs.config.outputs.app_name }}"
           VER="${{ needs.config.outputs.version }}"
+          APP_DIR="apps/${APP}"
+          
+          if [ ! -d "$APP_DIR" ]; then
+            echo "App directory not found: $APP_DIR"
+            exit 0
+          fi
+          
+          cd "$APP_DIR" || { echo "Failed to cd to $APP_DIR"; exit 1; }
+          
+          mkdir -p dist || { echo "Failed to create dist"; exit 1; }
+          
           TITLE="$(echo ${APP:0:1} | tr a-z A-Z)${APP:1}"
           [ -d "build/${APP}/windows/app/${TITLE}" ] && cp -r "build/${APP}/windows/app/${TITLE}" "dist/${APP}-${VER}-windows"
           [ -f "build/${APP}/windows/app/${TITLE}.zip" ] && cp "build/${APP}/windows/app/${TITLE}.zip" "dist/${APP}-${VER}-windows.zip"
+          
+          ls -la dist/
 
       - uses: actions/upload-artifact@v4
         if: always()
