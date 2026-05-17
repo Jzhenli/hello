@@ -63,6 +63,7 @@ jobs:
       version: ${{ steps.vars.outputs.version }}
       pbs_release: ${{ steps.versions.outputs.pbs_release }}
       enable_nuitka: ${{ steps.vars.outputs.enable_nuitka }}
+      python_version: ${{ steps.vars.outputs.python_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -119,6 +120,7 @@ jobs:
           echo "component=$COMPONENT" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "enable_nuitka=${{ github.event_name != 'workflow_dispatch' || inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
+          echo "python_version=${{ inputs.python_version || '3.11' }}" >> $GITHUB_OUTPUT
 
   build:
     needs: config
@@ -151,7 +153,7 @@ jobs:
               --build-type "${{ needs.config.outputs.build_type }}" \
               --target-component "${{ needs.config.outputs.component }}" \
               --target-version "${{ needs.config.outputs.version }}" \
-              --python-version "${{ inputs.python_version || '3.11' }}" \
+              --python-version "${{ needs.config.outputs.python_version }}" \
               --pbs-release "${{ needs.config.outputs.pbs_release }}" \
               --enable-nuitka "${{ needs.config.outputs.enable_nuitka }}" \
               --strip-stdlib "${{ inputs.strip_stdlib || 'true' }}"

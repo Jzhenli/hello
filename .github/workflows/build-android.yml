@@ -45,6 +45,7 @@ jobs:
       app_name: ${{ steps.vars.outputs.app_name }}
       enable_nuitka: ${{ steps.vars.outputs.enable_nuitka }}
       app_version: ${{ steps.vars.outputs.app_version }}
+      python_version: ${{ steps.vars.outputs.python_version }}
       briefcase_version: ${{ steps.versions.outputs.briefcase }}
       nuitka_version: ${{ steps.versions.outputs.nuitka }}
       compile_matrix: ${{ steps.matrix.outputs.compile_matrix }}
@@ -88,6 +89,7 @@ jobs:
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "enable_nuitka=${{ github.event_name != 'workflow_dispatch' || inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
+          echo "python_version=${{ inputs.python_version || '3.11' }}" >> $GITHUB_OUTPUT
 
       - name: Generate matrix
         id: matrix
@@ -119,7 +121,7 @@ jobs:
       - name: Compile in Termux Docker
         run: |
           APP_NAME="${{ needs.config.outputs.app_name }}"
-          PY_VER="${{ inputs.python_version || '3.10' }}"
+          PY_VER="${{ needs.config.outputs.python_version }}"
           NUITKA_VER="${{ needs.config.outputs.nuitka_version }}"
           IMAGE="termux/termux-docker:${{ matrix.termux_arch }}"
 
@@ -162,7 +164,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python_version || '3.10' }}
+          python-version: ${{ needs.config.outputs.python_version }}
 
       - name: Install Briefcase
         run: |
