@@ -202,6 +202,31 @@ install_app() {
   log_info "$APP_NAME 已安装: $new_ver → 运行: $APP_NAME"
 }
 
+uninstall_app() {
+  local APP_NAME="$1"
+  local APP_DIR="${INSTALL_DIR}/${APP_NAME}"
+  if [ ! -d "$APP_DIR" ]; then
+    log_error "应用 $APP_NAME 未安装 (目录 $APP_DIR 不存在)"
+    exit 1
+  fi
+  if [ "$APP_NAME" = "shared-python" ]; then
+    log_error "不支持通过此命令卸载 shared-python，请手动卸载"
+    log_error "注意: 卸载 shared-python 会导致所有依赖应用无法运行"
+    exit 1
+  fi
+  local OLD_VERSION=$(cat "$APP_DIR/VERSION" 2>/dev/null || echo "unknown")
+  log_step "卸载应用: $APP_NAME ($OLD_VERSION)"
+  rm -f "/usr/local/bin/$APP_NAME" 2>/dev/null || true
+  backup_app "$APP_DIR"
+  rm -rf "$APP_DIR"
+  if [ -f "$VERSIONS_FILE" ]; then
+    local tmpfile=$(mktemp)
+    grep -v "^${APP_NAME}:" "$VERSIONS_FILE" > "$tmpfile" || true
+    mv "$tmpfile" "$VERSIONS_FILE"
+  fi
+  log_info "$APP_NAME ($OLD_VERSION) 已卸载"
+}
+
 verify_checksums() {
   if [ ! -f "$SCRIPT_DIR/checksums.txt" ]; then
     log_warn "未找到 checksums.txt，跳过完整性校验"
@@ -317,6 +342,7 @@ show_help() {
   echo " sudo bash $0 --force         # 强制模式"
   echo " sudo bash $0 -y              # 自动确认"
   echo " sudo bash $0 --show-versions # 查看已安装版本"
+  echo " sudo bash $0 --uninstall <app_name> # 卸载指定应用"
   echo " sudo bash $0 --clean-backup  # 清理备份"
   echo " sudo bash $0 --help          # 显示帮助"
   echo ""
@@ -328,6 +354,17 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --force|-f)   FORCE_MODE=true; shift ;;
     -y|--yes)     YES_MODE=true; shift ;;
+    --uninstall)
+      if [ -z "$2" ]; then
+        log_error "--uninstall 需要指定应用名称"
+        echo "用法: sudo bash $0 --uninstall <app_name>"
+        echo "查看已安装应用: sudo bash $0 --show-versions"
+        exit 1
+      fi
+      check_root "$@"
+      uninstall_app "$2"
+      exit 0
+      ;;
     --show-versions) scan_installed; show_versions; exit 0 ;;
     --clean-backup)
       echo "清理备份文件..."
