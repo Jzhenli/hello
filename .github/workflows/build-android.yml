@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '*-android/v*'
+      - '*-all/v*'
   workflow_dispatch:
     inputs:
       app_name:
@@ -62,9 +63,15 @@ jobs:
       - name: Resolve variables
         id: vars
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/*-android/v* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
-            APP_NAME=${TAG%-android*}
+            if [[ "$TAG" == *-android/v* ]]; then
+              APP_NAME=${TAG%-android*}
+            elif [[ "$TAG" == *-all/v* ]]; then
+              APP_NAME=${TAG%-all*}
+            else
+              APP_NAME="${{ inputs.app_name || 'xagent' }}"
+            fi
             APP_VERSION=${TAG#*/v}
           else
             APP_NAME="${{ inputs.app_name || 'xagent' }}"

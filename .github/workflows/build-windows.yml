@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '*-windows/v*'
+      - '*-all/v*'
   workflow_dispatch:
     inputs:
       app_name:
@@ -64,7 +65,13 @@ jobs:
             ENABLE_NUITKA="${{ inputs.enable_nuitka }}"
           else
             TAG="${GITHUB_REF#refs/tags/}"
-            APP_NAME="${TAG%-windows/*}"
+            if [[ "$TAG" == *-windows/v* ]]; then
+              APP_NAME="${TAG%-windows/*}"
+            elif [[ "$TAG" == *-all/v* ]]; then
+              APP_NAME="${TAG%-all/*}"
+            else
+              APP_NAME="${{ inputs.app_name || 'weather' }}"
+            fi
             VERSION="${TAG#*/v}"
             ENABLE_NUITKA="true"
           fi

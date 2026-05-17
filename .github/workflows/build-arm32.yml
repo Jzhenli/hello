@@ -5,6 +5,7 @@ on:
     tags:
       - 'shared-python/v*'
       - '*-linux/v*'
+      - '*-all/v*'
   workflow_dispatch:
     inputs:
       build_type:
@@ -88,6 +89,13 @@ jobs:
               COMPONENT="shared-python"
             elif [[ "$PREFIX" == *-linux ]]; then
               COMPONENT=${PREFIX%-linux}
+              if [ -d "apps/$COMPONENT" ]; then
+                BUILD_TYPE="app-only"
+              else
+                BUILD_TYPE="skip"
+              fi
+            elif [[ "$PREFIX" == *-all ]]; then
+              COMPONENT=${PREFIX%-all}
               if [ -d "apps/$COMPONENT" ]; then
                 BUILD_TYPE="app-only"
               else
