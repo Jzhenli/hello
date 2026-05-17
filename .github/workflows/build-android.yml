@@ -18,7 +18,7 @@ on:
         required: false
         type: choice
         options: ['3.10', '3.11', '3.12']
-        default: '3.10'
+        default: '3.11'
       architectures:
         description: 'Target architectures'
         required: false
@@ -86,7 +86,7 @@ jobs:
           ")
 
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          echo "enable_nuitka=${{ inputs.enable_nuitka != false }}" >> $GITHUB_OUTPUT
+          echo "enable_nuitka=${{ github.event_name != 'workflow_dispatch' || inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Generate matrix

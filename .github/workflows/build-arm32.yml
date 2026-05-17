@@ -62,6 +62,7 @@ jobs:
       component: ${{ steps.vars.outputs.component }}
       version: ${{ steps.vars.outputs.version }}
       pbs_release: ${{ steps.versions.outputs.pbs_release }}
+      enable_nuitka: ${{ steps.vars.outputs.enable_nuitka }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,6 +118,7 @@ jobs:
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "component=$COMPONENT" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "enable_nuitka=${{ github.event_name != 'workflow_dispatch' || inputs.enable_nuitka }}" >> $GITHUB_OUTPUT
 
   build:
     needs: config
@@ -151,7 +153,7 @@ jobs:
               --target-version "${{ needs.config.outputs.version }}" \
               --python-version "${{ inputs.python_version || '3.11' }}" \
               --pbs-release "${{ needs.config.outputs.pbs_release }}" \
-              --enable-nuitka "${{ inputs.enable_nuitka || 'true' }}" \
+              --enable-nuitka "${{ needs.config.outputs.enable_nuitka }}" \
               --strip-stdlib "${{ inputs.strip_stdlib || 'true' }}"
 
       - name: Assemble deployment
@@ -172,4 +174,4 @@ jobs:
           echo "- **Type**: ${{ needs.config.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Component**: ${{ needs.config.outputs.component }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.config.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Nuitka**: ${{ inputs.enable_nuitka || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Nuitka**: ${{ needs.config.outputs.enable_nuitka }}" >> $GITHUB_STEP_SUMMARY

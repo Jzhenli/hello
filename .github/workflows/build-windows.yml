@@ -113,7 +113,7 @@ jobs:
         working-directory: apps/${{ needs.config.outputs.app_name }}
         run: |
           python -c "
-          import sys; sys.path.insert(0, '$GITHUB_WORKSPACE/scripts')
+          import sys; sys.path.insert(0, '${{ github.workspace }}/scripts')
           from utils import set_version_in_pyproject
           set_version_in_pyproject('pyproject.toml', '${{ needs.config.outputs.version }}')
           "
