@@ -32,7 +32,7 @@ pip install MarkupSafe==2.1.3 ordered-set==4.1.0 zstandard==0.23.0 nuitka==NUITK
 
 cd /src/apps/APP_NAME/src
 python -m nuitka --module APP_NAME --include-package=APP_NAME \
-  --nofollow-imports --output-dir=dist --remove-output \
+  --output-dir=dist --remove-output \
   --assume-yes-for-downloads --no-progressbar
 
 cp ./dist/*.so /src/dist/ 2>/dev/null || true

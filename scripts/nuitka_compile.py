@@ -48,7 +48,6 @@ lib = u.module_from_spec(sp); sp.loader.exec_module(lib)
 sys.meta_path.sort(key=lambda f: type(f).__name__ == "nuitka_module_loader")
 m.__dict__.update({{k: v for k, v in vars(lib).items() if k[:2] != "__"}})
 m.__spec__, m.__file__, m._RESOURCE_DIR = s, __file__, d
-if hasattr(lib, "__path__"): m.__path__ = lib.__path__
 lib._RESOURCE_DIR = d
 sys.modules["{pkg_name}"] = m
 '''
