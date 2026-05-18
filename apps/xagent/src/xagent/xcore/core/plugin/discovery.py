@@ -217,21 +217,18 @@ class PluginDiscovery:
         logger.debug(f"Discovered plugin class: {key}")
     
     def _discover_via_import(self, discovered: Dict[str, Type]) -> None:
-        """通过导入机制发现插件（用于压缩包环境）
+        """通过导入机制发现插件（用于编译后环境）
+        
+        直接从 xagent.plugins.__all_plugins__ 读取插件列表，
+        不依赖 __path__ 属性或 pkgutil.walk_packages。
         
         Args:
             discovered: 已发现的插件字典
         """
-        import pkgutil
-        import xagent.plugins
+        plugin_modules = self._get_plugin_modules()
+        logger.info(f"Starting import-based plugin discovery for {len(plugin_modules)} modules")
         
-        logger.info("Starting import-based plugin discovery")
-        
-        for importer, modname, ispkg in pkgutil.walk_packages(
-            path=xagent.plugins.__path__,
-            prefix='xagent.plugins.',
-            onerror=lambda name: logger.warning(f"Error importing {name}")
-        ):
+        for modname in plugin_modules:
             try:
                 module = importlib.import_module(modname)
                 logger.debug(f"Imported module: {modname}")
@@ -249,3 +246,27 @@ class PluginDiscovery:
                 continue
         
         logger.info(f"Import-based discovery completed, found {len(discovered)} plugins")
+    
+    def _get_plugin_modules(self) -> List[str]:
+        """获取插件模块列表
+        
+        从 xagent.plugins.ALL_PLUGINS 读取插件列表。
+        当添加或删除插件时，需要更新 xagent/plugins/__init__.py 中的 ALL_PLUGINS。
+        
+        Returns:
+            插件模块全名列表
+        """
+        try:
+            import xagent.plugins
+            plugin_list = getattr(xagent.plugins, 'ALL_PLUGINS', [])
+            
+            if not plugin_list:
+                logger.error("xagent.plugins.ALL_PLUGINS is empty or not defined")
+                return []
+            
+            logger.debug(f"Found {len(plugin_list)} plugins in xagent.plugins.ALL_PLUGINS")
+            return plugin_list
+            
+        except Exception as e:
+            logger.error(f"Failed to read xagent.plugins.ALL_PLUGINS: {e}")
+            return []
