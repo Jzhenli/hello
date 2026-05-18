@@ -635,7 +635,12 @@ class DeviceService:
     async def _validate_plugin(self, plugin_name: str) -> bool:
         """验证插件是否可用"""
         plugin_classes = self.plugin_loader.discover_plugins()
-        return plugin_name in plugin_classes
+        for key in plugin_classes:
+            if ':' in key:
+                _, name = key.split(':', 1)
+                if name == plugin_name:
+                    return True
+        return False
     
     async def _device_exists(self, asset: str) -> bool:
         """检查设备是否已存在"""
