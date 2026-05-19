@@ -8,6 +8,19 @@ PBS_PYTHON_VERSIONS = {
     "3.12": "3.12.13",
 }
 
+ARCH_CONFIGS = {
+    "armv7": {
+        "pbs_target": "armv7-unknown-linux-gnueabihf",
+        "pkg_suffix": "armv7",
+        "extra_index_url": "https://www.piwheels.org/simple",
+    },
+    "aarch64": {
+        "pbs_target": "aarch64-unknown-linux-gnu",
+        "pkg_suffix": "aarch64",
+        "extra_index_url": None,
+    },
+}
+
 PIWHEELS_URL = "https://www.piwheels.org/simple"
 
 STRIPPED_STDLIB_MODULES = [

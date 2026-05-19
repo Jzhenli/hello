@@ -1,6 +1,7 @@
 #!/bin/bash
 # ================================================
-# ARM32 Shared Python App - Smart Deploy/Upgrade Script
+# Linux Shared Python App - Smart Deploy/Upgrade Script
+# Supports: armv7, aarch64
 # Auto-detect package type, validate integrity, preview changes
 # ================================================
 set -e
@@ -19,6 +20,7 @@ NC='\033[0m'
 
 FORCE_MODE=false
 YES_MODE=false
+PKG_SUFFIX=""
 
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
@@ -48,16 +50,41 @@ read_installed_version() {
   fi
 }
 
+detect_arch() {
+  cd "$SCRIPT_DIR"
+  local found_armv7=false
+  local found_aarch64=false
+  for tar_file in *.tar.gz; do
+    [ ! -f "$tar_file" ] && continue
+    case "$tar_file" in
+      *-armv7.tar.gz)   found_armv7=true ;;
+      *-aarch64.tar.gz) found_aarch64=true ;;
+    esac
+  done
+  if $found_armv7 && $found_aarch64; then
+    log_warn "检测到混合架构包 (armv7 + aarch64)，请确保包架构一致!"
+  fi
+  if $found_aarch64; then
+    echo "aarch64"
+  elif $found_armv7; then
+    echo "armv7"
+  else
+    echo "armv7"
+  fi
+}
+
 HAS_PYTHON_PKG=false
 APP_TARS=()
 
 scan_package() {
   cd "$SCRIPT_DIR"
-  if [ -f "shared-python-base-arm32.tar.gz" ]; then
+  PKG_SUFFIX=$(detect_arch)
+  local python_pkg="shared-python-base-${PKG_SUFFIX}.tar.gz"
+  if [ -f "$python_pkg" ]; then
     HAS_PYTHON_PKG=true
   fi
-  for tar_file in *-arm32.tar.gz; do
-    [ "$tar_file" = "shared-python-base-arm32.tar.gz" ] && continue
+  for tar_file in *-${PKG_SUFFIX}.tar.gz; do
+    [ "$tar_file" = "$python_pkg" ] && continue
     [ ! -f "$tar_file" ] && continue
     APP_TARS+=("$tar_file")
   done
@@ -146,7 +173,8 @@ install_shared_python() {
   rm -rf "$NEW_DIR"
   mkdir -p "$NEW_DIR"
 
-  tar xzf shared-python-base-arm32.tar.gz -C "$NEW_DIR/" --strip-components=1
+  local python_pkg="shared-python-base-${PKG_SUFFIX}.tar.gz"
+  tar xzf "$python_pkg" -C "$NEW_DIR/" --strip-components=1
 
   if [ ! -x "$NEW_DIR/bin/python3" ] && [ -x "$NEW_DIR/shared-python/bin/python3" ]; then
     log_warn "Detected legacy tar format, adjusting directory structure..."
@@ -174,7 +202,7 @@ install_shared_python() {
 
 install_app() {
   local APP_TAR="$1"
-  local APP_NAME=$(echo "$APP_TAR" | sed "s/-arm32.tar.gz//")
+  local APP_NAME=$(echo "$APP_TAR" | sed "s/-${PKG_SUFFIX}.tar.gz//")
   local APP_DIR="${INSTALL_DIR}/${APP_NAME}"
   local NEW_DIR="${APP_DIR}.new"
   log_step "Installing app: $APP_NAME"
@@ -243,7 +271,7 @@ verify_checksums() {
 
 validate_full_install() {
   if ! $HAS_PYTHON_PKG; then
-    log_error "First-time install requires shared-python-base-arm32.tar.gz"
+    log_error "First-time install requires shared-python-base-${PKG_SUFFIX}.tar.gz"
     log_error "Current package is app-only, please use full deployment package"
     return 1
   fi
@@ -257,7 +285,7 @@ validate_full_install() {
 
 validate_python_upgrade() {
   if ! $HAS_PYTHON_PKG; then
-    log_error "Upgrading shared-python requires shared-python-base-arm32.tar.gz"
+    log_error "Upgrading shared-python requires shared-python-base-${PKG_SUFFIX}.tar.gz"
     return 1
   fi
   if ! $PYTHON_INSTALLED; then
@@ -288,6 +316,7 @@ show_preview() {
   echo -e "========================================"
   echo -e " ${BOLD}Deployment Preview${NC}"
   echo -e "========================================"
+  echo -e " Architecture: ${CYAN}${PKG_SUFFIX}${NC}"
   echo -e " Package Type: ${CYAN}$(get_package_type_label "$pkg_type")${NC}"
   if $is_first_install; then
     echo -e " System Status: ${YELLOW}Not Installed (First Deploy)${NC}"
@@ -297,21 +326,22 @@ show_preview() {
   echo ""
   echo -e " ${BOLD}Operations to be performed:${NC}"
   if $HAS_PYTHON_PKG; then
+    local python_pkg="shared-python-base-${PKG_SUFFIX}.tar.gz"
     if $PYTHON_INSTALLED; then
       local old_py_ver=$(read_installed_version "shared-python")
-      local new_py_ver=$(read_version_from_tar "shared-python-base-arm32.tar.gz" "shared-python/VERSION")
+      local new_py_ver=$(read_version_from_tar "$python_pkg" "shared-python/VERSION")
       if [ "$old_py_ver" = "$new_py_ver" ]; then
         echo -e " ${CYAN}=${NC} Reinstall shared-python: $old_py_ver (same version)"
       else
         echo -e " ${YELLOW}*${NC} Upgrade shared-python: $old_py_ver -> ${GREEN}$new_py_ver${NC}"
       fi
     else
-      local new_py_ver=$(read_version_from_tar "shared-python-base-arm32.tar.gz" "shared-python/VERSION")
+      local new_py_ver=$(read_version_from_tar "$python_pkg" "shared-python/VERSION")
       echo -e " ${GREEN}+${NC} Install shared-python: ${GREEN}$new_py_ver${NC}"
     fi
   fi
   for app_tar in "${APP_TARS[@]}"; do
-    local app_name=$(echo "$app_tar" | sed "s/-arm32.tar.gz//")
+    local app_name=$(echo "$app_tar" | sed "s/-${PKG_SUFFIX}.tar.gz//")
     local new_ver=$(read_version_from_tar "$app_tar" "$app_name/VERSION")
     local is_installed=false
     for installed in "${INSTALLED_APPS[@]}"; do
@@ -333,7 +363,8 @@ show_preview() {
 
 show_help() {
   echo ""
-  echo "ARM32 Shared Python App - Smart Deployment Script"
+  echo "Linux Shared Python App - Smart Deployment Script"
+  echo "Supports: armv7, aarch64"
   echo ""
   echo "Usage:"
   echo " sudo bash $0                 # Smart mode"
@@ -405,12 +436,12 @@ case "$PKG_TYPE" in
     fi
     validate_app_upgrade || exit 1
     if [ ${#APP_TARS[@]} -eq 1 ]; then
-      ACTION_LABEL="App Upgrade ($(echo ${APP_TARS[0]} | sed 's/-arm32.tar.gz//'))"
+      ACTION_LABEL="App Upgrade ($(echo ${APP_TARS[0]} | sed "s/-${PKG_SUFFIX}.tar.gz//"))"
     else
       ACTION_LABEL="App Upgrade (${#APP_TARS[@]} apps)"
     fi ;;
   empty)
-    log_error "No valid installation packages found in current directory (*-arm32.tar.gz)"
+    log_error "No valid installation packages found in current directory (*-${PKG_SUFFIX}.tar.gz)"
     exit 1 ;;
 esac
 

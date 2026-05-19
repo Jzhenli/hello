@@ -1,4 +1,4 @@
-name: Build ARM32 App
+name: Build Linux App
 
 on:
   push:
@@ -8,6 +8,12 @@ on:
       - '*-all/v*'
   workflow_dispatch:
     inputs:
+      arch:
+        description: 'Target architecture'
+        required: true
+        type: choice
+        options: [armv7, aarch64]
+        default: 'armv7'
       build_type:
         description: 'Build type'
         required: true
@@ -58,6 +64,7 @@ jobs:
   config:
     runs-on: ubuntu-latest
     outputs:
+      arch: ${{ steps.vars.outputs.arch }}
       build_type: ${{ steps.vars.outputs.build_type }}
       component: ${{ steps.vars.outputs.component }}
       version: ${{ steps.vars.outputs.version }}
@@ -77,6 +84,7 @@ jobs:
         id: vars
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ARCH="${{ inputs.arch }}"
             BUILD_TYPE="${{ inputs.build_type }}"
             COMPONENT="${{ inputs.app_name }}"
             VERSION="${{ inputs.version }}"
@@ -86,6 +94,7 @@ jobs:
             PREFIX=${TAG%/*}
             VERSION=${TAG#*/v}
             VERSION=${VERSION#v}
+            ARCH="armv7"
             if [ "$PREFIX" = "shared-python" ]; then
               BUILD_TYPE="python-only"
               COMPONENT="shared-python"
@@ -108,6 +117,7 @@ jobs:
               COMPONENT=""
             fi
           else
+            ARCH="armv7"
             BUILD_TYPE="full"
             COMPONENT=""
             VERSION=""
@@ -116,6 +126,7 @@ jobs:
           [ -z "$VERSION" ] && VERSION="dev"
           [ "$BUILD_TYPE" = "app-only" ] && [ ! -d "apps/$COMPONENT" ] && { echo "::error::App '$COMPONENT' not found"; BUILD_TYPE="skip"; }
           
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "component=$COMPONENT" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -130,10 +141,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build on ARM32
+      - name: Build on ${{ needs.config.outputs.arch }}
         uses: uraimo/run-on-arch-action@v3
         with:
-          arch: armv7
+          arch: ${{ needs.config.outputs.arch }}
           distro: ${{ inputs.distro || 'bullseye' }}
           githubToken: ${{ github.token }}
           install: |
@@ -141,15 +152,9 @@ jobs:
             apt-get install -y -qq python3 build-essential libffi-dev libssl-dev \
               libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev \
               wget git file ca-certificates tar gzip gcc g++ make patchelf
-            mkdir -p /etc/pip
-            cat > /etc/pip/pip.conf <<EOF
-            [global]
-            extra-index-url=https://www.piwheels.org/simple
-            timeout=120
-            retries=5
-            EOF
           run: |
-            python3 scripts/arm32_build.py \
+            python3 scripts/linux_build.py \
+              --arch "${{ needs.config.outputs.arch }}" \
               --build-type "${{ needs.config.outputs.build_type }}" \
               --target-component "${{ needs.config.outputs.component }}" \
               --target-version "${{ needs.config.outputs.version }}" \
@@ -162,17 +167,18 @@ jobs:
         run: |
           sudo chown -R $(whoami):$(id -gn) dist/ 2>/dev/null || true
           chmod -R u+rw dist/ 2>/dev/null || true
-          python3 scripts/generate_deploy.py dist/
+          python3 scripts/linux_deploy.py dist/ --arch "${{ needs.config.outputs.arch }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: arm32-deployment
+          name: ${{ needs.config.outputs.arch }}-deployment
           path: dist/
 
       - name: Summary
         if: always()
         run: |
-          echo "### ARM32 Build" >> $GITHUB_STEP_SUMMARY
+          echo "### Linux Build (${{ needs.config.outputs.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Architecture**: ${{ needs.config.outputs.arch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Type**: ${{ needs.config.outputs.build_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Component**: ${{ needs.config.outputs.component }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.config.outputs.version }}" >> $GITHUB_STEP_SUMMARY

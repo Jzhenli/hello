@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ARM32 构建脚本 — 在 QEMU ARM32 环境中运行
+Linux 多架构构建脚本 — 在 QEMU 环境中运行
 
 负责:
   1. 下载 PBS Python 并准备 shared-python 环境
@@ -8,7 +8,8 @@ ARM32 构建脚本 — 在 QEMU ARM32 环境中运行
   3. 调用 nuitka_compile.py 进行编译
 
 用法:
-    python3 arm32_build.py \
+    python3 linux_build.py \
+        --arch aarch64 \
         --build-type full \
         --python-version 3.11 \
         --enable-nuitka true \
@@ -25,19 +26,26 @@ from pathlib import Path
 from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import PBS_PYTHON_VERSIONS, PBS_RELEASE, PIWHEELS_URL, STRIPPED_STDLIB_MODULES, NUITKA_VERSION
+from config import (
+    ARCH_CONFIGS,
+    PBS_PYTHON_VERSIONS,
+    PBS_RELEASE,
+    STRIPPED_STDLIB_MODULES,
+    NUITKA_VERSION,
+)
 from utils import run_cmd, parse_bool, format_size, extract_version_from_init
 
 
 PBS_URL_TEMPLATE = (
     "https://github.com/astral-sh/python-build-standalone/releases/download/"
     "{pbs_release}/cpython-{pbs_python}+{pbs_release}"
-    "-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"
+    "-{pbs_target}-install_only_stripped.tar.gz"
 )
 
 
-class ARM32Builder:
+class LinuxBuilder:
     def __init__(self, args):
+        self.arch = args.arch
         self.build_type = args.build_type
         self.target_component = args.target_component
         self.target_version = args.target_version
@@ -48,6 +56,13 @@ class ARM32Builder:
         self.repo_root = Path(args.repo_root).resolve()
         self.dist_dir = self.repo_root / "dist"
         self.shared_python_dir = self.repo_root / "shared-python"
+
+        if self.arch not in ARCH_CONFIGS:
+            raise ValueError(f"Unsupported architecture: {self.arch}")
+
+        self.arch_config = ARCH_CONFIGS[self.arch]
+        self.pkg_suffix = self.arch_config["pkg_suffix"]
+        self.extra_index_url = self.arch_config["extra_index_url"]
 
     @property
     def pbs_python(self) -> str:
@@ -64,8 +79,14 @@ class ARM32Builder:
 
     def _pip_cmd_base(self) -> List[str]:
         if self.pbs_pip_exe:
-            return [str(self.pbs_pip_exe), "install", f"--extra-index-url={PIWHEELS_URL}"]
-        return [str(self.pbs_python_exe), "-m", "pip", "install", f"--extra-index-url={PIWHEELS_URL}"]
+            cmd = [str(self.pbs_pip_exe), "install"]
+        else:
+            cmd = [str(self.pbs_python_exe), "-m", "pip", "install"]
+        
+        if self.extra_index_url:
+            cmd.append(f"--extra-index-url={self.extra_index_url}")
+        
+        return cmd
 
     def pip_install(self, *args, verify_nuitka=False):
         env = os.environ.copy()
@@ -131,13 +152,13 @@ class ARM32Builder:
 
         if self.build_type == "app-only":
             for f in self.dist_dir.glob("*.tar.gz"):
-                if f.name != f"{self.target_component}-arm32.tar.gz":
+                if f.name != f"{self.target_component}-{self.pkg_suffix}.tar.gz":
                     f.unlink()
             for f in self.dist_dir.glob("checksums.txt"):
                 f.unlink()
         elif self.build_type == "python-only":
-            for f in self.dist_dir.glob("*-arm32.tar.gz"):
-                if f.name != "shared-python-base-arm32.tar.gz":
+            for f in self.dist_dir.glob(f"*-{self.pkg_suffix}.tar.gz"):
+                if f.name != f"shared-python-base-{self.pkg_suffix}.tar.gz":
                     f.unlink()
             for f in self.dist_dir.glob("checksums.txt"):
                 f.unlink()
@@ -167,9 +188,14 @@ class ARM32Builder:
             "python-only": "🐍 仅构建 Shared Python",
             "app-only": f"🎯 仅构建应用: {self.target_component}",
         }
+        arch_labels = {
+            "armv7": "ARM32 (armv7)",
+            "aarch64": "ARM64 (aarch64)",
+        }
         print("=" * 55)
-        print("  ARM32 Build")
+        print(f"  Linux Build ({arch_labels.get(self.arch, self.arch)})")
         print("=" * 55)
+        print(f"  架构      : {self.arch}")
         print(f"  模式      : {type_labels.get(self.build_type, self.build_type)}")
         print(f"  Python    : {self.python_version} (PBS {self.pbs_python})")
         print(f"  Nuitka    : {'启用' if self.enable_nuitka else '禁用'}")
@@ -183,6 +209,7 @@ class ARM32Builder:
         url = PBS_URL_TEMPLATE.format(
             pbs_release=self.pbs_release,
             pbs_python=self.pbs_python,
+            pbs_target=self.arch_config["pbs_target"],
         )
         tar_path = Path("/tmp/pbs.tar.gz")
 
@@ -266,7 +293,7 @@ class ARM32Builder:
         if self.strip_stdlib:
             self._strip_stdlib()
 
-        tar_name = "shared-python-base-arm32.tar.gz"
+        tar_name = f"shared-python-base-{self.pkg_suffix}.tar.gz"
         tar_path = self.dist_dir / tar_name
 
         print(f"  打包: {tar_name}")
@@ -338,7 +365,7 @@ class ARM32Builder:
         self._generate_run_sh(build_dir, module_name, app_version)
         self._cleanup_build(build_dir)
 
-        tar_path = self.dist_dir / f"{app_name}-arm32.tar.gz"
+        tar_path = self.dist_dir / f"{app_name}-{self.pkg_suffix}.tar.gz"
         with tarfile.open(str(tar_path), "w:gz") as tar:
             tar.add(str(build_dir), arcname=app_name)
 
@@ -436,9 +463,11 @@ exec -a "{module_name}" "$PYTHON" -s -m {module_name} "$@"
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ARM32 构建脚本",
+        description="Linux 多架构构建脚本",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument("--arch", required=True,
+                        choices=["armv7", "aarch64"])
     parser.add_argument("--build-type", required=True,
                         choices=["full", "python-only", "app-only"])
     parser.add_argument("--target-component", default="")
@@ -450,7 +479,7 @@ def main():
     parser.add_argument("--repo-root", default=".")
 
     args = parser.parse_args()
-    builder = ARM32Builder(args)
+    builder = LinuxBuilder(args)
     builder.run()
 
 
