@@ -171,7 +171,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ needs.config.outputs.arch }}-deployment
+          name: ${{ needs.config.outputs.component || 'all' }}-${{ needs.config.outputs.version }}-${{ needs.config.outputs.arch }}-linux
           path: dist/
 
       - name: Summary

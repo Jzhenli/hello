@@ -223,7 +223,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apk-${{ matrix.android_abi }}
+          name: ${{ needs.config.outputs.app_name }}-${{ needs.config.outputs.app_version }}-${{ matrix.apk_arch }}-apk
           path: final_dist/
 
       - uses: actions/upload-artifact@v4
