@@ -21,8 +21,6 @@ ARCH_CONFIGS = {
     },
 }
 
-PIWHEELS_URL = "https://www.piwheels.org/simple"
-
 STRIPPED_STDLIB_MODULES = [
     "tkinter", "idlelib", "lib2to3",
     "pydoc_data", "curses", "tty", "webbrowser",
