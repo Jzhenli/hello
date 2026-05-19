@@ -62,7 +62,7 @@ detect_arch() {
     esac
   done
   if $found_armv7 && $found_aarch64; then
-    log_warn "检测到混合架构包 (armv7 + aarch64)，请确保包架构一致!"
+    log_warn "Detected mixed architecture packages (armv7 + aarch64), please ensure package architecture consistency!"
   fi
   if $found_aarch64; then
     echo "aarch64"
@@ -70,6 +70,38 @@ detect_arch() {
     echo "armv7"
   else
     echo "armv7"
+  fi
+}
+
+detect_host_arch() {
+  local arch
+  arch=$(uname -m)
+  case "$arch" in
+    armv7l|armhf)   echo "armv7" ;;
+    aarch64|arm64)  echo "aarch64" ;;
+    x86_64|amd64)   echo "x86_64" ;;
+    i386|i686)      echo "i386" ;;
+    *)              echo "$arch" ;;
+  esac
+}
+
+validate_architecture() {
+  local pkg_arch="$1"
+  local host_arch
+  host_arch=$(detect_host_arch)
+  
+  if [ "$pkg_arch" != "$host_arch" ]; then
+    log_error "Architecture mismatch detected!"
+    log_error "  Package architecture: $pkg_arch"
+    log_error "  Host architecture:    $host_arch"
+    log_error ""
+    log_error "Installing $pkg_arch packages on $host_arch system is not supported."
+    log_error "Please use the correct architecture package for your system."
+    if $FORCE_MODE; then
+      log_warn "Force mode enabled, proceeding anyway (may cause runtime errors)..."
+    else
+      exit 1
+    fi
   fi
 }
 
@@ -409,6 +441,7 @@ done
 # --- Main Flow ---
 check_root "$@"
 scan_package
+validate_architecture "$PKG_SUFFIX"
 scan_installed
 verify_checksums
 
