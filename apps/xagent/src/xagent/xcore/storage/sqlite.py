@@ -65,6 +65,8 @@ class SQLiteStorage(StorageInterface):
         
         await self._create_metadata_tables()
         
+        await self._run_migrations()
+        
         await self._db.commit()
         self._initialized = True
         logger.info(f"SQLite storage initialized: {self._database_path}")
@@ -506,6 +508,14 @@ class SQLiteStorage(StorageInterface):
             stacklevel=2,
         )
         return self._db
+    
+    async def _run_migrations(self) -> None:
+        """运行数据库迁移"""
+        try:
+            from .migrations.v2_config_versioning import run_migration
+            await run_migration(self._db)
+        except Exception as e:
+            logger.warning(f"Migration check failed (this is normal for new databases): {e}")
     
     @property
     def is_initialized(self) -> bool:

@@ -1,0 +1,320 @@
+"""设备管理服务（数据库为中心版本）
+
+此服务使用数据库作为唯一数据源，YAML文件仅用于导入导出。
+"""
+
+import logging
+import asyncio
+import time
+import json
+from typing import Dict, Any, List, Optional
+from pathlib import Path
+import yaml
+from datetime import datetime
+
+from ..models.device import (
+    DeviceConfig,
+    PointConfig,
+    DeviceStatus,
+    StandardDataType
+)
+from ...core.metadata import MetadataManager
+from ...config.config_repository import ConfigRepository as DbConfigRepository
+from ...services.config_service import ConfigService
+from ...services.audit_service import AuditService
+
+logger = logging.getLogger(__name__)
+
+
+class DeviceService:
+    """设备管理服务（数据库为中心）"""
+    
+    def __init__(
+        self,
+        config_dir: Path,
+        metadata_manager: MetadataManager,
+        plugin_loader: Any
+    ):
+        self.config_dir = Path(config_dir)
+        self.devices_dir = self.config_dir / 'devices'
+        self.plugins_dir = self.config_dir / 'plugins'
+        self.metadata_manager = metadata_manager
+        self.plugin_loader = plugin_loader
+        self._lock: Optional[asyncio.Lock] = None
+        
+        self.devices_dir.mkdir(parents=True, exist_ok=True)
+        self.plugins_dir.mkdir(parents=True, exist_ok=True)
+        
+        self._config_repo = DbConfigRepository(metadata_manager._db)
+        self._audit_service = AuditService(metadata_manager._db)
+        self._config_service: Optional[ConfigService] = None
+    
+    def _get_config_service(self) -> ConfigService:
+        """获取配置服务（延迟初始化）"""
+        if self._config_service is None:
+            self._config_service = ConfigService(
+                self._config_repo,
+                self._audit_service,
+                self.plugin_loader
+            )
+        return self._config_service
+    
+    async def _get_lock(self) -> asyncio.Lock:
+        """获取异步锁（延迟初始化）"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+    
+    async def create_device(self, device: DeviceConfig) -> DeviceConfig:
+        """创建设备
+        
+        Args:
+            device: 设备配置
+            
+        Returns:
+            创建的设备配置
+            
+        Raises:
+            ValueError: 如果设备已存在或插件不可用
+        """
+        config_service = self._get_config_service()
+        
+        db_device = await config_service.create_device(device, user="api")
+        
+        logger.info(f"Device {device.asset} created successfully")
+        return db_device
+    
+    async def get_device(self, asset: str) -> Optional[DeviceConfig]:
+        """获取设备配置
+        
+        Args:
+            asset: 设备资产标识
+            
+        Returns:
+            设备配置，如果不存在返回None
+        """
+        db_device = await self._config_repo.get_device(asset)
+        
+        if not db_device:
+            return None
+        
+        return self._convert_db_device_to_api_device(db_device)
+    
+    async def list_devices(
+        self,
+        status: Optional[DeviceStatus] = None,
+        plugin_name: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        enabled: Optional[bool] = None
+    ) -> List[DeviceConfig]:
+        """列出设备
+        
+        Args:
+            status: 按状态过滤
+            plugin_name: 按插件名称过滤
+            tags: 按标签过滤
+            enabled: 按启用状态过滤
+            
+        Returns:
+            设备列表
+        """
+        db_devices = await self._config_repo.list_devices(
+            status=status.value if status else None,
+            enabled=enabled,
+            plugin_name=plugin_name
+        )
+        
+        devices = []
+        for db_device in db_devices:
+            device = self._convert_db_device_to_api_device(db_device)
+            
+            if tags and not any(tag in device.tags for tag in tags):
+                continue
+            
+            devices.append(device)
+        
+        return devices
+    
+    async def update_device(
+        self,
+        asset: str,
+        updates: Dict[str, Any]
+    ) -> DeviceConfig:
+        """更新设备
+        
+        Args:
+            asset: 设备资产标识
+            updates: 更新内容
+            
+        Returns:
+            更新后的设备配置
+        """
+        config_service = self._get_config_service()
+        
+        db_device = await config_service.update_device(asset, updates, user="api")
+        
+        logger.info(f"Device {asset} updated successfully")
+        return db_device
+    
+    async def delete_device(self, asset: str) -> None:
+        """删除设备
+        
+        Args:
+            asset: 设备资产标识
+        """
+        config_service = self._get_config_service()
+        
+        await config_service.delete_device(asset, user="api")
+        
+        logger.info(f"Device {asset} deleted successfully")
+    
+    async def add_point(
+        self,
+        asset: str,
+        point: PointConfig
+    ) -> DeviceConfig:
+        """添加点位
+        
+        Args:
+            asset: 设备资产标识
+            point: 点位配置
+            
+        Returns:
+            更新后的设备配置
+        """
+        config_service = self._get_config_service()
+        
+        point_dict = point.model_dump()
+        await config_service.add_point(asset, point_dict, user="api")
+        
+        return await self.get_device(asset)
+    
+    async def update_point(
+        self,
+        asset: str,
+        point_name: str,
+        updates: Dict[str, Any]
+    ) -> DeviceConfig:
+        """更新点位
+        
+        Args:
+            asset: 设备资产标识
+            point_name: 点位名称
+            updates: 更新内容
+            
+        Returns:
+            更新后的设备配置
+        """
+        config_service = self._get_config_service()
+        
+        await config_service.update_point(asset, point_name, updates, user="api")
+        
+        return await self.get_device(asset)
+    
+    async def delete_point(
+        self,
+        asset: str,
+        point_name: str
+    ) -> DeviceConfig:
+        """删除点位
+        
+        Args:
+            asset: 设备资产标识
+            point_name: 点位名称
+            
+        Returns:
+            更新后的设备配置
+        """
+        config_service = self._get_config_service()
+        
+        await config_service.delete_point(asset, point_name, user="api")
+        
+        return await self.get_device(asset)
+    
+    async def reload_device(self, asset: str) -> None:
+        """重载设备
+        
+        Args:
+            asset: 设备资产标识
+        """
+        config_service = self._get_config_service()
+        
+        await config_service.reload_device(asset, user="api")
+        
+        logger.info(f"Device {asset} reloaded successfully")
+    
+    async def export_devices(
+        self,
+        assets: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """导出设备配置
+        
+        Args:
+            assets: 要导出的设备列表，None表示导出所有
+            
+        Returns:
+            导出的设备配置
+        """
+        config_service = self._get_config_service()
+        
+        return await config_service.export_devices(assets, user="api")
+    
+    async def import_devices(
+        self,
+        data: Dict[str, Any],
+        overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """导入设备配置
+        
+        Args:
+            data: 导入的设备配置
+            overwrite: 是否覆盖已存在的设备
+            
+        Returns:
+            导入结果
+        """
+        config_service = self._get_config_service()
+        
+        return await config_service.import_devices(data, user="api", overwrite=overwrite)
+    
+    def _convert_db_device_to_api_device(self, db_device) -> DeviceConfig:
+        """将数据库设备转换为API设备模型
+        
+        Args:
+            db_device: 数据库设备配置
+            
+        Returns:
+            API设备配置
+        """
+        from ..models.device import PluginConfig
+        
+        points = []
+        for point in db_device.points:
+            points.append(PointConfig(
+                name=point.get('name'),
+                description=point.get('description'),
+                data_type=point.get('data_type'),
+                standard_data_type=point.get('standard_data_type'),
+                unit=point.get('unit'),
+                config=point.get('config', {}),
+                metadata=point.get('metadata', {}),
+                tags=point.get('tags', []),
+                enabled=point.get('enabled', True)
+            ))
+        
+        return DeviceConfig(
+            asset=db_device.asset,
+            name=db_device.name,
+            description=db_device.description,
+            plugin=PluginConfig(
+                name=db_device.plugin_name,
+                config=db_device.plugin_config
+            ),
+            enabled=db_device.enabled,
+            status=DeviceStatus(db_device.status),
+            metadata=db_device.metadata,
+            tags=db_device.tags,
+            points=points,
+            created_at=datetime.fromtimestamp(db_device.created_at) if db_device.created_at else None,
+            updated_at=datetime.fromtimestamp(db_device.updated_at) if db_device.updated_at else None
+        )

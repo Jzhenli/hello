@@ -14,7 +14,7 @@ from ..models.device import (
     DeviceReloadResponse,
     BatchDeviceReloadResponse
 )
-from ..services.device_service import DeviceService
+from ..services.device_service_db import DeviceService
 from ..dependencies import get_app_state
 from .config import verify_api_token
 
