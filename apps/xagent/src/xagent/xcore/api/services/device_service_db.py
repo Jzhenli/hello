@@ -79,10 +79,11 @@ class DeviceService:
         """
         config_service = self._get_config_service()
         
-        db_device = await config_service.create_device(device, user="api")
+        db_device = self._convert_api_device_to_db_device(device)
+        await config_service.create_device(db_device, user="api")
         
         logger.info(f"Device {device.asset} created successfully")
-        return db_device
+        return await self.get_device(device.asset)
     
     async def get_device(self, asset: str) -> Optional[DeviceConfig]:
         """获取设备配置
@@ -151,10 +152,11 @@ class DeviceService:
         """
         config_service = self._get_config_service()
         
-        db_device = await config_service.update_device(asset, updates, user="api")
+        db_updates = self._convert_api_updates_to_db_updates(updates)
+        await config_service.update_device(asset, db_updates, user="api")
         
         logger.info(f"Device {asset} updated successfully")
-        return db_device
+        return await self.get_device(asset)
     
     async def delete_device(self, asset: str) -> None:
         """删除设备
@@ -277,6 +279,54 @@ class DeviceService:
         
         return await config_service.import_devices(data, user="api", overwrite=overwrite)
     
+    def _convert_api_device_to_db_device(self, api_device: DeviceConfig):
+        """将API设备模型转换为数据库设备配置
+        
+        Args:
+            api_device: API设备配置
+            
+        Returns:
+            数据库设备配置
+        """
+        from ...config.config_repository import DeviceConfig as DbDeviceConfig
+        
+        points = []
+        for point in api_device.points:
+            points.append(point.model_dump())
+        
+        return DbDeviceConfig(
+            asset=api_device.asset,
+            name=api_device.name,
+            description=api_device.description,
+            plugin_name=api_device.plugin.name if api_device.plugin else "",
+            plugin_config=api_device.plugin.config if api_device.plugin else {},
+            enabled=api_device.enabled,
+            status=api_device.status.value if api_device.status else "active",
+            metadata=api_device.metadata or {},
+            tags=api_device.tags or [],
+            points=points
+        )
+    
+    def _convert_api_updates_to_db_updates(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """将API更新字段转换为数据库更新字段
+        
+        Args:
+            updates: API格式的更新内容
+            
+        Returns:
+            数据库格式的更新内容
+        """
+        db_updates = {}
+        for key, value in updates.items():
+            if key == 'plugin':
+                db_updates['plugin_name'] = value.get('name', '') if isinstance(value, dict) else ''
+                db_updates['plugin_config'] = value.get('config', {}) if isinstance(value, dict) else {}
+            elif key == 'status':
+                db_updates['status'] = value.value if hasattr(value, 'value') else str(value)
+            else:
+                db_updates[key] = value
+        return db_updates
+
     def _convert_db_device_to_api_device(self, db_device) -> DeviceConfig:
         """将数据库设备转换为API设备模型
         
@@ -286,7 +336,7 @@ class DeviceService:
         Returns:
             API设备配置
         """
-        from ..models.device import PluginConfig
+        from ..models.device import PluginReference
         
         points = []
         for point in db_device.points:
@@ -306,7 +356,7 @@ class DeviceService:
             asset=db_device.asset,
             name=db_device.name,
             description=db_device.description,
-            plugin=PluginConfig(
+            plugin=PluginReference(
                 name=db_device.plugin_name,
                 config=db_device.plugin_config
             ),

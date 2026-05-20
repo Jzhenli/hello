@@ -561,17 +561,64 @@ class ConfigService:
         logger.info(f"Config rolled back: {entity_type}/{entity_id} to v{version} by {user}")
     
     async def _validate_plugin(self, plugin_name: str) -> bool:
-        """验证插件是否可用"""
+        """验证插件是否可用
+        
+        Args:
+            plugin_name: 插件名称，如 'modbus_tcp' 或 'modbus'
+            
+        Returns:
+            插件是否可用
+        """
         try:
             plugin_classes = self.plugin_loader.discover_plugins()
-            return plugin_name in plugin_classes
+            if plugin_name in plugin_classes:
+                return True
+            for key in plugin_classes:
+                parts = key.split(':', 1)
+                if len(parts) == 2 and parts[1] == plugin_name:
+                    return True
+            for key in plugin_classes:
+                parts = key.split(':', 1)
+                if len(parts) == 2 and plugin_name in parts[1]:
+                    return True
+            return False
         except Exception as e:
             logger.error(f"Failed to validate plugin {plugin_name}: {e}")
             return False
     
+    def _resolve_plugin_key(self, plugin_name: str) -> Optional[str]:
+        """解析插件名称到完整的注册key
+        
+        Args:
+            plugin_name: 插件名称，如 'modbus_tcp', 'modbus', 'knx'
+            
+        Returns:
+            完整的注册key，如 'south:modbus_tcp'，未找到返回None
+        """
+        plugin_classes = self.plugin_loader.discover_plugins()
+        if plugin_name in plugin_classes:
+            return plugin_name
+        for key in plugin_classes:
+            parts = key.split(':', 1)
+            if len(parts) == 2 and parts[1] == plugin_name:
+                return key
+        for key in plugin_classes:
+            parts = key.split(':', 1)
+            if len(parts) == 2 and plugin_name in parts[1]:
+                return key
+        return None
+    
     async def _load_device_plugin(self, device: DeviceConfig) -> None:
         """加载设备插件"""
         try:
+            plugin_key = self._resolve_plugin_key(device.plugin_name)
+            if not plugin_key:
+                raise RuntimeError(f"Plugin '{device.plugin_name}' not found for device {device.asset}")
+            
+            parts = plugin_key.split(':', 1)
+            plugin_type = parts[0] if len(parts) == 2 else device.plugin_name
+            plugin_name = parts[1] if len(parts) == 2 else device.plugin_name
+            
             plugin_config = {
                 **device.plugin_config,
                 'asset_name': device.asset,
@@ -579,8 +626,8 @@ class ConfigService:
             }
             
             plugin_info = await self.plugin_loader.load_plugin(
-                plugin_type=device.plugin_name,
-                name=device.plugin_name,
+                plugin_type=plugin_type,
+                name=plugin_name,
                 config=plugin_config
             )
             

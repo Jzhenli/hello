@@ -1,129 +1,133 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { deviceApi } from '@/api/devices'
+import type { DeviceConfig, DeviceStatus } from '@/api/types'
 
-export interface Device {
+export interface DeviceListItem {
+  asset: string
   name: string
   enabled: boolean
-  assetName: string
-  protocol: string
-  status: 'online' | 'offline'
+  status: DeviceStatus
+  pluginName: string
   pointCount: number
-  lastUpdate: string
   connection: {
     host: string
     port: number
   }
+  tags: string[]
+  created_at?: string
+  updated_at?: string
 }
 
-export interface NorthChannel {
-  name: string
-  enabled: boolean
-  protocol: string
-  status: 'online' | 'offline'
-  uploadedCount: number
-  connection: {
-    url?: string
-    host?: string
-    port?: number
+function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
+  const pluginConfig = device.plugin?.config || {}
+  return {
+    asset: device.asset,
+    name: device.name || device.asset,
+    enabled: device.enabled,
+    status: device.status || 'active',
+    pluginName: device.plugin?.name || '',
+    pointCount: device.points?.length || 0,
+    connection: {
+      host: (pluginConfig.host as string) || '',
+      port: (pluginConfig.port as number) || 0
+    },
+    tags: device.tags || [],
+    created_at: device.created_at,
+    updated_at: device.updated_at
   }
 }
 
 export const useDeviceStore = defineStore('devices', () => {
-  const southDevices = ref<Device[]>([
-    {
-      name: 'KNX-01',
-      enabled: true,
-      assetName: 'knx_building',
-      protocol: 'KNX',
-      status: 'online',
-      pointCount: 128,
-      lastUpdate: '2分钟前',
-      connection: { host: '192.168.1.100', port: 3671 }
-    },
-    {
-      name: 'MODBUS-01',
-      enabled: true,
-      assetName: 'modbus_plant',
-      protocol: 'Modbus TCP',
-      status: 'online',
-      pointCount: 64,
-      lastUpdate: '1分钟前',
-      connection: { host: '192.168.1.101', port: 502 }
-    },
-    {
-      name: 'BACNET-01',
-      enabled: false,
-      assetName: 'bacnet_hvac',
-      protocol: 'BACnet',
-      status: 'offline',
-      pointCount: 32,
-      lastUpdate: '连接失败',
-      connection: { host: '192.168.1.102', port: 47808 }
-    },
-    {
-      name: 'KNX-02',
-      enabled: true,
-      assetName: 'knx_floor2',
-      protocol: 'KNX',
-      status: 'online',
-      pointCount: 96,
-      lastUpdate: '30秒前',
-      connection: { host: '192.168.1.103', port: 3671 }
-    }
-  ])
+  const devices = ref<DeviceConfig[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-  const northChannels = ref<NorthChannel[]>([
-    {
-      name: 'MQTT通道',
-      enabled: true,
-      protocol: 'MQTT',
-      status: 'online',
-      uploadedCount: 12456,
-      connection: { url: 'mqtt.example.com' }
-    },
-    {
-      name: 'XNC通道',
-      enabled: true,
-      protocol: 'XNC',
-      status: 'online',
-      uploadedCount: 8234,
-      connection: { host: '192.168.1.200', port: 8080 }
-    }
-  ])
-
-  const onlineDevices = computed(() => 
-    southDevices.value.filter(d => d.status === 'online').length
-  )
-  
-  const totalDevices = computed(() => southDevices.value.length)
-  
-  const totalPoints = computed(() => 
-    southDevices.value.reduce((sum, d) => sum + d.pointCount, 0)
+  const deviceList = computed<DeviceListItem[]>(() =>
+    devices.value.map(mapDeviceToListItem)
   )
 
-  const toggleDevice = (name: string) => {
-    const device = southDevices.value.find(d => d.name === name)
-    if (device) {
-      device.enabled = !device.enabled
-      device.status = device.enabled ? 'online' : 'offline'
+  const onlineDevices = computed(() =>
+    deviceList.value.filter(d => d.status === 'active' && d.enabled).length
+  )
+
+  const totalDevices = computed(() => devices.value.length)
+
+  const totalPoints = computed(() =>
+    devices.value.reduce((sum, d) => sum + (d.points?.length || 0), 0)
+  )
+
+  const southDevices = computed(() =>
+    deviceList.value
+  )
+
+  async function fetchDevices() {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await deviceApi.list()
+      devices.value = res.devices
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '获取设备列表失败'
+      error.value = msg
+      console.error('Failed to fetch devices:', e)
+    } finally {
+      loading.value = false
     }
   }
 
-  const toggleChannel = (name: string) => {
-    const channel = northChannels.value.find(c => c.name === name)
-    if (channel) {
-      channel.enabled = !channel.enabled
-      channel.status = channel.enabled ? 'online' : 'offline'
+  async function createDevice(device: DeviceConfig) {
+    const res = await deviceApi.create(device)
+    if (res.success) {
+      await fetchDevices()
     }
+    return res
+  }
+
+  async function updateDevice(asset: string, updates: Record<string, unknown>) {
+    const res = await deviceApi.update(asset, updates)
+    if (res.success) {
+      await fetchDevices()
+    }
+    return res
+  }
+
+  async function deleteDevice(asset: string) {
+    await deviceApi.delete(asset)
+    await fetchDevices()
+  }
+
+  async function toggleDevice(asset: string) {
+    const device = devices.value.find(d => d.asset === asset)
+    if (device) {
+      await deviceApi.update(asset, { enabled: !device.enabled })
+      await fetchDevices()
+    }
+  }
+
+  async function reloadDevice(asset: string) {
+    return await deviceApi.reload(asset)
+  }
+
+  function getDeviceByAsset(asset: string): DeviceConfig | undefined {
+    return devices.value.find(d => d.asset === asset)
   }
 
   return {
+    devices,
+    deviceList,
     southDevices,
-    northChannels,
+    loading,
+    error,
     onlineDevices,
     totalDevices,
     totalPoints,
+    fetchDevices,
+    createDevice,
+    updateDevice,
+    deleteDevice,
     toggleDevice,
-    toggleChannel
+    reloadDevice,
+    getDeviceByAsset
   }
 })

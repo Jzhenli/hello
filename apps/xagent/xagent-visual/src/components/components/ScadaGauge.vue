@@ -42,7 +42,7 @@ const strokeDasharray = computed(() => {
 
 onMounted(() => {
   if (binding.value) {
-    const device = pointStore.devices.find(d => d.name === binding.value!.deviceId)
+    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
     const point = device?.points.find(p => p.name === binding.value!.pointName)
     if (point) {
       currentValue.value = typeof point.currentValue === 'number' ? point.currentValue : 0

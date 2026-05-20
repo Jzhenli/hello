@@ -41,7 +41,7 @@ watch(currentBinding, (binding) => {
 
 const availablePoints = computed(() => {
   if (!selectedDevice.value) return []
-  const device = pointStore.devices.find(d => d.name === selectedDevice.value)
+  const device = pointStore.devices.find(d => d.asset === selectedDevice.value || d.name === selectedDevice.value)
   return device?.points || []
 })
 
@@ -178,7 +178,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
           <label>设备</label>
           <select v-model="selectedDevice" @change="handleDeviceChange">
             <option value="">请选择设备</option>
-            <option v-for="device in pointStore.devices" :key="device.name" :value="device.name">
+            <option v-for="device in pointStore.devices" :key="device.asset" :value="device.asset">
               {{ device.name }}
             </option>
           </select>

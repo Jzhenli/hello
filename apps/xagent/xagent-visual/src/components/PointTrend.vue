@@ -77,7 +77,13 @@ const hoursMap: Record<string, number> = {
 }
 
 const trendData = computed(() => {
-  if (!pointStore.selectedPoint) return []
+  if (!pointStore.selectedPoint || !pointStore.selectedDeviceAsset) return []
+  
+  const realData = pointStore.getPointTrendData(pointStore.selectedPoint.name)
+  if (realData.length > 0) {
+    return realData
+  }
+  
   const hours = hoursMap[pointStore.trendTimeRange] || 24
   return pointStore.generateTrendData(pointStore.selectedPoint, hours)
 })
@@ -90,14 +96,14 @@ const chartOption = computed(() => {
   
   const seriesData = data.map(d => [d.timestamp, d.value])
   
-  const statistics = {
+  const statistics = data.length > 0 ? {
     min: Math.min(...data.map(d => d.value)),
     max: Math.max(...data.map(d => d.value)),
     avg: data.reduce((sum, d) => sum + d.value, 0) / data.length
-  }
+  } : { min: 0, max: 0, avg: 0 }
   
   const markLine: any[] = []
-  if (showAvgLine.value) {
+  if (showAvgLine.value && data.length > 0) {
     markLine.push({
       name: '平均值',
       yAxis: statistics.avg,
@@ -105,13 +111,15 @@ const chartOption = computed(() => {
       label: { formatter: `平均: ${statistics.avg.toFixed(2)}` }
     })
   }
-  if (showMinMax.value) {
+  if (showMinMax.value && point.maxValue !== undefined) {
     markLine.push({
       name: '上限',
       yAxis: point.maxValue,
       lineStyle: { color: '#e74c3c', type: 'dashed' },
       label: { formatter: `上限: ${point.maxValue}` }
     })
+  }
+  if (showMinMax.value && point.minValue !== undefined) {
     markLine.push({
       name: '下限',
       yAxis: point.minValue,
@@ -122,16 +130,16 @@ const chartOption = computed(() => {
   
   return {
     title: {
-      text: `${point.description} (${point.name})`,
+      text: `${point.description || point.name} (${point.name})`,
       left: 'center',
       textStyle: { fontSize: 16, fontWeight: 'normal' }
     },
     tooltip: {
       trigger: 'axis',
       formatter: (params: any) => {
-        const data = params[0]
-        const time = dayjs(data.value[0]).format('MM-DD HH:mm:ss')
-        return `${time}<br/>值: ${data.value[1]} ${point.unit}`
+        const d = params[0]
+        const time = dayjs(d.value[0]).format('MM-DD HH:mm:ss')
+        return `${time}<br/>值: ${d.value[1]} ${point.unit || ''}`
       }
     },
     legend: {
@@ -172,7 +180,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: point.unit,
+      name: point.unit || '',
       min: (value: any) => Math.floor(value.min * 0.9),
       max: (value: any) => Math.ceil(value.max * 1.1)
     },
@@ -200,7 +208,7 @@ const chartOption = computed(() => {
           silent: true,
           data: markLine
         },
-        markPoint: showMinMax.value ? {
+        markPoint: showMinMax.value && data.length > 0 ? {
           data: [
             { type: 'max', name: '最大值', itemStyle: { color: '#e74c3c' } },
             { type: 'min', name: '最小值', itemStyle: { color: '#27ae60' } }
@@ -227,11 +235,17 @@ const statisticsInfo = computed(() => {
   }
 })
 
+const loadData = async () => {
+  if (!pointStore.selectedDeviceAsset) return
+  const hours = hoursMap[pointStore.trendTimeRange] || 24
+  await pointStore.fetchHistoryReadings(pointStore.selectedDeviceAsset, hours)
+}
+
 const startAutoRefresh = () => {
   if (refreshTimer) clearInterval(refreshTimer)
   if (autoRefresh.value) {
     refreshTimer = setInterval(() => {
-      // Trigger reactive update
+      loadData()
     }, refreshInterval.value * 1000)
   }
 }
@@ -240,9 +254,14 @@ watch(autoRefresh, () => {
   startAutoRefresh()
 })
 
-watch(() => props.deviceName, (name) => {
+watch(() => pointStore.trendTimeRange, () => {
+  loadData()
+})
+
+watch(() => props.deviceName, async (name) => {
   if (name && props.pointName) {
     pointStore.selectPoint(name, props.pointName)
+    await loadData()
   }
 }, { immediate: true })
 
@@ -261,8 +280,9 @@ onUnmounted(() => {
       <div class="header-left">
         <h3>📈 点位趋势</h3>
         <span v-if="pointStore.selectedPoint" class="point-info">
-          {{ pointStore.selectedDevice }} / {{ pointStore.selectedPoint.name }}
+          {{ pointStore.selectedDeviceAsset }} / {{ pointStore.selectedPoint.name }}
         </span>
+        <el-tag v-if="pointStore.historyLoading" type="info" size="small">加载中...</el-tag>
       </div>
       <div class="header-right">
         <el-select v-model="pointStore.trendTimeRange" style="width: 100px">
@@ -281,6 +301,7 @@ onUnmounted(() => {
             :value="opt.value"
           />
         </el-select>
+        <el-button @click="loadData" :loading="pointStore.historyLoading">刷新</el-button>
         <el-button @click="showConfig = !showConfig">
           ⚙️ 配置
         </el-button>
@@ -320,28 +341,28 @@ onUnmounted(() => {
         <div class="stat-card">
           <span class="stat-label">当前值</span>
           <span class="stat-value current">
-            {{ pointStore.selectedPoint.currentValue }} {{ pointStore.selectedPoint.unit }}
+            {{ pointStore.selectedPoint.currentValue ?? '--' }} {{ pointStore.selectedPoint.unit }}
           </span>
         </div>
         <div class="stat-card">
           <span class="stat-label">最小值</span>
-          <span class="stat-value min">{{ statisticsInfo?.min }}</span>
+          <span class="stat-value min">{{ statisticsInfo?.min ?? '--' }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">最大值</span>
-          <span class="stat-value max">{{ statisticsInfo?.max }}</span>
+          <span class="stat-value max">{{ statisticsInfo?.max ?? '--' }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">平均值</span>
-          <span class="stat-value avg">{{ statisticsInfo?.avg }}</span>
+          <span class="stat-value avg">{{ statisticsInfo?.avg ?? '--' }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">数据点数</span>
-          <span class="stat-value">{{ statisticsInfo?.count }}</span>
+          <span class="stat-value">{{ statisticsInfo?.count ?? 0 }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">时间范围</span>
-          <span class="stat-value time">{{ statisticsInfo?.start }} ~ {{ statisticsInfo?.end }}</span>
+          <span class="stat-value time">{{ statisticsInfo?.start ?? '--' }} ~ {{ statisticsInfo?.end ?? '--' }}</span>
         </div>
       </div>
       
@@ -358,21 +379,13 @@ onUnmounted(() => {
         </div>
         <div class="meta-item">
           <span class="meta-label">量程:</span>
-          <span>{{ pointStore.selectedPoint.minValue }} ~ {{ pointStore.selectedPoint.maxValue }} {{ pointStore.selectedPoint.unit }}</span>
+          <span>{{ pointStore.selectedPoint.minValue ?? '--' }} ~ {{ pointStore.selectedPoint.maxValue ?? '--' }} {{ pointStore.selectedPoint.unit }}</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">趋势记录:</span>
-          <el-tag :type="pointStore.selectedPoint.trend.enabled ? 'success' : 'info'" size="small">
-            {{ pointStore.selectedPoint.trend.enabled ? '已启用' : '未启用' }}
+          <el-tag :type="pointStore.selectedPoint.trend?.enabled ? 'success' : 'info'" size="small">
+            {{ pointStore.selectedPoint.trend?.enabled ? '已启用' : '未启用' }}
           </el-tag>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">采样间隔:</span>
-          <span>{{ pointStore.selectedPoint.trend.interval }}秒</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">保留天数:</span>
-          <span>{{ pointStore.selectedPoint.trend.retention }}天</span>
         </div>
       </div>
     </div>

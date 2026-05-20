@@ -135,6 +135,23 @@ class SQLiteStorage(StorageInterface):
             CREATE INDEX IF NOT EXISTS idx_point_enabled ON point_registry(enabled);
             CREATE INDEX IF NOT EXISTS idx_plugin_name ON plugin_registry(name);
             CREATE INDEX IF NOT EXISTS idx_plugin_type ON plugin_registry(type);
+            
+            CREATE TABLE IF NOT EXISTS config_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config TEXT,
+                config_hash TEXT,
+                change_type TEXT,
+                changed_by TEXT,
+                changed_at REAL,
+                previous_version INTEGER,
+                created_at REAL NOT NULL DEFAULT (strftime('%s','now')),
+                UNIQUE(entity_type, entity_id, version)
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_config_versions_entity ON config_versions(entity_type, entity_id);
         """)
         logger.info("Metadata tables created/verified")
 

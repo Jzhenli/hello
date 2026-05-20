@@ -120,8 +120,8 @@ class ConfigRepository:
         
         query = f"""
             SELECT asset, name, description, plugin_name, plugin_config, 
-                   enabled, status, metadata, tags, version, 
-                   created_at, updated_at, created_by, updated_by
+                   enabled, status, metadata, tags,
+                   created_at, updated_at
             FROM device_registry
             WHERE {' AND '.join(conditions)}
             ORDER BY asset
@@ -140,11 +140,11 @@ class ConfigRepository:
                     'status': row[6],
                     'metadata': json.loads(row[7]) if row[7] else {},
                     'tags': json.loads(row[8]) if row[8] else [],
-                    'version': row[9],
-                    'created_at': row[10],
-                    'updated_at': row[11],
-                    'created_by': row[12],
-                    'updated_by': row[13]
+                    'version': 1,
+                    'created_at': row[9],
+                    'updated_at': row[10],
+                    'created_by': None,
+                    'updated_by': None
                 }
                 
                 points = await self._get_device_points(device_data['asset'])
@@ -179,21 +179,23 @@ class ConfigRepository:
             await self._db.execute(
                 """
                 INSERT INTO device_registry (
-                    asset, name, description, plugin_name, plugin_config,
+                    asset, name, description, service_name, plugin_name, plugin_config,
                     enabled, status, metadata, tags, config_hash,
-                    version, created_at, updated_at, created_by, updated_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     device.asset, device.name, device.description,
-                    device.plugin_name, json.dumps(device.plugin_config),
+                    device.plugin_name, device.plugin_name, json.dumps(device.plugin_config),
                     device.enabled, device.status,
                     json.dumps(device.metadata), json.dumps(device.tags),
-                    config_hash, 1, now, now, user, user
+                    config_hash, now, now
                 )
             )
-        except aiosqlite.IntegrityError:
-            raise ValueError(f"Device '{device.asset}' already exists")
+        except aiosqlite.IntegrityError as e:
+            if 'UNIQUE constraint' in str(e):
+                raise ValueError(f"Device '{device.asset}' already exists")
+            raise ValueError(f"Failed to create device '{device.asset}': {e}")
         
         for point in device.points:
             await self._create_point(device.asset, point, user)
@@ -256,17 +258,17 @@ class ConfigRepository:
         await self._db.execute(
             """
             UPDATE device_registry SET
-                name = ?, description = ?, plugin_config = ?,
+                name = ?, description = ?, service_name = ?, plugin_name = ?, plugin_config = ?,
                 enabled = ?, status = ?, metadata = ?, tags = ?,
-                config_hash = ?, version = ?, updated_at = ?, updated_by = ?
+                config_hash = ?, updated_at = ?
             WHERE asset = ?
             """,
             (
-                device.name, device.description, 
-                json.dumps(device.plugin_config),
+                device.name, device.description,
+                device.plugin_name, device.plugin_name, json.dumps(device.plugin_config),
                 device.enabled, device.status,
                 json.dumps(device.metadata), json.dumps(device.tags),
-                config_hash, device.version, now, user, asset
+                config_hash, now, asset
             )
         )
         
@@ -303,10 +305,10 @@ class ConfigRepository:
         await self._db.execute(
             """
             UPDATE device_registry 
-            SET status = 'deleted', deleted_at = ?, updated_at = ?, updated_by = ?
+            SET status = 'deleted', deleted_at = ?, updated_at = ?
             WHERE asset = ?
             """,
-            (now, now, user, asset)
+            (now, now, asset)
         )
         
         await self._db.execute(
@@ -406,21 +408,20 @@ class ConfigRepository:
         await self._db.execute(
             """
             UPDATE point_registry SET
-                description = ?, data_type = ?, standard_data_type = ?,
+                description = ?, data_type = ?,
                 unit = ?, config = ?, metadata = ?, tags = ?, enabled = ?,
-                config_hash = ?, version = version + 1, updated_at = ?, updated_by = ?
+                config_hash = ?, updated_at = ?
             WHERE asset = ? AND point_name = ?
             """,
             (
                 device.points[point_index].get('description'),
                 device.points[point_index].get('data_type'),
-                device.points[point_index].get('standard_data_type'),
                 device.points[point_index].get('unit'),
                 json.dumps(device.points[point_index].get('config', {})),
                 json.dumps(device.points[point_index].get('metadata', {})),
                 json.dumps(device.points[point_index].get('tags', [])),
                 device.points[point_index].get('enabled', True),
-                config_hash, now, user, asset, point_name
+                config_hash, now, asset, point_name
             )
         )
         
@@ -499,7 +500,7 @@ class ConfigRepository:
         async with self._db.execute(
             """
             SELECT version, config, config_hash, change_type, changed_by,
-                   changed_at, change_reason, previous_version
+                   changed_at, previous_version
             FROM config_versions
             WHERE entity_type = ? AND entity_id = ?
             ORDER BY version DESC
@@ -516,8 +517,7 @@ class ConfigRepository:
                     'change_type': row[3],
                     'changed_by': row[4],
                     'changed_at': row[5],
-                    'change_reason': row[6],
-                    'previous_version': row[7]
+                    'previous_version': row[6]
                 })
             return versions
     
@@ -540,7 +540,7 @@ class ConfigRepository:
         async with self._db.execute(
             """
             SELECT version, config, config_hash, change_type, changed_by,
-                   changed_at, change_reason, previous_version
+                   changed_at, previous_version
             FROM config_versions
             WHERE entity_type = ? AND entity_id = ? AND version = ?
             """,
@@ -555,8 +555,7 @@ class ConfigRepository:
                     'change_type': row[3],
                     'changed_by': row[4],
                     'changed_at': row[5],
-                    'change_reason': row[6],
-                    'previous_version': row[7]
+                    'previous_version': row[6]
                 }
             return None
     
@@ -565,8 +564,8 @@ class ConfigRepository:
         async with self._db.execute(
             """
             SELECT asset, name, description, plugin_name, plugin_config,
-                   enabled, status, metadata, tags, version,
-                   created_at, updated_at, created_by, updated_by
+                   enabled, status, metadata, tags,
+                   created_at, updated_at
             FROM device_registry
             WHERE asset = ? AND status != 'deleted'
             """,
@@ -586,19 +585,19 @@ class ConfigRepository:
                 'status': row[6],
                 'metadata': json.loads(row[7]) if row[7] else {},
                 'tags': json.loads(row[8]) if row[8] else [],
-                'version': row[9],
-                'created_at': row[10],
-                'updated_at': row[11],
-                'created_by': row[12],
-                'updated_by': row[13]
+                'version': 1,
+                'created_at': row[9],
+                'updated_at': row[10],
+                'created_by': None,
+                'updated_by': None
             }
     
     async def _get_device_points(self, asset: str) -> List[Dict[str, Any]]:
         """获取设备的所有点位（内部方法）"""
         async with self._db.execute(
             """
-            SELECT point_name, description, data_type, standard_data_type,
-                   unit, config, metadata, tags, enabled, version
+            SELECT point_name, description, data_type,
+                   unit, config, metadata, tags, enabled
             FROM point_registry
             WHERE asset = ? AND status = 'active'
             ORDER BY point_name
@@ -611,13 +610,12 @@ class ConfigRepository:
                     'name': row[0],
                     'description': row[1],
                     'data_type': row[2],
-                    'standard_data_type': row[3],
-                    'unit': row[4],
-                    'config': json.loads(row[5]) if row[5] else {},
-                    'metadata': json.loads(row[6]) if row[6] else {},
-                    'tags': json.loads(row[7]) if row[7] else [],
-                    'enabled': bool(row[8]),
-                    'version': row[9]
+                    'standard_data_type': None,
+                    'unit': row[3],
+                    'config': json.loads(row[4]) if row[4] else {},
+                    'metadata': json.loads(row[5]) if row[5] else {},
+                    'tags': json.loads(row[6]) if row[6] else [],
+                    'enabled': bool(row[7])
                 })
             return points
     
@@ -636,23 +634,25 @@ class ConfigRepository:
             await self._db.execute(
                 """
                 INSERT INTO point_registry (
-                    asset, point_name, description, data_type, standard_data_type,
+                    asset, point_name, description, data_type,
                     unit, config, metadata, tags, enabled, config_hash,
-                    version, created_at, updated_at, created_by, updated_by, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                    created_at, updated_at, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
                 """,
                 (
                     asset, point['name'], point.get('description'),
-                    point.get('data_type'), point.get('standard_data_type'),
+                    point.get('data_type'),
                     point.get('unit'), json.dumps(point.get('config', {})),
                     json.dumps(point.get('metadata', {})),
                     json.dumps(point.get('tags', [])),
                     point.get('enabled', True), config_hash,
-                    1, now, now, user, user
+                    now, now
                 )
             )
-        except aiosqlite.IntegrityError:
-            raise ValueError(f"Point '{point['name']}' already exists in device '{asset}'")
+        except aiosqlite.IntegrityError as e:
+            if 'UNIQUE constraint' in str(e):
+                raise ValueError(f"Point '{point['name']}' already exists in device '{asset}'")
+            raise ValueError(f"Failed to create point '{point['name']}': {e}")
     
     async def _update_device_version(self, device: DeviceConfig) -> None:
         """更新设备版本（内部方法）"""
@@ -662,10 +662,10 @@ class ConfigRepository:
         await self._db.execute(
             """
             UPDATE device_registry SET
-                config_hash = ?, version = ?, updated_at = ?, updated_by = ?
+                config_hash = ?, updated_at = ?
             WHERE asset = ?
             """,
-            (config_hash, device.version, device.updated_at, device.updated_by, device.asset)
+            (config_hash, device.updated_at, device.asset)
         )
         
         await self._save_config_version(

@@ -18,7 +18,7 @@ const isOn = ref(false)
 
 onMounted(() => {
   if (binding.value) {
-    const device = pointStore.devices.find(d => d.name === binding.value!.deviceId)
+    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
     const point = device?.points.find(p => p.name === binding.value!.pointName)
     if (point) {
       isOn.value = point.currentValue === true || point.currentValue === 1
