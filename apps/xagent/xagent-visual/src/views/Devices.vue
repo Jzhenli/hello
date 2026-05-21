@@ -23,7 +23,6 @@ const pointStore = usePointStore()
 
 const searchQuery = ref('')
 const statusFilter = ref('')
-const activeTab = ref('south')
 const selectedDeviceAsset = ref<string | null>(null)
 const showTrend = ref(false)
 const selectedPointForTrend = ref<{ deviceAsset: string; pointName: string } | null>(null)
@@ -688,100 +687,82 @@ onMounted(async () => {
       style="margin-bottom: 16px"
     />
     
-    <el-tabs v-model="activeTab" class="device-tabs">
-      <el-tab-pane label="南向设备" name="south">
+    <div class="main-content">
+      <div class="device-list-panel">
+        <div class="panel-header">
+          <span class="panel-title">设备列表</span>
+          <span class="device-count">{{ filteredSouthDevices.length }} 个设备</span>
+        </div>
+        
         <div v-if="deviceStore.loading && deviceStore.southDevices.length === 0" class="loading-state">
           <el-icon class="is-loading" :size="32"><Refresh /></el-icon>
           <p>加载设备列表...</p>
         </div>
 
         <div v-else-if="filteredSouthDevices.length === 0" class="empty-state">
-          <p>暂无设备，点击"新增设备"添加</p>
+          <p>暂无设备</p>
         </div>
 
-        <div v-else class="section">
-          <div class="section-header">
-            <h3>南向设备 ({{ filteredSouthDevices.length }})</h3>
-            <span class="section-desc">数据采集设备</span>
+        <div v-else class="device-list">
+          <div 
+            v-for="device in filteredSouthDevices" 
+            :key="device.asset" 
+            class="device-item"
+            :class="{ 
+              offline: !device.enabled || device.status !== 'active',
+              selected: selectedDeviceAsset === device.asset 
+            }"
+            @click="handleViewPoints(device.asset)"
+          >
+            <div class="device-item-status" :class="{ online: device.enabled && device.status === 'active' }">
+              <el-icon v-if="device.enabled && device.status === 'active'"><CircleCheck /></el-icon>
+              <el-icon v-else><CircleClose /></el-icon>
+            </div>
+            <div class="device-item-content">
+              <div class="device-item-header">
+                <span class="device-item-name">{{ device.name }}</span>
+                <el-tag size="small" :type="getStatusType(device.status, device.enabled)">
+                  {{ getStatusLabel(device.status, device.enabled) }}
+                </el-tag>
+              </div>
+              <div class="device-item-meta">
+                <span>{{ device.pluginName }}</span>
+                <span>{{ device.pointCount }} 点位</span>
+              </div>
+            </div>
+            <div class="device-item-actions" @click.stop>
+              <el-switch 
+                :model-value="device.enabled" 
+                size="small"
+                @change="handleToggleDevice(device.asset)"
+              />
+            </div>
           </div>
-          <el-row :gutter="20">
-            <el-col 
-              v-for="device in filteredSouthDevices" 
-              :key="device.asset" 
-              :span="selectedDeviceAsset ? 12 : 6"
-            >
-              <el-card 
-                class="device-card" 
-                shadow="hover" 
-                :class="{ offline: !device.enabled || device.status !== 'active', selected: selectedDeviceAsset === device.asset }"
-                @click="handleViewPoints(device.asset)"
-              >
-                <div class="device-header">
-                  <div class="device-status" :class="{ online: device.enabled && device.status === 'active', offline: !device.enabled || device.status !== 'active' }">
-                    <el-icon v-if="device.enabled && device.status === 'active'"><CircleCheck /></el-icon>
-                    <el-icon v-else><CircleClose /></el-icon>
-                  </div>
-                  <div class="device-name">{{ device.name }}</div>
-                  <el-tag size="small" :type="getStatusType(device.status, device.enabled)">
-                    {{ getStatusLabel(device.status, device.enabled) }}
-                  </el-tag>
-                </div>
-                <div class="device-info">
-                  <div class="info-row">
-                    <span class="label">资产标识:</span>
-                    <span class="value">{{ device.asset }}</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="label">协议:</span>
-                    <span class="value">{{ device.pluginName }}</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="label">点位:</span>
-                    <span class="value">{{ device.pointCount }} 个</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="label">地址:</span>
-                    <span class="value">{{ device.connection.host }}:{{ device.connection.port }}</span>
-                  </div>
-                </div>
-                <div class="device-footer">
-                  <el-switch 
-                    :model-value="device.enabled" 
-                    size="small"
-                    @click.stop
-                    @change="handleToggleDevice(device.asset)"
-                  />
-                  <div class="actions">
-                    <el-button type="primary" link size="small" @click.stop="handleViewPoints(device.asset)">
-                      点位
-                    </el-button>
-                    <el-button type="primary" link size="small" @click.stop="handleEditDevice(device)">
-                      编辑
-                    </el-button>
-                    <el-button link size="small" @click.stop="handleReloadDevice(device.asset)">
-                      重载
-                    </el-button>
-                    <el-button type="danger" link size="small" @click.stop="handleDeleteDevice(device)">
-                      删除
-                    </el-button>
-                  </div>
-                </div>
-              </el-card>
-            </el-col>
-          </el-row>
+        </div>
+      </div>
+      
+      <div class="points-panel">
+        <div v-if="!selectedDeviceAsset" class="empty-points">
+          <el-icon :size="48"><TrendCharts /></el-icon>
+          <p>请从左侧选择一个设备查看点位列表</p>
         </div>
         
-        <div v-if="selectedDeviceAsset" class="points-section">
-          <div class="section-header">
-            <h3>{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name || selectedDeviceAsset }} 点位列表</h3>
+        <template v-else>
+          <div class="panel-header">
+            <span class="panel-title">{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name || selectedDeviceAsset }} 点位列表</span>
             <div class="points-actions">
               <el-button type="primary" :icon="Plus" size="small" @click="handleAddPoint">
                 新增点位
               </el-button>
-              <el-button link @click="selectedDeviceAsset = null">关闭</el-button>
             </div>
           </div>
-          <el-table :data="getDevicePoints(selectedDeviceAsset)" stripe style="width: 100%">
+          
+          <el-table 
+            :data="getDevicePoints(selectedDeviceAsset)" 
+            stripe 
+            style="width: 100%; flex: 1;"
+            height="100%"
+          >
             <el-table-column prop="name" label="点位名称" width="150" />
             <el-table-column prop="description" label="描述" width="150" />
             <el-table-column label="当前值" width="120">
@@ -830,9 +811,9 @@ onMounted(async () => {
               </template>
             </el-table-column>
           </el-table>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
+        </template>
+      </div>
+    </div>
     
     <el-dialog 
       v-model="showDeviceDialog" 
@@ -1108,10 +1089,14 @@ onMounted(async () => {
 <style scoped>
 .devices-page {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .page-header {
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .page-header h2 {
@@ -1124,11 +1109,12 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   padding: 16px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .toolbar-left {
@@ -1141,134 +1127,154 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.device-tabs {
+.main-content {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.device-list-panel {
+  width: 320px;
+  flex-shrink: 0;
   background: #fff;
   border-radius: 8px;
-  padding: 16px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.section {
-  margin-bottom: 24px;
-}
-
-.section-header {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 16px;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.section-header h3 {
-  margin: 0;
-  font-size: 18px;
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #ebeef5;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
   color: #2c3e50;
 }
 
-.section-desc {
+.device-count {
   font-size: 13px;
-  color: #7f8c8d;
+  color: #909399;
+}
+
+.device-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+}
+
+.device-item:hover {
+  background: #f5f7fa;
+}
+
+.device-item.selected {
+  background: #ecf5ff;
+  border-color: #409eff;
+}
+
+.device-item.offline {
+  opacity: 0.7;
+}
+
+.device-item-status {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #ffebee;
+  color: #e74c3c;
+}
+
+.device-item-status.online {
+  background: #e8f5e9;
+  color: #27ae60;
+}
+
+.device-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.device-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.device-item-actions {
+  flex-shrink: 0;
+}
+
+.points-panel {
+  flex: 1;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.empty-points {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+}
+
+.empty-points p {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 .points-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
-}
-
-.device-card {
-  margin-bottom: 16px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.device-card:hover {
-  transform: translateY(-2px);
-}
-
-.device-card.offline {
-  opacity: 0.7;
-}
-
-.device-card.selected {
-  border: 2px solid #3498db;
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
-
-.device-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #eee;
-}
-
-.device-status {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.device-status.online {
-  background: #e8f5e9;
-  color: #27ae60;
-}
-
-.device-status.offline {
-  background: #ffebee;
-  color: #e74c3c;
-}
-
-.device-name {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.device-info {
-  margin-bottom: 12px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.info-row .label {
-  color: #7f8c8d;
-}
-
-.info-row .value {
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-.device-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
-}
-
-.actions {
-  display: flex;
-  gap: 4px;
-}
-
-.points-section {
-  margin-top: 24px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
 }
 
 .config-preview {
@@ -1311,5 +1317,20 @@ onMounted(async () => {
   padding: 60px 0;
   color: #95a5a6;
   font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .main-content {
+    flex-direction: column;
+  }
+  
+  .device-list-panel {
+    width: 100%;
+    max-height: 300px;
+  }
+  
+  .points-panel {
+    min-height: 400px;
+  }
 }
 </style>

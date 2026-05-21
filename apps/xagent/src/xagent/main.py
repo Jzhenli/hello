@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 def setup_logging(debug: bool = False):
     """配置日志"""
+    from .xcore.core.logging import _ensure_utf8_encoding
+    
+    _ensure_utf8_encoding()
+    
     level = logging.DEBUG if debug else logging.INFO
     
     logging.basicConfig(
