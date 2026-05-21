@@ -12,6 +12,7 @@ export interface Reading {
 
 export interface StandardPoint {
   name: string
+  point_name?: string
   value: number | boolean | string
   unit?: string
   data_type?: string

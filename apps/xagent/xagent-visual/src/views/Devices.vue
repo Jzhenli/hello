@@ -62,7 +62,6 @@ const handleToggleDevice = async (asset: string) => {
 const handleRefresh = async () => {
   await deviceStore.fetchDevices()
   await pointStore.fetchDevicesWithPoints()
-  await pointStore.fetchAllLatestReadings()
 }
 
 const showDeviceDialog = ref(false)
@@ -219,7 +218,6 @@ const handleReloadDevice = async (asset: string) => {
 const handleViewPoints = async (asset: string) => {
   selectedDeviceAsset.value = asset
   await pointStore.fetchDevicePoints(asset)
-  await pointStore.fetchLatestReadings(asset)
 }
 
 const handleViewTrend = (deviceAsset: string, pointName: string) => {
@@ -405,7 +403,6 @@ const handleDeletePoint = (pointName: string) => {
 onMounted(async () => {
   await deviceStore.fetchDevices()
   await pointStore.fetchDevicesWithPoints()
-  await pointStore.fetchAllLatestReadings()
 })
 </script>
 

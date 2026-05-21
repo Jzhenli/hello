@@ -42,9 +42,17 @@ export interface DeviceWithPoints {
   points: PointDisplay[]
 }
 
-function mapPointToDisplay(point: PointConfig): PointDisplay {
+function mapPointToDisplay(point: PointConfig, readingData?: { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number }): PointDisplay {
   const metadata = point.metadata || {}
   const isDigital = point.standard_data_type === 'bool'
+
+  const sp = readingData?.standardPoints?.get(point.name)
+  const rawValue = readingData?.data?.[point.name]
+  const currentValue = sp?.value ?? (rawValue as number | boolean | string | undefined)
+  const timeStr = readingData?.timestamp
+    ? new Date(readingData.timestamp * 1000).toLocaleString('zh-CN')
+    : undefined
+
   return {
     name: point.name,
     description: point.description || '',
@@ -56,9 +64,11 @@ function mapPointToDisplay(point: PointConfig): PointDisplay {
     metadata: point.metadata || {},
     tags: point.tags || [],
     type: isDigital ? 'digital' : 'analog',
+    currentValue,
     minValue: (metadata.minValue as number) ?? (metadata.range as number[])?.[0],
     maxValue: (metadata.maxValue as number) ?? (metadata.range as number[])?.[1],
-    quality: 'good',
+    lastUpdate: timeStr,
+    quality: (sp?.quality as 'good' | 'bad' | 'uncertain') ?? 'good',
     trend: {
       enabled: (metadata.trendEnabled as boolean) ?? false,
       interval: (metadata.trendInterval as number) ?? 60,
@@ -67,7 +77,7 @@ function mapPointToDisplay(point: PointConfig): PointDisplay {
   }
 }
 
-function mapDeviceWithPoints(device: DeviceConfig): DeviceWithPoints {
+function mapDeviceWithPoints(device: DeviceConfig, readingData?: { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number }): DeviceWithPoints {
   const pluginConfig = device.plugin?.config || {}
   return {
     asset: device.asset,
@@ -80,8 +90,29 @@ function mapDeviceWithPoints(device: DeviceConfig): DeviceWithPoints {
       host: (pluginConfig.host as string) || '',
       port: (pluginConfig.port as number) || 0
     },
-    points: (device.points || []).map(mapPointToDisplay)
+    points: (device.points || []).map(p => mapPointToDisplay(p, readingData))
   }
+}
+
+function parseStandardPoints(rawSp: any[]): { standardPoints: Map<string, StandardPoint>; timestamp?: number } {
+  const standardPoints = new Map<string, StandardPoint>()
+  let timestamp: number | undefined
+  for (const p of rawSp || []) {
+    const key = p.point_name || p.name || ''
+    if (key) {
+      standardPoints.set(key, {
+        name: key,
+        point_name: p.point_name,
+        value: p.value,
+        unit: p.unit,
+        data_type: p.data_type,
+        quality: p.quality,
+        timestamp: p.timestamp
+      })
+    }
+    if (p.timestamp && !timestamp) timestamp = p.timestamp
+  }
+  return { standardPoints, timestamp }
 }
 
 export const usePointStore = defineStore('points', () => {
@@ -111,8 +142,42 @@ export const usePointStore = defineStore('points', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await deviceApi.list()
-      devices.value = res.devices.map(mapDeviceWithPoints)
+      const [devRes, readRes] = await Promise.allSettled([
+        deviceApi.list(),
+        deviceApi.getLatest(false)
+      ])
+
+      console.log('[points store] devRes status:', devRes.status)
+      console.log('[points store] readRes status:', readRes.status)
+      if (devRes.status === 'rejected') console.error('[points store] devRes reason:', devRes.reason)
+      if (readRes.status === 'rejected') console.error('[points store] readRes reason:', readRes.reason)
+
+      const deviceList = devRes.status === 'fulfilled' ? devRes.value.devices : []
+      const readingList = readRes.status === 'fulfilled' ? readRes.value.devices : []
+
+      console.log('[points store] deviceList length:', deviceList.length)
+      console.log('[points store] readingList length:', readingList.length)
+      if (readingList.length > 0) {
+        console.log('[points store] first reading asset:', readingList[0].asset)
+        console.log('[points store] first reading data:', JSON.stringify(readingList[0].data))
+        console.log('[points store] first reading sp:', JSON.stringify(readingList[0].standard_points?.[0]))
+      }
+
+      const readingMap = new Map<string, { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number }>()
+      for (const r of readingList) {
+        const { standardPoints, timestamp } = parseStandardPoints(r.standard_points)
+        readingMap.set(r.asset, { data: r.data || {}, standardPoints, timestamp })
+      }
+
+      console.log('[points store] readingMap keys:', [...readingMap.keys()])
+      console.log('[points store] readingMap for modbustcp_dev001 sp keys:', [...(readingMap.get('modbustcp_dev001')?.standardPoints?.keys() || [])])
+
+      devices.value = deviceList.map(d => {
+        const rd = readingMap.get(d.asset)
+        const mapped = mapDeviceWithPoints(d, rd)
+        console.log(`[points store] device ${d.asset}: points count=${mapped.points.length}, first point currentValue=${mapped.points[0]?.currentValue}`)
+        return mapped
+      })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '获取设备点位失败'
       error.value = msg
@@ -124,14 +189,30 @@ export const usePointStore = defineStore('points', () => {
 
   async function fetchDevicePoints(asset: string) {
     try {
-      const points = await deviceApi.listPoints(asset)
+      const [pointsRes, readingRes] = await Promise.allSettled([
+        deviceApi.listPoints(asset),
+        dataApi.getReadings({ asset, limit: 1, active_only: false })
+      ])
+
+      const points = pointsRes.status === 'fulfilled' ? pointsRes.value : []
+      const readings = readingRes.status === 'fulfilled' ? readingRes.value.readings : []
+
+      let readingData: { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number } | undefined
+      if (readings.length > 0) {
+        const r = readings[0]
+        const { standardPoints, timestamp } = parseStandardPoints(r.standard_points)
+        readingData = { data: r.data || {}, standardPoints, timestamp }
+      }
+
       const deviceIdx = devices.value.findIndex(d => d.asset === asset)
+      const mappedPoints = points.map(p => mapPointToDisplay(p, readingData))
+
       if (deviceIdx !== -1) {
-        devices.value[deviceIdx].points = points.map(mapPointToDisplay)
-        devices.value[deviceIdx].pointCount = points.length
+        const device = devices.value[deviceIdx]
+        devices.value[deviceIdx] = { ...device, points: mappedPoints, pointCount: mappedPoints.length }
       } else {
         const device = await deviceApi.get(asset)
-        const mapped = mapDeviceWithPoints(device)
+        const mapped = mapDeviceWithPoints(device, readingData)
         devices.value.push(mapped)
       }
     } catch (e: unknown) {
@@ -139,40 +220,12 @@ export const usePointStore = defineStore('points', () => {
     }
   }
 
-  async function fetchLatestReadings(asset: string) {
-    try {
-      const res = await dataApi.getReadings({ asset, limit: 1, active_only: false })
-      if (res.readings.length > 0) {
-        const reading = res.readings[0]
-        latestReadings.value.set(asset, reading)
-        _applyReadingToPoints(asset, reading)
-      }
-    } catch (e: unknown) {
-      console.error(`Failed to fetch latest readings for ${asset}:`, e)
-    }
+  async function fetchLatestReadings(_asset: string) {
+    // No longer needed - data is merged in fetchDevicePoints/fetchDevicesWithPoints
   }
 
   async function fetchAllLatestReadings() {
-    try {
-      const res = await deviceApi.getLatest(false)
-      if (res.devices && res.devices.length > 0) {
-        for (const readingData of res.devices) {
-          const reading: Reading = {
-            asset: readingData.asset,
-            timestamp: readingData.timestamp,
-            service_name: readingData.service_name || '',
-            data: readingData.data || {},
-            tags: readingData.tags || [],
-            standard_points: readingData.standard_points || [],
-            device_status: readingData.device_status || null
-          }
-          latestReadings.value.set(reading.asset, reading)
-          _applyReadingToPoints(reading.asset, reading)
-        }
-      }
-    } catch (e: unknown) {
-      console.error('Failed to fetch all latest readings:', e)
-    }
+    // No longer needed - data is merged in fetchDevicesWithPoints
   }
 
   async function fetchHistoryReadings(asset: string, hours: number = 24) {
@@ -191,41 +244,11 @@ export const usePointStore = defineStore('points', () => {
     }
   }
 
-  function _applyReadingToPoints(asset: string, reading: Reading) {
-    const deviceIdx = devices.value.findIndex(d => d.asset === asset)
-    if (deviceIdx === -1) return
-
-    const device = devices.value[deviceIdx]
-    const data = reading.data || {}
-    const standardPoints = reading.standard_points || []
-    const spMap = new Map<string, StandardPoint>()
-    for (const sp of standardPoints) {
-      spMap.set(sp.name, sp)
-    }
-
-    const updatedPoints = device.points.map(point => {
-      const sp = spMap.get(point.name)
-      const rawValue = data[point.name]
-      const timeStr = reading.timestamp
-        ? new Date(reading.timestamp * 1000).toLocaleString('zh-CN')
-        : undefined
-
-      return {
-        ...point,
-        currentValue: sp?.value ?? (rawValue as number | boolean | string | undefined) ?? point.currentValue,
-        lastUpdate: timeStr || point.lastUpdate,
-        quality: (sp?.quality as 'good' | 'bad' | 'uncertain') ?? point.quality
-      }
-    })
-
-    devices.value[deviceIdx] = { ...device, points: updatedPoints }
-  }
-
   function getPointTrendData(pointName: string): { time: string; timestamp: number; value: number; quality: string }[] {
     const data: { time: string; timestamp: number; value: number; quality: string }[] = []
 
     for (const reading of historyReadings.value) {
-      const sp = reading.standard_points?.find(p => p.name === pointName)
+      const sp = reading.standard_points?.find(p => (p.name || p.point_name) === pointName)
       const rawVal = reading.data?.[pointName]
       const val = sp?.value ?? rawVal
 
