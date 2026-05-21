@@ -147,21 +147,8 @@ export const usePointStore = defineStore('points', () => {
         deviceApi.getLatest(false)
       ])
 
-      console.log('[points store] devRes status:', devRes.status)
-      console.log('[points store] readRes status:', readRes.status)
-      if (devRes.status === 'rejected') console.error('[points store] devRes reason:', devRes.reason)
-      if (readRes.status === 'rejected') console.error('[points store] readRes reason:', readRes.reason)
-
       const deviceList = devRes.status === 'fulfilled' ? devRes.value.devices : []
       const readingList = readRes.status === 'fulfilled' ? readRes.value.devices : []
-
-      console.log('[points store] deviceList length:', deviceList.length)
-      console.log('[points store] readingList length:', readingList.length)
-      if (readingList.length > 0) {
-        console.log('[points store] first reading asset:', readingList[0].asset)
-        console.log('[points store] first reading data:', JSON.stringify(readingList[0].data))
-        console.log('[points store] first reading sp:', JSON.stringify(readingList[0].standard_points?.[0]))
-      }
 
       const readingMap = new Map<string, { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number }>()
       for (const r of readingList) {
@@ -169,15 +156,7 @@ export const usePointStore = defineStore('points', () => {
         readingMap.set(r.asset, { data: r.data || {}, standardPoints, timestamp })
       }
 
-      console.log('[points store] readingMap keys:', [...readingMap.keys()])
-      console.log('[points store] readingMap for modbustcp_dev001 sp keys:', [...(readingMap.get('modbustcp_dev001')?.standardPoints?.keys() || [])])
-
-      devices.value = deviceList.map(d => {
-        const rd = readingMap.get(d.asset)
-        const mapped = mapDeviceWithPoints(d, rd)
-        console.log(`[points store] device ${d.asset}: points count=${mapped.points.length}, first point currentValue=${mapped.points[0]?.currentValue}`)
-        return mapped
-      })
+      devices.value = deviceList.map(d => mapDeviceWithPoints(d, readingMap.get(d.asset)))
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '获取设备点位失败'
       error.value = msg

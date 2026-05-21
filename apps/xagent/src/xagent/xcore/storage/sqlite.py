@@ -298,10 +298,10 @@ class SQLiteStorage(StorageInterface):
             """
         else:
             query = f"""
-                SELECT asset, timestamp, service_name, data, tags, standard_points, device_status
-                FROM readings
+                SELECT r.asset, r.timestamp, r.service_name, r.data, r.tags, r.standard_points, r.device_status
+                FROM readings r
                 WHERE {where_clause}
-                ORDER BY timestamp DESC
+                ORDER BY r.timestamp DESC
                 LIMIT ?
             """
         
