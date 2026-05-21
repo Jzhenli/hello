@@ -110,7 +110,7 @@ requires = [
     "platformdirs>=3.0.0",
 ]
 requirement_installer_args = [
-    "--find-links", "./wheels/pydantic_core"
+    "--extra-index-url", "https://jzhenli.github.io/my-pypi/"
 ]
 
 # Web deployments
