@@ -44,5 +44,5 @@ requires = [
     "uvicorn>=0.27.0",
 ]
 requirement_installer_args = [
-    "--find-links", "./wheels/pydantic_core"
+    "--extra-index-url", "https://jzhenli.github.io/my-pypi/"
 ]
