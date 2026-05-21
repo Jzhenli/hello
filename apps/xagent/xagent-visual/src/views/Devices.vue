@@ -5,6 +5,7 @@ import { usePointStore } from '@/stores/points'
 import type { DeviceConfig, PointConfig, StandardDataType } from '@/api/types'
 import type { DeviceListItem } from '@/stores/devices'
 import { useResponsive } from '@/utils/useResponsive'
+import yaml from 'js-yaml'
 import { 
   Plus, 
   Upload, 
@@ -639,6 +640,93 @@ const handleDeletePoint = (pointName: string) => {
   }).catch(() => {})
 }
 
+const handleExportYaml = () => {
+  const devices = deviceStore.devices.map(d => {
+    const clean: Record<string, unknown> = {
+      asset: d.asset,
+      name: d.name,
+      enabled: d.enabled
+    }
+    if (d.description) clean.description = d.description
+    clean.plugin = d.plugin
+    if (d.points && d.points.length > 0) {
+      clean.points = d.points.map(p => {
+        const pt: Record<string, unknown> = {
+          name: p.name,
+          data_type: p.data_type,
+          enabled: p.enabled,
+          config: p.config
+        }
+        if (p.description) pt.description = p.description
+        if (p.standard_data_type) pt.standard_data_type = p.standard_data_type
+        if (p.unit) pt.unit = p.unit
+        if (p.metadata && Object.keys(p.metadata).length > 0) pt.metadata = p.metadata
+        if (p.tags && p.tags.length > 0) pt.tags = p.tags
+        return pt
+      })
+    }
+    if (d.tags && d.tags.length > 0) clean.tags = d.tags
+    if (d.metadata && Object.keys(d.metadata).length > 0) clean.metadata = d.metadata
+    return clean
+  })
+
+  const content = yaml.dump({ devices }, { 
+    indent: 2, 
+    lineWidth: 120,
+    noRefs: true,
+    sortKeys: false
+  })
+  const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `xagent-devices-${new Date().toISOString().slice(0, 10)}.yaml`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success(`已导出 ${devices.length} 个设备`)
+}
+
+const importFileRef = ref<HTMLInputElement | null>(null)
+
+const handleImportYaml = () => {
+  importFileRef.value?.click()
+}
+
+const handleImportFileChange = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const text = await file.text()
+    const parsed = yaml.load(text) as { devices?: DeviceConfig[] }
+    if (!parsed.devices || !Array.isArray(parsed.devices)) {
+      ElMessage.error('无效的 YAML 文件：缺少 devices 数组')
+      return
+    }
+
+    const devices = parsed.devices as DeviceConfig[]
+    await ElMessageBox.confirm(
+      `即将导入 ${devices.length} 个设备及其点位，是否继续？`,
+      '导入确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
+    )
+
+    const result = await deviceStore.batchCreate(devices)
+    if (result.failed > 0) {
+      ElMessage.warning(`导入完成：成功 ${result.succeeded}，失败 ${result.failed}`)
+    } else {
+      ElMessage.success(`成功导入 ${result.succeeded} 个设备`)
+    }
+    await pointStore.fetchDevicesWithPoints()
+  } catch (e: unknown) {
+    if ((e as any) !== 'cancel') {
+      ElMessage.error('导入失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    }
+  }
+}
+
 onMounted(async () => {
   await deviceStore.fetchDevices()
   await pointStore.fetchDevicesWithPoints()
@@ -683,6 +771,12 @@ onMounted(async () => {
       <div class="toolbar-right">
         <el-button type="primary" :icon="Plus" @click="handleAddDevice">
           新增设备
+        </el-button>
+        <el-button :icon="Download" @click="handleExportYaml">
+          导出
+        </el-button>
+        <el-button :icon="Upload" @click="handleImportYaml">
+          导入
         </el-button>
         <el-button :icon="Refresh" @click="handleRefresh" :loading="deviceStore.loading">
           刷新
@@ -1113,6 +1207,14 @@ onMounted(async () => {
         @close="handleCloseTrend"
       />
     </el-drawer>
+
+    <input
+      ref="importFileRef"
+      type="file"
+      accept=".yaml,.yml"
+      style="display: none"
+      @change="handleImportFileChange"
+    />
   </div>
 </template>
 

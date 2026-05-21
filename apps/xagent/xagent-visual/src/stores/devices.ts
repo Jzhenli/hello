@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { deviceApi } from '@/api/devices'
-import type { DeviceConfig, DeviceStatus } from '@/api/types'
+import type { DeviceConfig, DeviceStatus, BatchOperationResult } from '@/api/types'
 
 export interface DeviceListItem {
   asset: string
@@ -111,6 +111,12 @@ export const useDeviceStore = defineStore('devices', () => {
     return await deviceApi.reload(asset)
   }
 
+  async function batchCreate(devices: DeviceConfig[]): Promise<BatchOperationResult> {
+    const result = await deviceApi.batchCreate(devices)
+    await fetchDevices()
+    return result
+  }
+
   function getDeviceByAsset(asset: string): DeviceConfig | undefined {
     return devices.value.find(d => d.asset === asset)
   }
@@ -130,6 +136,7 @@ export const useDeviceStore = defineStore('devices', () => {
     deleteDevice,
     toggleDevice,
     reloadDevice,
+    batchCreate,
     getDeviceByAsset
   }
 })
