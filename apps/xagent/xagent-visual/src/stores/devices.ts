@@ -14,6 +14,7 @@ export interface DeviceListItem {
     host: string
     port: number
   }
+  pluginConfig: Record<string, unknown>
   tags: string[]
   created_at?: string
   updated_at?: string
@@ -32,6 +33,7 @@ function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
       host: (pluginConfig.host as string) || '',
       port: (pluginConfig.port as number) || 0
     },
+    pluginConfig: pluginConfig as Record<string, unknown>,
     tags: device.tags || [],
     created_at: device.created_at,
     updated_at: device.updated_at

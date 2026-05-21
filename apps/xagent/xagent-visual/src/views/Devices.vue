@@ -73,6 +73,11 @@ const deviceForm = ref({
   pluginName: 'modbus_tcp',
   host: '',
   port: 502,
+  slave_id: 1,
+  timeout: 5,
+  gateway_ip: '',
+  local_ip: '',
+  device_id: 1234,
   tags: ''
 })
 const deviceFormRef = ref()
@@ -81,10 +86,30 @@ const editingAsset = ref('')
 const saving = ref(false)
 
 const pluginOptions = [
-  { label: 'Modbus TCP', value: 'modbus_tcp', defaultPort: 502 },
-  { label: 'Modbus RTU', value: 'modbus_rtu', defaultPort: 0 },
-  { label: 'KNX', value: 'knx', defaultPort: 3671 },
-  { label: 'BACnet', value: 'bacnet', defaultPort: 47808 }
+  { 
+    label: 'Modbus TCP', 
+    value: 'modbus_tcp', 
+    defaultPort: 502,
+    defaultConfig: { slave_id: 1, timeout: 5 }
+  },
+  { 
+    label: 'Modbus RTU', 
+    value: 'modbus_rtu', 
+    defaultPort: 0,
+    defaultConfig: { slave_id: 1, timeout: 5 }
+  },
+  { 
+    label: 'KNX', 
+    value: 'knx', 
+    defaultPort: 3671,
+    defaultConfig: { local_ip: '', timeout: 5 }
+  },
+  { 
+    label: 'BACnet', 
+    value: 'bacnet', 
+    defaultPort: 47808,
+    defaultConfig: { device_id: 1234, timeout: 5 }
+  }
 ]
 
 const deviceFormRules = {
@@ -97,6 +122,9 @@ const handlePluginChange = (val: string) => {
   const opt = pluginOptions.find(o => o.value === val)
   if (opt) {
     deviceForm.value.port = opt.defaultPort
+    if (opt.defaultConfig) {
+      Object.assign(deviceForm.value, opt.defaultConfig)
+    }
   }
 }
 
@@ -111,6 +139,11 @@ const handleAddDevice = () => {
     pluginName: 'modbus_tcp',
     host: '',
     port: 502,
+    slave_id: 1,
+    timeout: 5,
+    gateway_ip: '',
+    local_ip: '',
+    device_id: 1234,
     tags: ''
   }
   showDeviceDialog.value = true
@@ -127,6 +160,11 @@ const handleEditDevice = (device: DeviceListItem) => {
     pluginName: device.pluginName,
     host: device.connection.host,
     port: device.connection.port,
+    slave_id: (device.pluginConfig.slave_id as number) || 1,
+    timeout: (device.pluginConfig.timeout as number) || 5,
+    gateway_ip: (device.pluginConfig.gateway_ip as string) || '',
+    local_ip: (device.pluginConfig.local_ip as string) || '',
+    device_id: (device.pluginConfig.device_id as number) || 1234,
     tags: device.tags.join(', ')
   }
   showDeviceDialog.value = true
@@ -142,10 +180,31 @@ const handleSaveDevice = async () => {
 
   saving.value = true
   try {
-    const config: Record<string, unknown> = {
-      host: deviceForm.value.host,
-      port: deviceForm.value.port
+    const buildPluginConfig = (): Record<string, unknown> => {
+      const baseConfig: Record<string, unknown> = {
+        host: deviceForm.value.host,
+        port: deviceForm.value.port
+      }
+      
+      if (deviceForm.value.pluginName === 'modbus_tcp' || deviceForm.value.pluginName === 'modbus_rtu') {
+        baseConfig.slave_id = deviceForm.value.slave_id
+        baseConfig.timeout = deviceForm.value.timeout
+      } else if (deviceForm.value.pluginName === 'knx') {
+        baseConfig.gateway_ip = deviceForm.value.gateway_ip || deviceForm.value.host
+        baseConfig.gateway_port = deviceForm.value.port
+        if (deviceForm.value.local_ip) {
+          baseConfig.local_ip = deviceForm.value.local_ip
+        }
+        baseConfig.timeout = deviceForm.value.timeout
+      } else if (deviceForm.value.pluginName === 'bacnet') {
+        baseConfig.device_id = deviceForm.value.device_id
+        baseConfig.timeout = deviceForm.value.timeout
+      }
+      
+      return baseConfig
     }
+
+    const config = buildPluginConfig()
 
     if (isEditing.value) {
       await deviceStore.updateDevice(editingAsset.value, {
@@ -270,12 +329,81 @@ const pointForm = ref({
   enabled: true,
   configJson: '{}',
   metadataJson: '{}',
-  tags: ''
+  tags: '',
+  address: 0,
+  register_type: 'holding' as 'holding' | 'input' | 'coil' | 'discrete_input',
+  count: 1,
+  slave_id: null as number | null,
+  scale: null as number | null,
+  offset: null as number | null,
+  byte_order: 'big' as 'big' | 'little',
+  word_order: 'big' as 'big' | 'little',
+  group_address: '',
+  status_address: '',
+  control_address: '',
+  writable: false,
+  object_type: 'analogInput' as string,
+  object_instance: 0,
+  property: 'presentValue' as string,
+  alarm_high: null as number | null,
+  alarm_low: null as number | null,
+  min: null as number | null,
+  max: null as number | null
 })
 const pointFormRef = ref()
 const isEditingPoint = ref(false)
 const editingPointName = ref('')
 const savingPoint = ref(false)
+
+const currentDevicePluginName = computed(() => {
+  if (!selectedDeviceAsset.value) return ''
+  const device = deviceStore.getDeviceByAsset(selectedDeviceAsset.value)
+  return device?.plugin?.name || ''
+})
+
+const modbusDataTypes = [
+  { label: 'uint16 - 无符号16位整数', value: 'uint16' },
+  { label: 'int16 - 有符号16位整数', value: 'int16' },
+  { label: 'uint32 - 无符号32位整数', value: 'uint32' },
+  { label: 'int32 - 有符号32位整数', value: 'int32' },
+  { label: 'float32 - 32位浮点数', value: 'float32' },
+  { label: 'float32_swap - 字序交换浮点数', value: 'float32_swap' },
+  { label: 'float64 - 64位浮点数', value: 'float64' },
+  { label: 'uint64 - 无符号64位整数', value: 'uint64' },
+  { label: 'int64 - 有符号64位整数', value: 'int64' },
+  { label: 'bool - 布尔值', value: 'bool' },
+  { label: 'string - 字符串', value: 'string' }
+]
+
+const knxDataTypes = [
+  { label: 'switch - 开关', value: 'switch' },
+  { label: 'bool - 布尔值', value: 'bool' },
+  { label: 'percent - 百分比', value: 'percent' },
+  { label: 'temperature - 温度', value: 'temperature' },
+  { label: 'brightness - 亮度', value: 'brightness' },
+  { label: 'humidity - 湿度', value: 'humidity' },
+  { label: 'co2 - CO2浓度', value: 'co2' },
+  { label: 'string - 字符串', value: 'string' }
+]
+
+const bacnetDataTypes = [
+  { label: 'analogInput - 模拟输入', value: 'analogInput' },
+  { label: 'analogOutput - 模拟输出', value: 'analogOutput' },
+  { label: 'analogValue - 模拟值', value: 'analogValue' },
+  { label: 'binaryInput - 二进制输入', value: 'binaryInput' },
+  { label: 'binaryOutput - 二进制输出', value: 'binaryOutput' },
+  { label: 'binaryValue - 二进制值', value: 'binaryValue' },
+  { label: 'multiStateInput - 多状态输入', value: 'multiStateInput' },
+  { label: 'multiStateOutput - 多状态输出', value: 'multiStateOutput' },
+  { label: 'multiStateValue - 多状态值', value: 'multiStateValue' }
+]
+
+const registerTypes = [
+  { label: '保持寄存器 (Holding)', value: 'holding' },
+  { label: '输入寄存器 (Input)', value: 'input' },
+  { label: '线圈 (Coil)', value: 'coil' },
+  { label: '离散输入 (Discrete Input)', value: 'discrete_input' }
+]
 
 const pointFormRules = {
   name: [{ required: true, message: '请输入点位名称', trigger: 'blur' }],
@@ -286,16 +414,36 @@ const handleAddPoint = () => {
   if (!selectedDeviceAsset.value) return
   isEditingPoint.value = false
   editingPointName.value = ''
+  const pluginName = currentDevicePluginName.value
   pointForm.value = {
     name: '',
     description: '',
-    data_type: 'uint16',
+    data_type: pluginName === 'knx' ? 'switch' : pluginName === 'bacnet' ? 'analogInput' : 'uint16',
     standard_data_type: 'float',
     unit: '',
     enabled: true,
     configJson: '{}',
     metadataJson: '{}',
-    tags: ''
+    tags: '',
+    address: 0,
+    register_type: 'holding',
+    count: 1,
+    slave_id: null,
+    scale: null,
+    offset: null,
+    byte_order: 'big',
+    word_order: 'big',
+    group_address: '',
+    status_address: '',
+    control_address: '',
+    writable: false,
+    object_type: 'analogInput',
+    object_instance: 0,
+    property: 'presentValue',
+    alarm_high: null,
+    alarm_low: null,
+    min: null,
+    max: null
   }
   showPointDialog.value = true
 }
@@ -303,6 +451,8 @@ const handleAddPoint = () => {
 const handleEditPoint = (point: any) => {
   isEditingPoint.value = true
   editingPointName.value = point.name
+  const config = point.config || {}
+  const metadata = point.metadata || {}
   pointForm.value = {
     name: point.name,
     description: point.description || '',
@@ -310,35 +460,120 @@ const handleEditPoint = (point: any) => {
     standard_data_type: point.standard_data_type || '',
     unit: point.unit || '',
     enabled: point.enabled,
-    configJson: JSON.stringify(point.config || {}, null, 2),
-    metadataJson: JSON.stringify(point.metadata || {}, null, 2),
-    tags: (point.tags || []).join(', ')
+    configJson: JSON.stringify(config, null, 2),
+    metadataJson: JSON.stringify(metadata, null, 2),
+    tags: (point.tags || []).join(', '),
+    address: config.address ?? 0,
+    register_type: config.register_type || 'holding',
+    count: config.count ?? 1,
+    slave_id: config.slave_id ?? null,
+    scale: config.scale ?? null,
+    offset: config.offset ?? null,
+    byte_order: config.byte_order || 'big',
+    word_order: config.word_order || 'big',
+    group_address: config.group_address || '',
+    status_address: config.status_address || '',
+    control_address: config.control_address || '',
+    writable: config.writable ?? false,
+    object_type: config.object_type || point.data_type || 'analogInput',
+    object_instance: config.object_instance ?? 0,
+    property: config.property || 'presentValue',
+    alarm_high: metadata.alarm_high ?? null,
+    alarm_low: metadata.alarm_low ?? null,
+    min: metadata.min ?? null,
+    max: metadata.max ?? null
   }
   showPointDialog.value = true
 }
 
+const buildPointConfig = (): Record<string, unknown> => {
+  const pluginName = currentDevicePluginName.value
+  const config: Record<string, unknown> = {}
+  
+  if (pluginName === 'modbus_tcp' || pluginName === 'modbus_rtu') {
+    config.address = pointForm.value.address
+    config.register_type = pointForm.value.register_type
+    if (pointForm.value.count && pointForm.value.count > 1) {
+      config.count = pointForm.value.count
+    }
+    if (pointForm.value.slave_id !== null) {
+      config.slave_id = pointForm.value.slave_id
+    }
+    if (pointForm.value.scale !== null) {
+      config.scale = pointForm.value.scale
+    }
+    if (pointForm.value.offset !== null) {
+      config.offset = pointForm.value.offset
+    }
+    if (pointForm.value.byte_order !== 'big') {
+      config.byte_order = pointForm.value.byte_order
+    }
+    if (pointForm.value.word_order !== 'big') {
+      config.word_order = pointForm.value.word_order
+    }
+  } else if (pluginName === 'knx') {
+    config.group_address = pointForm.value.group_address
+    if (pointForm.value.status_address) {
+      config.status_address = pointForm.value.status_address
+    }
+    if (pointForm.value.control_address) {
+      config.control_address = pointForm.value.control_address
+    }
+    if (pointForm.value.writable) {
+      config.writable = true
+    }
+    if (pointForm.value.scale !== null) {
+      config.scale = pointForm.value.scale
+    }
+    if (pointForm.value.offset !== null) {
+      config.offset = pointForm.value.offset
+    }
+  } else if (pluginName === 'bacnet') {
+    config.object_type = pointForm.value.object_type
+    config.object_instance = pointForm.value.object_instance
+    if (pointForm.value.property !== 'presentValue') {
+      config.property = pointForm.value.property
+    }
+    if (pointForm.value.scale !== null) {
+      config.scale = pointForm.value.scale
+    }
+    if (pointForm.value.offset !== null) {
+      config.offset = pointForm.value.offset
+    }
+  }
+  
+  return config
+}
+
+const buildPointMetadata = (): Record<string, unknown> => {
+  const metadata: Record<string, unknown> = {}
+  
+  if (pointForm.value.alarm_high !== null) {
+    metadata.alarm_high = pointForm.value.alarm_high
+  }
+  if (pointForm.value.alarm_low !== null) {
+    metadata.alarm_low = pointForm.value.alarm_low
+  }
+  if (pointForm.value.min !== null) {
+    metadata.min = pointForm.value.min
+  }
+  if (pointForm.value.max !== null) {
+    metadata.max = pointForm.value.max
+  }
+  
+  return metadata
+}
+
 const handleSavePoint = async () => {
-  if (!deviceFormRef.value) return
+  if (!pointFormRef.value) return
   try {
     await pointFormRef.value.validate()
   } catch {
     return
   }
 
-  let config: Record<string, unknown>
-  let metadata: Record<string, unknown>
-  try {
-    config = JSON.parse(pointForm.value.configJson)
-  } catch {
-    ElMessage.error('协议配置JSON格式错误')
-    return
-  }
-  try {
-    metadata = JSON.parse(pointForm.value.metadataJson)
-  } catch {
-    ElMessage.error('元数据JSON格式错误')
-    return
-  }
+  const config = buildPointConfig()
+  const metadata = buildPointMetadata()
 
   savingPoint.value = true
   try {
@@ -635,6 +870,18 @@ onMounted(async () => {
         <el-form-item label="端口">
           <el-input-number v-model="deviceForm.port" :min="1" :max="65535" />
         </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'modbus_tcp' || deviceForm.pluginName === 'modbus_rtu'" label="从站ID">
+          <el-input-number v-model="deviceForm.slave_id" :min="0" :max="255" />
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'bacnet'" label="设备ID">
+          <el-input-number v-model="deviceForm.device_id" :min="0" :max="4194303" />
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'knx'" label="本地IP">
+          <el-input v-model="deviceForm.local_ip" placeholder="可选，本地IP地址" />
+        </el-form-item>
+        <el-form-item label="超时(秒)">
+          <el-input-number v-model="deviceForm.timeout" :min="1" :max="60" />
+        </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="deviceForm.enabled" />
         </el-form-item>
@@ -651,7 +898,7 @@ onMounted(async () => {
     <el-dialog 
       v-model="showPointDialog" 
       :title="isEditingPoint ? '编辑点位' : '新增点位'"
-      width="650px"
+      width="700px"
       :close-on-click-modal="false"
     >
       <el-form ref="pointFormRef" :model="pointForm" :rules="pointFormRules" label-width="100px">
@@ -665,9 +912,131 @@ onMounted(async () => {
         <el-form-item label="描述">
           <el-input v-model="pointForm.description" placeholder="请输入点位描述" />
         </el-form-item>
-        <el-form-item label="数据类型" prop="data_type">
-          <el-input v-model="pointForm.data_type" placeholder="协议特定类型，如 uint16, analogInput" />
-        </el-form-item>
+        
+        <el-divider content-position="left">协议配置</el-divider>
+        
+        <template v-if="currentDevicePluginName === 'modbus_tcp' || currentDevicePluginName === 'modbus_rtu'">
+          <el-form-item label="数据类型" prop="data_type">
+            <el-select v-model="pointForm.data_type" placeholder="请选择数据类型">
+              <el-option 
+                v-for="opt in modbusDataTypes" 
+                :key="opt.value" 
+                :label="opt.label" 
+                :value="opt.value" 
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="寄存器地址" prop="address">
+            <el-input-number v-model="pointForm.address" :min="0" :max="65535" placeholder="Modbus寄存器地址" />
+          </el-form-item>
+          <el-form-item label="寄存器类型">
+            <el-select v-model="pointForm.register_type" placeholder="请选择寄存器类型">
+              <el-option 
+                v-for="opt in registerTypes" 
+                :key="opt.value" 
+                :label="opt.label" 
+                :value="opt.value" 
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="寄存器数量">
+            <el-input-number v-model="pointForm.count" :min="1" :max="16" placeholder="多字节数据类型需要多个寄存器" />
+          </el-form-item>
+          <el-form-item label="从站ID">
+            <el-input-number v-model="pointForm.slave_id" :min="0" :max="255" placeholder="可选，覆盖设备级别配置" clearable />
+          </el-form-item>
+          <el-form-item label="缩放因子">
+            <el-input-number v-model="pointForm.scale" placeholder="可选，如 0.1" :precision="4" :step="0.1" clearable />
+          </el-form-item>
+          <el-form-item label="偏移量">
+            <el-input-number v-model="pointForm.offset" placeholder="可选，如 -273.15" :precision="4" clearable />
+          </el-form-item>
+          <el-form-item label="字节顺序">
+            <el-radio-group v-model="pointForm.byte_order">
+              <el-radio value="big">大端 (Big)</el-radio>
+              <el-radio value="little">小端 (Little)</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="字顺序">
+            <el-radio-group v-model="pointForm.word_order">
+              <el-radio value="big">大端 (Big)</el-radio>
+              <el-radio value="little">小端 (Little，西门子/三菱)</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </template>
+        
+        <template v-else-if="currentDevicePluginName === 'knx'">
+          <el-form-item label="数据类型" prop="data_type">
+            <el-select v-model="pointForm.data_type" placeholder="请选择数据类型">
+              <el-option 
+                v-for="opt in knxDataTypes" 
+                :key="opt.value" 
+                :label="opt.label" 
+                :value="opt.value" 
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="组地址" prop="group_address">
+            <el-input v-model="pointForm.group_address" placeholder="KNX组地址，如 1/2/3" />
+          </el-form-item>
+          <el-form-item label="状态地址">
+            <el-input v-model="pointForm.status_address" placeholder="可选，状态组地址" />
+          </el-form-item>
+          <el-form-item label="控制地址">
+            <el-input v-model="pointForm.control_address" placeholder="可选，控制组地址" />
+          </el-form-item>
+          <el-form-item label="可写">
+            <el-switch v-model="pointForm.writable" />
+          </el-form-item>
+          <el-form-item label="缩放因子">
+            <el-input-number v-model="pointForm.scale" placeholder="可选" :precision="4" :step="0.1" clearable />
+          </el-form-item>
+          <el-form-item label="偏移量">
+            <el-input-number v-model="pointForm.offset" placeholder="可选" :precision="4" clearable />
+          </el-form-item>
+        </template>
+        
+        <template v-else-if="currentDevicePluginName === 'bacnet'">
+          <el-form-item label="对象类型" prop="object_type">
+            <el-select v-model="pointForm.object_type" placeholder="请选择对象类型" @change="pointForm.data_type = pointForm.object_type">
+              <el-option 
+                v-for="opt in bacnetDataTypes" 
+                :key="opt.value" 
+                :label="opt.label" 
+                :value="opt.value" 
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="对象实例" prop="object_instance">
+            <el-input-number v-model="pointForm.object_instance" :min="0" placeholder="BACnet对象实例ID" />
+          </el-form-item>
+          <el-form-item label="属性">
+            <el-input v-model="pointForm.property" placeholder="默认为 presentValue" />
+          </el-form-item>
+          <el-form-item label="缩放因子">
+            <el-input-number v-model="pointForm.scale" placeholder="可选" :precision="4" :step="0.1" clearable />
+          </el-form-item>
+          <el-form-item label="偏移量">
+            <el-input-number v-model="pointForm.offset" placeholder="可选" :precision="4" clearable />
+          </el-form-item>
+        </template>
+        
+        <template v-else>
+          <el-form-item label="数据类型" prop="data_type">
+            <el-input v-model="pointForm.data_type" placeholder="协议特定类型" />
+          </el-form-item>
+          <el-form-item label="协议配置">
+            <el-input 
+              v-model="pointForm.configJson" 
+              type="textarea" 
+              :rows="4" 
+              placeholder='JSON格式的协议配置'
+            />
+          </el-form-item>
+        </template>
+        
+        <el-divider content-position="left">通用配置</el-divider>
+        
         <el-form-item label="标准类型">
           <el-select v-model="pointForm.standard_data_type" placeholder="可选，由插件自动推导" clearable>
             <el-option label="布尔 (bool)" value="bool" />
@@ -679,24 +1048,36 @@ onMounted(async () => {
         <el-form-item label="单位">
           <el-input v-model="pointForm.unit" placeholder="如 °C, %, V, A" />
         </el-form-item>
+        
+        <el-divider content-position="left">元数据 (可选)</el-divider>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="最小值">
+              <el-input-number v-model="pointForm.min" placeholder="可选" clearable style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="最大值">
+              <el-input-number v-model="pointForm.max" placeholder="可选" clearable style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="高报警">
+              <el-input-number v-model="pointForm.alarm_high" placeholder="可选" clearable style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="低报警">
+              <el-input-number v-model="pointForm.alarm_low" placeholder="可选" clearable style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
         <el-form-item label="启用">
           <el-switch v-model="pointForm.enabled" />
-        </el-form-item>
-        <el-form-item label="协议配置">
-          <el-input 
-            v-model="pointForm.configJson" 
-            type="textarea" 
-            :rows="4" 
-            placeholder='如: {"address": 100, "function": "read_holding_registers"}'
-          />
-        </el-form-item>
-        <el-form-item label="元数据">
-          <el-input 
-            v-model="pointForm.metadataJson" 
-            type="textarea" 
-            :rows="3" 
-            placeholder='如: {"alarm_high": 80, "alarm_low": 20}'
-          />
         </el-form-item>
         <el-form-item label="标签">
           <el-input v-model="pointForm.tags" placeholder="多个标签用逗号分隔" />
