@@ -4,6 +4,7 @@ import { useDeviceStore } from '@/stores/devices'
 import { usePointStore } from '@/stores/points'
 import type { DeviceConfig, PointConfig, StandardDataType } from '@/api/types'
 import type { DeviceListItem } from '@/stores/devices'
+import { useResponsive } from '@/utils/useResponsive'
 import { 
   Plus, 
   Upload, 
@@ -13,13 +14,17 @@ import {
   CircleClose,
   Search,
   TrendCharts,
-  Delete
+  Delete,
+  Edit,
+  MoreFilled,
+  RefreshRight
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PointTrend from '@/components/PointTrend.vue'
 
 const deviceStore = useDeviceStore()
 const pointStore = usePointStore()
+const { isTouch } = useResponsive()
 
 const searchQuery = ref('')
 const statusFilter = ref('')
@@ -642,10 +647,6 @@ onMounted(async () => {
 
 <template>
   <div class="devices-page">
-    <div class="page-header">
-      <h2>设备管理</h2>
-    </div>
-    
     <div class="toolbar">
       <div class="toolbar-left">
         <el-input
@@ -653,20 +654,31 @@ onMounted(async () => {
           placeholder="搜索设备..."
           :prefix-icon="Search"
           clearable
-          style="width: 250px"
+          class="toolbar-search"
           @input="handleSearch"
         />
         <el-select 
           v-model="statusFilter" 
           placeholder="状态筛选" 
           clearable
-          style="width: 120px"
+          class="toolbar-filter"
           @change="handleFilterChange"
         >
           <el-option label="全部" value="" />
           <el-option label="在线" value="online" />
           <el-option label="离线" value="offline" />
         </el-select>
+        <div class="toolbar-stats">
+          <span class="stat-item">
+            <span class="stat-value">{{ deviceStore.totalDevices }}</span>
+            <span class="stat-label">设备</span>
+          </span>
+          <span class="stat-divider">/</span>
+          <span class="stat-item stat-online">
+            <span class="stat-value">{{ deviceStore.onlineDevices }}</span>
+            <span class="stat-label">在线</span>
+          </span>
+        </div>
       </div>
       <div class="toolbar-right">
         <el-button type="primary" :icon="Plus" @click="handleAddDevice">
@@ -733,9 +745,27 @@ onMounted(async () => {
             <div class="device-item-actions" @click.stop>
               <el-switch 
                 :model-value="device.enabled" 
-                size="small"
+                :size="isTouch ? 'default' : 'small'"
                 @change="handleToggleDevice(device.asset)"
               />
+              <el-dropdown trigger="click" @command="(cmd: string) => {
+                if (cmd === 'edit') handleEditDevice(device)
+                else if (cmd === 'delete') handleDeleteDevice(device)
+                else if (cmd === 'reload') handleReloadDevice(device.asset)
+              }">
+                <el-button type="info" link :size="isTouch ? 'default' : 'small'" class="more-btn">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit" :icon="Edit">编辑</el-dropdown-item>
+                    <el-dropdown-item command="reload" :icon="RefreshRight">热重载</el-dropdown-item>
+                    <el-dropdown-item command="delete" :icon="Delete" divided>
+                      <span style="color: #f56c6c">删除</span>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
         </div>
@@ -797,15 +827,15 @@ onMounted(async () => {
                 <span class="config-preview">{{ JSON.stringify(row.config) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column label="操作" :width="isTouch ? 200 : 160" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
+                <el-button type="primary" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
                 </el-button>
-                <el-button type="primary" link size="small" @click="handleEditPoint(row)">
+                <el-button type="primary" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleEditPoint(row)">
                   编辑
                 </el-button>
-                <el-button type="danger" link size="small" @click="handleDeletePoint(row.name)">
+                <el-button type="danger" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleDeletePoint(row.name)">
                   删除
                 </el-button>
               </template>
@@ -1094,23 +1124,14 @@ onMounted(async () => {
   height: 100%;
 }
 
-.page-header {
-  margin-bottom: 20px;
-  flex-shrink: 0;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #2c3e50;
-}
-
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -1119,7 +1140,53 @@ onMounted(async () => {
 
 .toolbar-left {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.toolbar-search {
+  width: 250px;
+}
+
+.toolbar-filter {
+  width: 120px;
+}
+
+.toolbar-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid #ebeef5;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.stat-divider {
+  color: #dcdfe6;
+  font-size: 14px;
+  margin: 0 2px;
+}
+
+.stat-online .stat-value {
+  color: #27ae60;
 }
 
 .toolbar-right {
@@ -1137,6 +1204,7 @@ onMounted(async () => {
 
 .device-list-panel {
   width: 320px;
+  min-width: 260px;
   flex-shrink: 0;
   background: #fff;
   border-radius: 8px;
@@ -1244,6 +1312,18 @@ onMounted(async () => {
 
 .device-item-actions {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.more-btn {
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.more-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .points-panel {
@@ -1319,18 +1399,74 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+@media (max-width: 1200px) {
+  .toolbar-search {
+    width: 200px;
+  }
+
+  .device-list-panel {
+    width: 280px;
+    min-width: 240px;
+  }
+}
+
 @media (max-width: 900px) {
   .main-content {
     flex-direction: column;
   }
-  
+
   .device-list-panel {
     width: 100%;
+    min-width: 0;
     max-height: 300px;
   }
-  
+
   .points-panel {
     min-height: 400px;
+  }
+
+  .toolbar-search {
+    width: 100%;
+    order: 1;
+  }
+
+  .toolbar-filter {
+    width: 140px;
+    order: 2;
+  }
+
+  .toolbar-stats {
+    order: 3;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .toolbar-right {
+    order: 4;
+    margin-left: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .device-item {
+    padding: 14px 12px;
+    min-height: 56px;
+  }
+
+  .device-item-actions {
+    gap: 8px;
+  }
+
+  .more-btn {
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .device-item-status {
+    width: 36px;
+    height: 36px;
   }
 }
 </style>
