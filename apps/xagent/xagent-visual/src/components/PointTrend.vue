@@ -93,6 +93,7 @@ const chartOption = computed(() => {
   
   const point = pointStore.selectedPoint
   const data = trendData.value
+  const isDigital = point.type === 'digital' || point.standard_data_type === 'bool'
   
   const seriesData = data.map(d => [d.timestamp, d.value])
   
@@ -103,29 +104,31 @@ const chartOption = computed(() => {
   } : { min: 0, max: 0, avg: 0 }
   
   const markLine: any[] = []
-  if (showAvgLine.value && data.length > 0) {
-    markLine.push({
-      name: '平均值',
-      yAxis: statistics.avg,
-      lineStyle: { color: '#f39c12', type: 'dashed' },
-      label: { formatter: `平均: ${statistics.avg.toFixed(2)}` }
-    })
-  }
-  if (showMinMax.value && point.maxValue !== undefined) {
-    markLine.push({
-      name: '上限',
-      yAxis: point.maxValue,
-      lineStyle: { color: '#e74c3c', type: 'dashed' },
-      label: { formatter: `上限: ${point.maxValue}` }
-    })
-  }
-  if (showMinMax.value && point.minValue !== undefined) {
-    markLine.push({
-      name: '下限',
-      yAxis: point.minValue,
-      lineStyle: { color: '#3498db', type: 'dashed' },
-      label: { formatter: `下限: ${point.minValue}` }
-    })
+  if (!isDigital) {
+    if (showAvgLine.value && data.length > 0) {
+      markLine.push({
+        name: '平均值',
+        yAxis: statistics.avg,
+        lineStyle: { color: '#f39c12', type: 'dashed' },
+        label: { formatter: `平均: ${statistics.avg.toFixed(2)}` }
+      })
+    }
+    if (showMinMax.value && point.maxValue !== undefined) {
+      markLine.push({
+        name: '上限',
+        yAxis: point.maxValue,
+        lineStyle: { color: '#e74c3c', type: 'dashed' },
+        label: { formatter: `上限: ${point.maxValue}` }
+      })
+    }
+    if (showMinMax.value && point.minValue !== undefined) {
+      markLine.push({
+        name: '下限',
+        yAxis: point.minValue,
+        lineStyle: { color: '#3498db', type: 'dashed' },
+        label: { formatter: `下限: ${point.minValue}` }
+      })
+    }
   }
   
   return {
@@ -139,11 +142,12 @@ const chartOption = computed(() => {
       formatter: (params: any) => {
         const d = params[0]
         const time = dayjs(d.value[0]).format('MM-DD HH:mm:ss')
-        return `${time}<br/>值: ${d.value[1]} ${point.unit || ''}`
+        const value = isDigital ? (d.value[1] === 1 ? '开' : '关') : d.value[1]
+        return `${time}<br/>值: ${value} ${point.unit || ''}`
       }
     },
     legend: {
-      data: ['数值', '平均值', '上限', '下限'],
+      data: isDigital ? ['状态'] : ['数值', '平均值', '上限', '下限'],
       bottom: 10
     },
     grid: {
@@ -179,21 +183,40 @@ const chartOption = computed(() => {
       }
     },
     yAxis: {
-      type: 'value',
-      name: point.unit || '',
-      min: (value: any) => Math.floor(value.min * 0.9),
-      max: (value: any) => Math.ceil(value.max * 1.1)
+      type: isDigital ? 'category' : 'value',
+      name: isDigital ? '' : (point.unit || ''),
+      min: isDigital ? undefined : (value: any) => Math.floor(value.min * 0.9),
+      max: isDigital ? undefined : (value: any) => Math.ceil(value.max * 1.1),
+      data: isDigital ? ['关', '开'] : undefined,
+      axisLabel: {
+        formatter: isDigital ? (value: string) => value : undefined
+      }
     },
     series: [
       {
-        name: '数值',
+        name: isDigital ? '状态' : '数值',
         type: 'line',
-        smooth: true,
+        smooth: !isDigital,
+        step: isDigital ? 'middle' : undefined,
         symbol: showDataPoints.value ? 'circle' : 'none',
         symbolSize: 6,
         sampling: 'lttb',
-        itemStyle: { color: '#3498db' },
-        areaStyle: {
+        itemStyle: { 
+          color: isDigital ? (params: any) => params.value[1] === 1 ? '#27ae60' : '#e74c3c' : '#3498db'
+        },
+        lineStyle: isDigital ? {
+          width: 3
+        } : undefined,
+        areaStyle: isDigital ? {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(39, 174, 96, 0.3)' },
+              { offset: 1, color: 'rgba(39, 174, 96, 0.05)' }
+            ]
+          }
+        } : {
           color: {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
@@ -204,11 +227,11 @@ const chartOption = computed(() => {
           }
         },
         data: seriesData,
-        markLine: {
+        markLine: isDigital ? undefined : {
           silent: true,
           data: markLine
         },
-        markPoint: showMinMax.value && data.length > 0 ? {
+        markPoint: !isDigital && showMinMax.value && data.length > 0 ? {
           data: [
             { type: 'max', name: '最大值', itemStyle: { color: '#e74c3c' } },
             { type: 'min', name: '最小值', itemStyle: { color: '#27ae60' } }
@@ -224,6 +247,11 @@ const statisticsInfo = computed(() => {
   
   const values = trendData.value.map(d => d.value)
   const sum = values.reduce((a, b) => a + b, 0)
+  const point = pointStore.selectedPoint
+  const isDigital = point?.type === 'digital' || point?.standard_data_type === 'bool'
+  
+  const onCount = isDigital ? values.filter(v => v === 1).length : 0
+  const offCount = isDigital ? values.filter(v => v === 0).length : 0
   
   return {
     min: Math.min(...values).toFixed(2),
@@ -231,7 +259,11 @@ const statisticsInfo = computed(() => {
     avg: (sum / values.length).toFixed(2),
     count: values.length,
     start: dayjs(trendData.value[0]?.timestamp).format('MM-DD HH:mm'),
-    end: dayjs(trendData.value[trendData.value.length - 1]?.timestamp).format('MM-DD HH:mm')
+    end: dayjs(trendData.value[trendData.value.length - 1]?.timestamp).format('MM-DD HH:mm'),
+    isDigital,
+    onCount,
+    offCount,
+    onPercentage: isDigital ? ((onCount / values.length) * 100).toFixed(1) : undefined
   }
 })
 
@@ -341,21 +373,45 @@ onUnmounted(() => {
         <div class="stat-card">
           <span class="stat-label">当前值</span>
           <span class="stat-value current">
-            {{ pointStore.selectedPoint.currentValue ?? '--' }} {{ pointStore.selectedPoint.unit }}
+            <template v-if="statisticsInfo?.isDigital">
+              {{ pointStore.selectedPoint.currentValue === true || pointStore.selectedPoint.currentValue === 1 ? '开' : '关' }}
+            </template>
+            <template v-else>
+              {{ pointStore.selectedPoint.currentValue ?? '--' }} {{ pointStore.selectedPoint.unit }}
+            </template>
           </span>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">最小值</span>
-          <span class="stat-value min">{{ statisticsInfo?.min ?? '--' }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">最大值</span>
-          <span class="stat-value max">{{ statisticsInfo?.max ?? '--' }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">平均值</span>
-          <span class="stat-value avg">{{ statisticsInfo?.avg ?? '--' }}</span>
-        </div>
+        
+        <template v-if="statisticsInfo?.isDigital">
+          <div class="stat-card">
+            <span class="stat-label">开启次数</span>
+            <span class="stat-value on">{{ statisticsInfo?.onCount ?? 0 }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">关闭次数</span>
+            <span class="stat-value off">{{ statisticsInfo?.offCount ?? 0 }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">开启率</span>
+            <span class="stat-value percentage">{{ statisticsInfo?.onPercentage ?? 0 }}%</span>
+          </div>
+        </template>
+        
+        <template v-else>
+          <div class="stat-card">
+            <span class="stat-label">最小值</span>
+            <span class="stat-value min">{{ statisticsInfo?.min ?? '--' }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">最大值</span>
+            <span class="stat-value max">{{ statisticsInfo?.max ?? '--' }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">平均值</span>
+            <span class="stat-value avg">{{ statisticsInfo?.avg ?? '--' }}</span>
+          </div>
+        </template>
+        
         <div class="stat-card">
           <span class="stat-label">数据点数</span>
           <span class="stat-value">{{ statisticsInfo?.count ?? 0 }}</span>
@@ -524,6 +580,18 @@ onUnmounted(() => {
 
 .stat-value.avg {
   color: #f39c12;
+}
+
+.stat-value.on {
+  color: #27ae60;
+}
+
+.stat-value.off {
+  color: #e74c3c;
+}
+
+.stat-value.percentage {
+  color: #9b59b6;
 }
 
 .stat-value.time {

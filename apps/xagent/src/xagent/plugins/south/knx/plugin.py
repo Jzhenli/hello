@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 KNX_AVAILABLE = None
 _XKNX = None
 _ConnectionConfig = None
+_ConnectionType = None
 _Switch = None
 _BinarySensor = None
 _Climate = None
@@ -27,7 +28,7 @@ _XknxConnectionState = None
 
 
 def _check_knx_available():
-    global KNX_AVAILABLE, _XKNX, _ConnectionConfig
+    global KNX_AVAILABLE, _XKNX, _ConnectionConfig, _ConnectionType
     global _Switch, _BinarySensor, _Climate, _Light, _Cover, _Sensor, _GroupAddress
     global _XknxConnectionState
 
@@ -38,11 +39,12 @@ def _check_knx_available():
         from xknx import XKNX
         from xknx.devices import Switch, BinarySensor, Climate, Light, Cover, Sensor
         from xknx.telegram import GroupAddress
-        from xknx.io import ConnectionConfig
+        from xknx.io import ConnectionConfig, ConnectionType
         from xknx.core.connection_manager import XknxConnectionState
 
         _XKNX = XKNX
         _ConnectionConfig = ConnectionConfig
+        _ConnectionType = ConnectionType
         _Switch = Switch
         _BinarySensor = BinarySensor
         _Climate = Climate
@@ -68,6 +70,19 @@ class KNXPlugin(SouthPluginBase):
     - Light: 灯光（亮度、颜色）
     - Cover: 遮阳帘
     - Sensor: 通用传感器
+    
+    连接模式配置 (connection_type):
+    - automatic: 自动模式，依次尝试TCP隧道→UDP隧道→路由模式（默认）
+    - tunneling: UDP隧道模式，需要gateway_ip
+    - tunneling_tcp: TCP隧道模式，需要gateway_ip
+    - routing: 路由模式，使用多播通信，不占用连接槽
+    - tunneling_tcp_secure: 安全TCP隧道模式
+    - routing_secure: 安全路由模式
+    
+    注意：
+    - 当指定gateway_ip时，automatic模式可能只尝试TUNNELING
+    - routing模式适合解决连接数满的问题
+    - routing模式依赖多播，可能不适用于跨网段环境
     """
     
     __plugin_name__ = "knx"
@@ -95,6 +110,7 @@ class KNXPlugin(SouthPluginBase):
         self._local_ip = config.get("local_ip")
         self._route_back = config.get("route_back", False)
         self._reconnect_interval = config.get("reconnect_interval", 5)
+        self._connection_type = config.get("connection_type", "automatic")
         
         self._heartbeat_timeout = config.get("heartbeat_timeout", self.HEARTBEAT_TIMEOUT)
         self._heartbeat_retries = config.get("heartbeat_retries", self.HEARTBEAT_RETRIES)
@@ -145,11 +161,19 @@ class KNXPlugin(SouthPluginBase):
         try:
             logger.info(f"Connecting to KNX gateway {self._gateway_ip}:{self._gateway_port}...")
             
+            if self._connection_type.lower() == "routing":
+                xknx_logger = logging.getLogger('xknx.cemi')
+                xknx_logger.setLevel(logging.ERROR)
+                logger.info("ROUTING mode: adjusted xknx.cemi log level to ERROR to suppress expected warnings")
+            
             if _ConnectionConfig is None:
                 logger.error("ConnectionConfig is not available")
                 return False
             
+            connection_type = self._get_connection_type()
+            
             connection_config = _ConnectionConfig(
+                connection_type=connection_type,
                 gateway_ip=self._gateway_ip,
                 gateway_port=self._gateway_port,
                 local_ip=self._local_ip if self._local_ip else None,
@@ -199,6 +223,56 @@ class KNXPlugin(SouthPluginBase):
                 logger.debug("Error creating offline reading during connect failure", exc_info=True)
             
             return False
+    
+    def _get_connection_type(self) -> Optional[Any]:
+        """将配置字符串转换为ConnectionType枚举
+        
+        Returns:
+            ConnectionType枚举值，如果_ConnectionType不可用则返回None
+        """
+        if _ConnectionType is None:
+            logger.warning("ConnectionType not available, using default")
+            return None
+        
+        type_mapping = {
+            "automatic": _ConnectionType.AUTOMATIC,
+            "tunneling": _ConnectionType.TUNNELING,
+            "tunneling_tcp": _ConnectionType.TUNNELING_TCP,
+            "routing": _ConnectionType.ROUTING,
+            "tunneling_tcp_secure": _ConnectionType.TUNNELING_TCP_SECURE,
+            "routing_secure": _ConnectionType.ROUTING_SECURE,
+        }
+        
+        conn_type_str = self._connection_type.lower().strip()
+        connection_type = type_mapping.get(conn_type_str)
+        
+        if connection_type is None:
+            logger.warning(f"Unknown connection_type '{self._connection_type}', using AUTOMATIC")
+            return _ConnectionType.AUTOMATIC
+        
+        self._validate_connection_config(conn_type_str)
+        
+        logger.info(f"Using connection type: {conn_type_str.upper()}")
+        return connection_type
+    
+    def _validate_connection_config(self, conn_type_str: str) -> None:
+        """验证连接配置的合理性
+        
+        Args:
+            conn_type_str: 连接类型字符串
+        """
+        if conn_type_str in ("tunneling", "tunneling_tcp", "tunneling_tcp_secure"):
+            if not self._gateway_ip:
+                logger.warning(
+                    f"Connection type '{conn_type_str}' requires gateway_ip, "
+                    f"but no gateway_ip is configured"
+                )
+        elif conn_type_str in ("routing", "routing_secure"):
+            if self._gateway_ip:
+                logger.info(
+                    f"Connection type '{conn_type_str}' uses multicast, "
+                    f"gateway_ip '{self._gateway_ip}' will be used for discovery only"
+                )
     
     async def _handle_connection_lost(self) -> None:
         """处理连接丢失 - 停止xknx并标记设备离线"""

@@ -21,10 +21,16 @@ const route = useRoute()
 const router = useRouter()
 const alertStore = useAlertStore()
 const scadaStore = useScadaStore()
-const { isTablet, isMobile, isTouch } = useResponsive()
+const { isTablet, isMobile, isTouch, width, height } = useResponsive()
 
 const isCollapsed = ref(false)
 const isDrawerVisible = ref(false)
+const forceExpanded = ref(false)
+
+const shouldCollapseSidebar = computed(() => {
+  if (forceExpanded.value) return false
+  return width.value <= 1280 || height.value <= 700
+})
 
 const menuItems = [
   { path: '/dashboard', title: '监控面板', icon: Odometer },
@@ -45,7 +51,11 @@ const handleMenuSelect = (path: string) => {
 }
 
 const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value
+  if (shouldCollapseSidebar.value || (width.value <= 1280 || height.value <= 700)) {
+    forceExpanded.value = !forceExpanded.value
+  } else {
+    isCollapsed.value = !isCollapsed.value
+  }
 }
 
 const toggleDrawer = () => {
@@ -62,19 +72,19 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
   <el-container class="app-layout">
     <template v-if="showSidebar">
       <el-aside 
-        :width="isCollapsed ? '64px' : '220px'" 
+        :width="(isCollapsed || shouldCollapseSidebar) ? '64px' : '220px'" 
         class="app-aside"
-        :class="{ collapsed: isCollapsed, 'fullscreen-hidden': isFullscreenMode }"
+        :class="{ collapsed: isCollapsed || shouldCollapseSidebar, 'fullscreen-hidden': isFullscreenMode }"
       >
         <div class="logo">
           <span class="logo-icon">⚡</span>
-          <span v-if="!isCollapsed" class="logo-text">XAgent</span>
+          <span v-if="!isCollapsed && !shouldCollapseSidebar" class="logo-text">XAgent</span>
         </div>
         
         <el-menu
           :default-active="activeMenu"
           class="app-menu"
-          :collapse="isCollapsed"
+          :collapse="isCollapsed || shouldCollapseSidebar"
           @select="handleMenuSelect"
         >
           <el-menu-item 
@@ -95,11 +105,11 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
         <div class="aside-footer">
           <el-button 
             class="collapse-btn"
-            :icon="isCollapsed ? Expand : Fold"
+            :icon="(isCollapsed || shouldCollapseSidebar) ? Expand : Fold"
             @click="toggleCollapse"
             text
           />
-          <div v-if="!isCollapsed" class="version">v1.0.0</div>
+          <div v-if="!isCollapsed && !shouldCollapseSidebar" class="version">v1.0.0</div>
         </div>
       </el-aside>
     </template>

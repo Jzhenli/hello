@@ -25,13 +25,17 @@ import PointTrend from '@/components/PointTrend.vue'
 
 const deviceStore = useDeviceStore()
 const pointStore = usePointStore()
-const { isTouch } = useResponsive()
+const { isTouch, width } = useResponsive()
 
 const searchQuery = ref('')
 const statusFilter = ref('')
 const selectedDeviceAsset = ref<string | null>(null)
 const showTrend = ref(false)
 const selectedPointForTrend = ref<{ deviceAsset: string; pointName: string } | null>(null)
+
+const activeTab = ref('devices')
+
+const isCompactMode = computed(() => width.value <= 1100)
 
 const filteredSouthDevices = computed(() => {
   let list = deviceStore.southDevices
@@ -82,6 +86,10 @@ const deviceForm = ref({
   timeout: 5,
   gateway_ip: '',
   local_ip: '',
+  connection_type: 'automatic',
+  interval: 1,
+  sync_mode: 'smart',
+  sync_interval: 60,
   device_id: 1234,
   tags: ''
 })
@@ -95,25 +103,32 @@ const pluginOptions = [
     label: 'Modbus TCP', 
     value: 'modbus_tcp', 
     defaultPort: 502,
-    defaultConfig: { slave_id: 1, timeout: 5 }
+    defaultConfig: { slave_id: 1, timeout: 5, interval: 1 }
   },
   { 
     label: 'Modbus RTU', 
     value: 'modbus_rtu', 
     defaultPort: 0,
-    defaultConfig: { slave_id: 1, timeout: 5 }
+    defaultConfig: { slave_id: 1, timeout: 5, interval: 1 }
   },
   { 
     label: 'KNX', 
     value: 'knx', 
     defaultPort: 3671,
-    defaultConfig: { local_ip: '', timeout: 5 }
+    defaultConfig: { 
+      local_ip: '', 
+      timeout: 5, 
+      connection_type: 'automatic',
+      interval: 1,
+      sync_mode: 'smart',
+      sync_interval: 60
+    }
   },
   { 
     label: 'BACnet', 
     value: 'bacnet', 
     defaultPort: 47808,
-    defaultConfig: { device_id: 1234, timeout: 5 }
+    defaultConfig: { device_id: 1234, timeout: 5, interval: 1 }
   }
 ]
 
@@ -148,6 +163,10 @@ const handleAddDevice = () => {
     timeout: 5,
     gateway_ip: '',
     local_ip: '',
+    connection_type: 'automatic',
+    interval: 1,
+    sync_mode: 'smart',
+    sync_interval: 60,
     device_id: 1234,
     tags: ''
   }
@@ -169,6 +188,10 @@ const handleEditDevice = (device: DeviceListItem) => {
     timeout: (device.pluginConfig.timeout as number) || 5,
     gateway_ip: (device.pluginConfig.gateway_ip as string) || '',
     local_ip: (device.pluginConfig.local_ip as string) || '',
+    connection_type: (device.pluginConfig.connection_type as string) || 'automatic',
+    interval: (device.pluginConfig.interval as number) || 1,
+    sync_mode: (device.pluginConfig.sync_mode as string) || 'smart',
+    sync_interval: (device.pluginConfig.sync_interval as number) || 60,
     device_id: (device.pluginConfig.device_id as number) || 1234,
     tags: device.tags.join(', ')
   }
@@ -186,24 +209,33 @@ const handleSaveDevice = async () => {
   saving.value = true
   try {
     const buildPluginConfig = (): Record<string, unknown> => {
-      const baseConfig: Record<string, unknown> = {
-        host: deviceForm.value.host,
-        port: deviceForm.value.port
-      }
+      const baseConfig: Record<string, unknown> = {}
       
       if (deviceForm.value.pluginName === 'modbus_tcp' || deviceForm.value.pluginName === 'modbus_rtu') {
+        baseConfig.host = deviceForm.value.host
+        baseConfig.port = deviceForm.value.port
         baseConfig.slave_id = deviceForm.value.slave_id
         baseConfig.timeout = deviceForm.value.timeout
+        baseConfig.interval = deviceForm.value.interval
       } else if (deviceForm.value.pluginName === 'knx') {
         baseConfig.gateway_ip = deviceForm.value.gateway_ip || deviceForm.value.host
         baseConfig.gateway_port = deviceForm.value.port
         if (deviceForm.value.local_ip) {
           baseConfig.local_ip = deviceForm.value.local_ip
         }
+        if (deviceForm.value.connection_type) {
+          baseConfig.connection_type = deviceForm.value.connection_type
+        }
+        baseConfig.interval = deviceForm.value.interval
+        baseConfig.sync_mode = deviceForm.value.sync_mode
+        baseConfig.sync_interval = deviceForm.value.sync_interval
         baseConfig.timeout = deviceForm.value.timeout
       } else if (deviceForm.value.pluginName === 'bacnet') {
+        baseConfig.host = deviceForm.value.host
+        baseConfig.port = deviceForm.value.port
         baseConfig.device_id = deviceForm.value.device_id
         baseConfig.timeout = deviceForm.value.timeout
+        baseConfig.interval = deviceForm.value.interval
       }
       
       return baseConfig
@@ -338,7 +370,6 @@ const pointForm = ref({
   address: 0,
   register_type: 'holding' as 'holding' | 'input' | 'coil' | 'discrete_input',
   count: 1,
-  slave_id: null as number | null,
   scale: null as number | null,
   offset: null as number | null,
   byte_order: 'big' as 'big' | 'little',
@@ -433,7 +464,6 @@ const handleAddPoint = () => {
     address: 0,
     register_type: 'holding',
     count: 1,
-    slave_id: null,
     scale: null,
     offset: null,
     byte_order: 'big',
@@ -471,7 +501,6 @@ const handleEditPoint = (point: any) => {
     address: config.address ?? 0,
     register_type: config.register_type || 'holding',
     count: config.count ?? 1,
-    slave_id: config.slave_id ?? null,
     scale: config.scale ?? null,
     offset: config.offset ?? null,
     byte_order: config.byte_order || 'big',
@@ -500,9 +529,6 @@ const buildPointConfig = (): Record<string, unknown> => {
     config.register_type = pointForm.value.register_type
     if (pointForm.value.count && pointForm.value.count > 1) {
       config.count = pointForm.value.count
-    }
-    if (pointForm.value.slave_id !== null) {
-      config.slave_id = pointForm.value.slave_id
     }
     if (pointForm.value.scale !== null) {
       config.scale = pointForm.value.scale
@@ -793,7 +819,151 @@ onMounted(async () => {
       style="margin-bottom: 16px"
     />
     
-    <div class="main-content">
+    <div v-if="isCompactMode" class="main-content compact-mode">
+      <div class="compact-tabs">
+        <div 
+          class="compact-tab" 
+          :class="{ active: activeTab === 'devices' }"
+          @click="activeTab = 'devices'"
+        >
+          设备列表
+          <span v-if="selectedDeviceAsset" class="tab-badge">{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name }}</span>
+        </div>
+        <div 
+          class="compact-tab" 
+          :class="{ active: activeTab === 'points', disabled: !selectedDeviceAsset }"
+          @click="selectedDeviceAsset && (activeTab = 'points')"
+        >
+          点位列表
+          <span v-if="selectedDeviceAsset" class="tab-count">{{ getDevicePoints(selectedDeviceAsset).length }}</span>
+        </div>
+      </div>
+      
+      <div v-show="activeTab === 'devices'" class="compact-panel device-panel">
+        <div v-if="deviceStore.loading && deviceStore.southDevices.length === 0" class="loading-state">
+          <el-icon class="is-loading" :size="32"><Refresh /></el-icon>
+          <p>加载设备列表...</p>
+        </div>
+
+        <div v-else-if="filteredSouthDevices.length === 0" class="empty-state">
+          <p>暂无设备</p>
+        </div>
+
+        <div v-else class="device-grid">
+          <div 
+            v-for="device in filteredSouthDevices" 
+            :key="device.asset" 
+            class="device-card-compact"
+            :class="{ 
+              offline: !device.enabled || device.status !== 'active',
+              selected: selectedDeviceAsset === device.asset 
+            }"
+            @click="handleViewPoints(device.asset); activeTab = 'points'"
+          >
+            <div class="device-card-header">
+              <div class="device-card-status" :class="{ online: device.enabled && device.status === 'active' }">
+                <el-icon v-if="device.enabled && device.status === 'active'"><CircleCheck /></el-icon>
+                <el-icon v-else><CircleClose /></el-icon>
+              </div>
+              <div class="device-card-info">
+                <div class="device-card-name">{{ device.name }}</div>
+                <div class="device-card-meta">
+                  <span>{{ device.pluginName }}</span>
+                  <span>{{ device.pointCount }} 点位</span>
+                </div>
+              </div>
+              <el-tag size="small" :type="getStatusType(device.status, device.enabled)">
+                {{ getStatusLabel(device.status, device.enabled) }}
+              </el-tag>
+            </div>
+            <div class="device-card-actions">
+              <el-switch 
+                :model-value="device.enabled" 
+                :size="isTouch ? 'default' : 'small'"
+                @change="handleToggleDevice(device.asset)"
+                @click.stop
+              />
+              <div class="action-buttons" @click.stop>
+                <el-button type="primary" link :size="isTouch ? 'default' : 'small'" @click="handleEditDevice(device)">
+                  编辑
+                </el-button>
+                <el-button type="danger" link :size="isTouch ? 'default' : 'small'" @click="handleDeleteDevice(device)">
+                  删除
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div v-show="activeTab === 'points'" class="compact-panel points-panel">
+        <div v-if="!selectedDeviceAsset" class="empty-points">
+          <el-icon :size="48"><TrendCharts /></el-icon>
+          <p>请先选择一个设备</p>
+          <el-button type="primary" @click="activeTab = 'devices'">返回设备列表</el-button>
+        </div>
+        
+        <template v-else>
+          <div class="panel-header">
+            <div class="panel-header-left">
+              <el-button link @click="activeTab = 'devices'">
+                <el-icon><RefreshRight /></el-icon>
+                返回设备
+              </el-button>
+            </div>
+            <span class="panel-title">{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name || selectedDeviceAsset }}</span>
+            <el-button type="primary" :icon="Plus" size="small" @click="handleAddPoint">
+              新增点位
+            </el-button>
+          </div>
+          
+          <el-table 
+            :data="getDevicePoints(selectedDeviceAsset)" 
+            stripe 
+            style="width: 100%; flex: 1;"
+            height="100%"
+          >
+            <el-table-column prop="name" label="点位名称" min-width="120" />
+            <el-table-column label="当前值" min-width="100">
+              <template #default="{ row }">
+                <span v-if="row.currentValue !== undefined && row.currentValue !== null" class="current-value">
+                  {{ row.currentValue }}{{ row.unit ? ' ' + row.unit : '' }}
+                </span>
+                <span v-else class="text-muted">--</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="数据类型" width="100">
+              <template #default="{ row }">
+                <el-tag size="small">{{ row.data_type }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="质量" width="80">
+              <template #default="{ row }">
+                <el-tag v-if="row.quality" size="small" :type="row.quality === 'good' ? 'success' : row.quality === 'bad' ? 'danger' : 'warning'">
+                  {{ row.quality === 'good' ? '良好' : row.quality === 'bad' ? '异常' : '不确定' }}
+                </el-tag>
+                <span v-else class="text-muted">--</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
+                  趋势
+                </el-button>
+                <el-button type="primary" link size="small" @click="handleEditPoint(row)">
+                  编辑
+                </el-button>
+                <el-button type="danger" link size="small" @click="handleDeletePoint(row.name)">
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+      </div>
+    </div>
+    
+    <div v-else class="main-content">
       <div class="device-list-panel">
         <div class="panel-header">
           <span class="panel-title">设备列表</span>
@@ -921,15 +1091,15 @@ onMounted(async () => {
                 <span class="config-preview">{{ JSON.stringify(row.config) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" :width="isTouch ? 200 : 160" fixed="right">
+            <el-table-column label="操作" width="180" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
+                <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
                 </el-button>
-                <el-button type="primary" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleEditPoint(row)">
+                <el-button type="primary" link size="small" @click="handleEditPoint(row)">
                   编辑
                 </el-button>
-                <el-button type="danger" :text="isTouch" :link="!isTouch" :size="isTouch ? 'default' : 'small'" @click="handleDeletePoint(row.name)">
+                <el-button type="danger" link size="small" @click="handleDeletePoint(row.name)">
                   删除
                 </el-button>
               </template>
@@ -978,11 +1148,58 @@ onMounted(async () => {
         <el-form-item v-if="deviceForm.pluginName === 'modbus_tcp' || deviceForm.pluginName === 'modbus_rtu'" label="从站ID">
           <el-input-number v-model="deviceForm.slave_id" :min="0" :max="255" />
         </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'modbus_tcp' || deviceForm.pluginName === 'modbus_rtu'" label="采集周期(秒)">
+          <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            数据采集间隔时间，推荐1-5秒。
+          </div>
+        </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'bacnet'" label="设备ID">
           <el-input-number v-model="deviceForm.device_id" :min="0" :max="4194303" />
         </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'bacnet'" label="采集周期(秒)">
+          <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            数据采集间隔时间，推荐5-10秒。
+          </div>
+        </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'knx'" label="本地IP">
           <el-input v-model="deviceForm.local_ip" placeholder="可选，本地IP地址" />
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'knx'" label="连接模式">
+          <el-select v-model="deviceForm.connection_type" placeholder="请选择连接模式">
+            <el-option label="自动模式 (推荐)" value="automatic" />
+            <el-option label="UDP隧道模式" value="tunneling" />
+            <el-option label="TCP隧道模式" value="tunneling_tcp" />
+            <el-option label="路由模式" value="routing" />
+            <el-option label="安全TCP隧道" value="tunneling_tcp_secure" />
+            <el-option label="安全路由模式" value="routing_secure" />
+          </el-select>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            推荐使用自动模式。如遇连接数满问题，请选择路由模式。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'knx'" label="采集周期(秒)">
+          <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            数据采集间隔时间，推荐5-10秒。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'knx'" label="同步模式">
+          <el-select v-model="deviceForm.sync_mode" placeholder="请选择同步模式">
+            <el-option label="智能模式 (推荐)" value="smart" />
+            <el-option label="主动模式" value="always" />
+            <el-option label="被动模式" value="passive" />
+          </el-select>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            智能模式自动平衡性能和数据新鲜度。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="deviceForm.pluginName === 'knx'" label="同步间隔(分钟)">
+          <el-input-number v-model="deviceForm.sync_interval" :min="5" :max="1440" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            智能模式下主动同步的时间间隔，默认60分钟。
+          </div>
         </el-form-item>
         <el-form-item label="超时(秒)">
           <el-input-number v-model="deviceForm.timeout" :min="1" :max="60" />
@@ -1046,9 +1263,6 @@ onMounted(async () => {
           </el-form-item>
           <el-form-item label="寄存器数量">
             <el-input-number v-model="pointForm.count" :min="1" :max="16" placeholder="多字节数据类型需要多个寄存器" />
-          </el-form-item>
-          <el-form-item label="从站ID">
-            <el-input-number v-model="pointForm.slave_id" :min="0" :max="255" placeholder="可选，覆盖设备级别配置" clearable />
           </el-form-item>
           <el-form-item label="缩放因子">
             <el-input-number v-model="pointForm.scale" placeholder="可选，如 0.1" :precision="4" :step="0.1" clearable />
@@ -1304,6 +1518,187 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.main-content.compact-mode {
+  flex-direction: column;
+}
+
+.compact-tabs {
+  display: flex;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.compact-tab {
+  flex: 1;
+  padding: 12px 16px;
+  text-align: center;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #606266;
+  background: transparent;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.compact-tab:hover {
+  background: #f5f7fa;
+}
+
+.compact-tab.active {
+  background: #409eff;
+  color: #fff;
+}
+
+.compact-tab.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tab-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-tab:not(.active) .tab-badge {
+  background: #e6f7ff;
+  color: #409eff;
+}
+
+.tab-count {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.compact-tab:not(.active) .tab-count {
+  background: #f0f0f0;
+  color: #606266;
+}
+
+.compact-panel {
+  flex: 1;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.device-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.device-card-compact {
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.device-card-compact:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+}
+
+.device-card-compact.selected {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.device-card-compact.offline {
+  opacity: 0.7;
+}
+
+.device-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.device-card-status {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #ffebee;
+  color: #e74c3c;
+}
+
+.device-card-status.online {
+  background: #e8f5e9;
+  color: #27ae60;
+}
+
+.device-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-card-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.device-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #ebeef5;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.panel-header-left {
+  display: flex;
+  align-items: center;
+}
+
 .device-list-panel {
   width: 320px;
   min-width: 260px;
@@ -1520,11 +1915,12 @@ onMounted(async () => {
   .device-list-panel {
     width: 100%;
     min-width: 0;
-    max-height: 300px;
+    max-height: 280px;
   }
 
   .points-panel {
-    min-height: 400px;
+    min-height: 300px;
+    flex: 1;
   }
 
   .toolbar-search {
@@ -1550,6 +1946,38 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 600px) {
+  .toolbar {
+    padding: 10px 12px;
+  }
+
+  .toolbar-search {
+    width: 100%;
+  }
+
+  .toolbar-filter {
+    width: 100%;
+  }
+
+  .toolbar-stats {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .device-list-panel {
+    max-height: 220px;
+  }
+
+  .device-item {
+    padding: 10px;
+  }
+
+  .device-item-meta {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
 @media (pointer: coarse) {
   .device-item {
     padding: 14px 12px;
@@ -1569,6 +1997,19 @@ onMounted(async () => {
   .device-item-status {
     width: 36px;
     height: 36px;
+  }
+
+  .el-button {
+    min-height: 36px;
+  }
+
+  .el-table .el-button:not(.is-link) {
+    min-height: 32px;
+    padding: 6px 12px;
+  }
+
+  .el-table .el-button.is-link {
+    padding: 4px 8px;
   }
 }
 </style>

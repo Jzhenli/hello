@@ -231,12 +231,22 @@ export const usePointStore = defineStore('points', () => {
       const rawVal = reading.data?.[pointName]
       const val = sp?.value ?? rawVal
 
-      if (val !== undefined && val !== null && typeof val === 'number') {
+      if (val !== undefined && val !== null) {
         const date = new Date(reading.timestamp * 1000)
+        let numericValue: number
+        
+        if (typeof val === 'boolean') {
+          numericValue = val ? 1 : 0
+        } else if (typeof val === 'number') {
+          numericValue = val
+        } else {
+          continue
+        }
+        
         data.push({
           time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
           timestamp: reading.timestamp * 1000,
-          value: val,
+          value: numericValue,
           quality: sp?.quality || 'good'
         })
       }
@@ -287,7 +297,7 @@ export const usePointStore = defineStore('points', () => {
     return device?.points || []
   }
 
-  const generateTrendData = (_point: PointDisplay, hours: number = 24) => {
+  const generateTrendData = (point: PointDisplay, hours: number = 24) => {
     const now = Date.now()
     const data: { time: string; timestamp: number; value: number; quality: string }[] = []
     const interval = trendAggregation.value === 'none' ? 60000 :
@@ -296,6 +306,7 @@ export const usePointStore = defineStore('points', () => {
                      trendAggregation.value === '15min' ? 900000 : 3600000
 
     const count = (hours * 3600000) / interval
+    const isDigital = point.type === 'digital' || point.standard_data_type === 'bool'
 
     for (let i = count; i >= 0; i--) {
       const timestamp = now - i * interval
@@ -303,12 +314,17 @@ export const usePointStore = defineStore('points', () => {
       const h = time.getHours().toString().padStart(2, '0')
       const m = time.getMinutes().toString().padStart(2, '0')
 
-      const value = 20 + (Math.random() - 0.5) * 10
+      let value: number
+      if (isDigital) {
+        value = Math.random() > 0.5 ? 1 : 0
+      } else {
+        value = 20 + (Math.random() - 0.5) * 10
+      }
 
       data.push({
         time: `${h}:${m}`,
         timestamp,
-        value: Math.round(value * 100) / 100,
+        value: isDigital ? value : Math.round(value * 100) / 100,
         quality: Math.random() > 0.05 ? 'good' : 'uncertain'
       })
     }
