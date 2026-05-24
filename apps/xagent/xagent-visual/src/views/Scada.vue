@@ -17,7 +17,6 @@ const newPanelDescription = ref('')
 const newPanelWidth = ref(1200)
 const newPanelHeight = ref(800)
 const isPreviewMode = ref(false)
-const showCanvasSettings = ref(false)
 const canvasWidth = ref(1200)
 const canvasHeight = ref(800)
 

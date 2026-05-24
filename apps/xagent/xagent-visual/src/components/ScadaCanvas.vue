@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useScadaStore } from '@/stores/scada'
 import type { ComponentType, ScadaComponent } from '@/types/scada'
 import ScadaGauge from './components/ScadaGauge.vue'

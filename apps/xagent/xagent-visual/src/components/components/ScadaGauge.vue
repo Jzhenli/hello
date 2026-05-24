@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
 import { usePointStore } from '@/stores/points'
 
@@ -11,7 +11,6 @@ const props = defineProps<{
 const pointStore = usePointStore()
 
 const currentValue = ref(0)
-const targetValue = ref(0)
 
 const gaugeConfig = computed(() => props.config.gaugeConfig)
 const binding = computed(() => props.config.binding)

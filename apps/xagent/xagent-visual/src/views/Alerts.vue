@@ -2,12 +2,6 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
 import { useUserStore } from '@/stores/users'
-import { 
-  Bell,
-  Check,
-  Close,
-  Delete
-} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const alertStore = useAlertStore()

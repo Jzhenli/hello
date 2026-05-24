@@ -23,7 +23,7 @@ const router = useRouter()
 const alertStore = useAlertStore()
 const scadaStore = useScadaStore()
 const userStore = useUserStore()
-const { isTablet, isMobile, isTouch, width, height } = useResponsive()
+const { isTablet, isMobile, width, height } = useResponsive()
 
 const isCollapsed = ref(false)
 const isDrawerVisible = ref(false)

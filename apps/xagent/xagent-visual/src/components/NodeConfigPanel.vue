@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import type { RuleNodeData, NodeType, ConditionData, LogicData, ActionData, TriggerData, ScheduleTriggerData, NotificationData } from '@/types/rule'
+import type { RuleNodeData, NodeType } from '@/types/rule'
 import { OPERATORS, LOGIC_OPERATORS, SCHEDULE_MODES, SCHEDULE_FREQUENCIES, WEEKDAYS, NOTIFICATION_LEVELS, NOTIFICATION_CHANNEL_TYPES } from '@/types/rule'
 import { useDeviceStore } from '@/stores/devices'
 import type { DeviceConfig, PointConfig } from '@/api/types'

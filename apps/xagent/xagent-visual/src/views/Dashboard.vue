@@ -44,12 +44,6 @@ const statCardSpan = computed(() => {
   return 6
 })
 
-const chartColSpan = computed(() => {
-  if (isMobile.value) return 24
-  if (isTablet.value) return 24
-  return { main: 16, side: 8 }
-})
-
 const infoColSpan = computed(() => {
   if (isMobile.value) return 24
   if (isTablet.value) return 12
@@ -126,53 +120,6 @@ const deviceChartOption = ref({
       { value: deviceStore.onlineDevices, name: '在线', itemStyle: { color: '#27ae60' } },
       { value: deviceStore.totalDevices - deviceStore.onlineDevices, name: '离线', itemStyle: { color: '#e74c3c' } }
     ]
-  }]
-})
-
-const cpuGaugeOption = ref({
-  series: [{
-    type: 'gauge',
-    startAngle: 200,
-    endAngle: -20,
-    min: 0,
-    max: 100,
-    splitNumber: 10,
-    itemStyle: {
-      color: '#3498db'
-    },
-    progress: {
-      show: true,
-      width: 20
-    },
-    pointer: {
-      show: false
-    },
-    axisLine: {
-      lineStyle: {
-        width: 20,
-        color: [[1, '#e0e0e0']]
-      }
-    },
-    axisTick: {
-      show: false
-    },
-    splitLine: {
-      show: false
-    },
-    axisLabel: {
-      show: false
-    },
-    title: {
-      show: false
-    },
-    detail: {
-      valueAnimation: true,
-      fontSize: 24,
-      fontWeight: 'bold',
-      formatter: '{value}%',
-      color: '#2c3e50'
-    },
-    data: [{ value: systemStore.stats.cpuUsage }]
   }]
 })
 

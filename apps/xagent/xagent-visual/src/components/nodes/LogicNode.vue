@@ -3,7 +3,7 @@ import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
 import type { RuleNodeData } from '@/types/rule'
 
-const { id, node } = useNode<RuleNodeData>()
+const { node } = useNode<RuleNodeData>()
 
 const nodeData = computed(() => node.data?.logic)
 

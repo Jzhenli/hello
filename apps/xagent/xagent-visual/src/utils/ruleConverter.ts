@@ -54,7 +54,7 @@ export function createNode(
   }
 }
 
-export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string {
+export function graphToExpression(nodes: RuleNode[]): string {
   if (nodes.length === 0) return ''
   
   const triggerNodes = nodes.filter(n => n.type === 'trigger' || n.type === 'schedule-trigger')
@@ -66,8 +66,8 @@ export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string 
   
   // 处理触发器
   triggerNodes.forEach(node => {
-    if (node.type === 'schedule-trigger' && node.data.scheduleTrigger) {
-      const schedule = node.data.scheduleTrigger
+    if (node.type === 'schedule-trigger' && node.data?.scheduleTrigger) {
+      const schedule = node.data?.scheduleTrigger
       if (schedule.mode === 'cron') {
         parts.push(`schedule: cron "${schedule.cron}"`)
       } else if (schedule.mode === 'once') {
@@ -81,8 +81,8 @@ export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string 
         const freq = freqMap[schedule.frequency || 'daily']
         parts.push(`schedule: ${freq} at ${schedule.time}`)
       }
-    } else if (node.type === 'trigger' && node.data.trigger) {
-      const trigger = node.data.trigger
+    } else if (node.type === 'trigger' && node.data?.trigger) {
+      const trigger = node.data?.trigger
       if (trigger.source && trigger.field) {
         parts.push(`trigger: ${trigger.source}.${trigger.field}`)
       }
@@ -92,7 +92,7 @@ export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string 
   // 处理条件
   const conditionExprs: string[] = []
   conditionNodes.forEach(node => {
-    const cond = node.data.condition
+    const cond = node.data?.condition
     if (cond && cond.field && cond.value) {
       let expr = ''
       if (cond.operator === 'regex') {
@@ -107,7 +107,7 @@ export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string 
   if (conditionExprs.length > 0) {
     if (logicNodes.length > 0 && conditionExprs.length > 1) {
       const logicNode = logicNodes[0]
-      const op = logicNode.data.logic?.operator || 'and'
+      const op = logicNode.data?.logic?.operator || 'and'
       
       if (op === 'not') {
         parts.push(`not (${conditionExprs.join(' and ')})`)
@@ -121,7 +121,7 @@ export function graphToExpression(nodes: RuleNode[], edges: RuleEdge[]): string 
   
   // 处理动作
   actionNodes.forEach(node => {
-    const action = node.data.action
+    const action = node.data?.action
     if (action && action.target_asset && action.operation) {
       parts.push(`action: ${action.target_asset}.${action.operation}`)
     }
@@ -157,7 +157,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
   // 验证定时触发器
   triggerNodes.forEach(node => {
     if (node.type === 'schedule-trigger') {
-      const schedule = node.data.scheduleTrigger
+      const schedule = node.data?.scheduleTrigger
       if (!schedule?.time && schedule?.mode !== 'cron') {
         errors.push(`定时触发器 "${node.id}" 缺少执行时间`)
       }
@@ -165,7 +165,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
         errors.push(`定时触发器 "${node.id}" 缺少Cron表达式`)
       }
     } else if (node.type === 'trigger') {
-      const trigger = node.data.trigger
+      const trigger = node.data?.trigger
       if (!trigger?.source) {
         errors.push(`数据触发器 "${node.id}" 缺少数据源`)
       }
@@ -176,7 +176,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
   })
   
   conditionNodes.forEach(node => {
-    const cond = node.data.condition
+    const cond = node.data?.condition
     if (!cond?.field) {
       errors.push(`条件节点 "${node.id}" 缺少字段名`)
     }
@@ -186,7 +186,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
   })
   
   actionNodes.forEach(node => {
-    const action = node.data.action
+    const action = node.data?.action
     if (!action?.target_asset) {
       errors.push(`动作节点 "${node.id}" 缺少目标设备`)
     }
@@ -196,7 +196,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
   })
 
   notificationNodes.forEach(node => {
-    const notif = node.data.notification
+    const notif = node.data?.notification
     if (!notif?.channel_type) {
       errors.push(`通知节点 "${node.id}" 缺少通知渠道`)
     }
@@ -219,7 +219,7 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
 }
 
 export function exportRule(nodes: RuleNode[], edges: RuleEdge[]): Rule {
-  const expression = graphToExpression(nodes, edges)
+  const expression = graphToExpression(nodes)
   
   // 判断规则类型
   const hasScheduleTrigger = nodes.some(n => n.type === 'schedule-trigger')
@@ -252,13 +252,13 @@ export function createDefaultRule(): { nodes: RuleNode[], edges: RuleEdge[] } {
   const conditionNode = createNode('condition', { x: 250, y: 180 })
   const actionNode = createNode('action', { x: 250, y: 340 })
   
-  triggerNode.data.trigger = {
+  triggerNode.data!.trigger = {
     source: 'temperature_sensor',
     field: 'temperature',
     description: '温度传感器'
   }
   
-  conditionNode.data.condition = {
+  conditionNode.data!.condition = {
     field: 'temperature',
     operator: '>',
     value: '30',
@@ -266,7 +266,7 @@ export function createDefaultRule(): { nodes: RuleNode[], edges: RuleEdge[] } {
     description: '温度超过30度持续5分钟'
   }
   
-  actionNode.data.action = {
+  actionNode.data!.action = {
     target_asset: 'air_conditioner',
     operation: 'write_setpoint',
     parameters: { point: 'power', value: 1 },
@@ -298,7 +298,7 @@ export function createScheduleRule(): { nodes: RuleNode[], edges: RuleEdge[] } {
   const scheduleNode = createNode('schedule-trigger', { x: 250, y: 50 })
   const actionNode = createNode('action', { x: 250, y: 180 })
   
-  scheduleNode.data.scheduleTrigger = {
+  scheduleNode.data!.scheduleTrigger = {
     mode: 'periodic',
     time: '18:00',
     frequency: 'daily',
@@ -306,7 +306,7 @@ export function createScheduleRule(): { nodes: RuleNode[], edges: RuleEdge[] } {
     description: '每天18:00执行'
   }
   
-  actionNode.data.action = {
+  actionNode.data!.action = {
     target_asset: 'lighting_system',
     operation: 'turn_on',
     parameters: { zone: 'office' },

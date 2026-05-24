@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
 import { usePointStore } from '@/stores/points'
 import { use } from 'echarts/core'

@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useScadaStore } from '@/stores/scada'
 import { usePointStore } from '@/stores/points'
-import type { PointBinding, ScadaComponent } from '@/types/scada'
+import type { PointBinding } from '@/types/scada'
 
 const scadaStore = useScadaStore()
 const pointStore = usePointStore()

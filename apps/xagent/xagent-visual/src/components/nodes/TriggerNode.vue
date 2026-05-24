@@ -3,19 +3,12 @@ import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
 import type { RuleNodeData } from '@/types/rule'
 
-const { id, node } = useNode<RuleNodeData>()
+const { node } = useNode<RuleNodeData>()
 
 const nodeData = computed(() => node.data?.trigger)
 const hasValidData = computed(() => 
   nodeData.value?.source && nodeData.value?.field
 )
-
-const displayText = computed(() => {
-  if (!nodeData.value) return '未配置'
-  const { source, field } = nodeData.value
-  if (!source || !field) return '未配置'
-  return `${source}.${field}`
-})
 </script>
 
 <template>

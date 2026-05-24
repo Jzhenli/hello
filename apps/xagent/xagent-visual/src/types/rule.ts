@@ -51,6 +51,17 @@ export interface ActionData {
 export interface NotificationData {
   channel_type: 'email' | 'webhook' | 'system'
   level: 'info' | 'warning' | 'error' | 'critical'
+  recipients?: string | string[]
+  smtp_host?: string
+  smtp_port?: number
+  smtp_user?: string
+  smtp_password?: string
+  from_address?: string
+  use_tls?: boolean
+  webhook_url?: string
+  webhook_method?: string
+  webhook_headers?: Record<string, string>
+  retention_days?: number
   description?: string
 }
 
@@ -83,6 +94,9 @@ export interface Rule {
   expression?: string
   cooldown_period?: number
   max_executions?: number
+  createdAt?: number
+  updatedAt?: number
+  executionCount?: number
 }
 
 export interface NodeTemplate {

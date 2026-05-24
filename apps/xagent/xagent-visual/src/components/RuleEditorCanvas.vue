@@ -59,20 +59,18 @@ const nodeTypes = {
   logic: markRaw(LogicNode),
   action: markRaw(ActionNode),
   notification: markRaw(NotificationNode)
-}
+} as any
 
 const selectedNode = computed(() => {
   if (!selectedNodeId.value) return null
   const node = findNode(selectedNodeId.value)
-  if (node) {
-    return {
-      id: node.id,
-      type: node.type as NodeType,
-      data: node.data as RuleNodeData,
-      position: node.position,
-    }
+  if (!node) return null
+  return {
+    id: node.id,
+    type: node.type as NodeType,
+    data: (node.data ?? {}) as RuleNodeData,
+    position: node.position,
   }
-  return nodes.value.find(n => n.id === selectedNodeId.value) || null
 })
 
 const canSave = computed(() => {
@@ -334,7 +332,7 @@ watch(() => props.ruleId, (newId) => {
         <NodeConfigPanel
           :node-id="selectedNode.id"
           :node-type="selectedNode.type as NodeType"
-          :node-data="selectedNode.data"
+          :node-data="selectedNode.data ?? {}"
           @update="handleNodeUpdate"
           @delete="handleNodeDelete"
         />

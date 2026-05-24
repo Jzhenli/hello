@@ -83,6 +83,20 @@ if _static_dir.exists():
 
 @app.get("/")
 async def root():
+    return _serve_spa()
+
+
+@app.get("/{path:path}")
+async def spa_fallback(path: str):
+    if path.startswith("api/"):
+        return {"detail": "Not found"}
+    if "." in path.split("/")[-1]:
+        from fastapi.responses import JSONResponse
+        return FileResponse(str(_static_dir / path)) if (_static_dir / path).exists() else JSONResponse({"detail": "Not found"}, status_code=404)
+    return _serve_spa()
+
+
+def _serve_spa():
     index_path = _static_dir / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))

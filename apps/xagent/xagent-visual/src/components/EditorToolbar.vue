@@ -17,10 +17,6 @@ const emit = defineEmits<{
 
 const { isTablet, isMobile } = useResponsive()
 
-const expressionPreview = computed(() => {
-  return props.rule?.expression || '暂无规则表达式'
-})
-
 const nodeCount = computed(() => {
   return props.rule?.graph.nodes.length || 0
 })

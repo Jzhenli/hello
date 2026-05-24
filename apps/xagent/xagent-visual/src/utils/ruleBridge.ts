@@ -90,7 +90,7 @@ function extractExpression(rule: RuleResponse): string {
   const visualGraph = pluginConfig[VISUAL_GRAPH_KEY]
 
   if (visualGraph?.nodes && visualGraph.edges) {
-    return graphToExpression(visualGraph.nodes, visualGraph.edges)
+    return graphToExpression(visualGraph.nodes)
   }
 
   if (rule.plugin?.name === 'schedule_rule') {
@@ -141,7 +141,7 @@ function buildExpressionFromConditions(
   const parts: string[] = []
 
   for (const node of conditionNodes) {
-    const cond = node.data.condition
+    const cond = node.data?.condition
     if (!cond?.field) continue
 
     if (cond.operator === 'regex') {
@@ -152,7 +152,7 @@ function buildExpressionFromConditions(
   }
 
   if (logicNodes.length > 0 && parts.length > 1) {
-    const logicOp = logicNodes[0].data.logic?.operator || 'and'
+    const logicOp = logicNodes[0].data?.logic?.operator || 'and'
     if (logicOp === 'not') {
       return `not (${parts.join(' and ')})`
     }
@@ -166,7 +166,7 @@ function buildScheduleConfig(scheduleNodes: RuleNode[]): Record<string, any> {
   if (scheduleNodes.length === 0) return {}
 
   const nodeData = scheduleNodes[0].data
-  const schedule = nodeData.scheduleTrigger || nodeData.schedule
+  const schedule = nodeData?.scheduleTrigger
   if (!schedule) return { trigger_type: 'interval', interval: 60 }
 
   const mode = schedule.mode || 'periodic'
@@ -223,7 +223,7 @@ function buildScheduleConfig(scheduleNodes: RuleNode[]): Record<string, any> {
 function buildActionChannelConfig(actionNodes: RuleNode[]): ActionChannelConfig | null {
   if (actionNodes.length === 0) return null
 
-  const action = actionNodes[0].data.action
+  const action = actionNodes[0].data?.action
   if (!action) return null
 
   return {
@@ -240,7 +240,7 @@ function buildActionChannelConfig(actionNodes: RuleNode[]): ActionChannelConfig 
 function buildNotificationChannelConfig(notificationNodes: RuleNode[]): NotificationChannelConfig | null {
   if (notificationNodes.length === 0) return null
 
-  const notif = notificationNodes[0].data.notification
+  const notif = notificationNodes[0].data?.notification
   if (!notif) return null
 
   return {
@@ -286,16 +286,12 @@ export function graphToBackendCreate(
   const notificationNodes = nodes.filter(n => n.type === 'notification')
 
   const dataSubscriptions: RuleDataSubscription[] = triggerNodes
-    .filter(n => n.data.trigger?.source && n.data.trigger?.field)
+    .filter(n => n.data?.trigger?.source && n.data?.trigger?.field)
     .map(n => ({
-      asset: n.data.trigger!.source,
-      point: n.data.trigger!.field,
+      asset: n.data!.trigger!.source,
+      point: n.data!.trigger!.field,
       mode: 'single' as const,
     }))
-
-  const sourceService = triggerNodes.length > 0
-    ? triggerNodes[0].data.trigger?.sourceService || ''
-    : ''
 
   const graphData = serializeGraph(nodes, edges)
 
@@ -313,15 +309,27 @@ export function graphToBackendCreate(
       },
     }
   } else if (conditionNodes.length === 1 && logicNodes.length === 0) {
-    const cond = conditionNodes[0].data.condition!
-    plugin = {
-      name: 'threshold_rule',
-      config: {
-        threshold: Number(cond.value) || cond.value,
-        operator: cond.operator,
-        duration: cond.duration || 0,
-        [VISUAL_GRAPH_KEY]: graphData,
-      },
+    const cond = conditionNodes[0].data?.condition
+    if (!cond) {
+      plugin = {
+        name: 'threshold_rule',
+        config: {
+          threshold: 0,
+          operator: '>',
+          duration: 0,
+          [VISUAL_GRAPH_KEY]: graphData,
+        },
+      }
+    } else {
+      plugin = {
+        name: 'threshold_rule',
+        config: {
+          threshold: Number(cond.value) || cond.value,
+          operator: cond.operator,
+          duration: cond.duration || 0,
+          [VISUAL_GRAPH_KEY]: graphData,
+        },
+      }
     }
   } else if (conditionNodes.length > 0) {
     const expression = buildExpressionFromConditions(conditionNodes, logicNodes)

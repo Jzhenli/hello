@@ -1,16 +1,18 @@
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, type ComputedRef } from 'vue'
 
 export type DeviceType = 'desktop' | 'tablet' | 'mobile'
 
 export interface ResponsiveState {
-  width: number
-  height: number
-  deviceType: DeviceType
-  isDesktop: boolean
-  isTablet: boolean
-  isMobile: boolean
+  width: number | Ref<number>
+  height: number | Ref<number>
+  deviceType: DeviceType | ComputedRef<DeviceType>
+  isDesktop: boolean | ComputedRef<boolean>
+  isTablet: boolean | ComputedRef<boolean>
+  isMobile: boolean | ComputedRef<boolean>
   isTouch: boolean
 }
+
+import type { Ref } from 'vue'
 
 const breakpoints = {
   mobile: 768,
@@ -67,14 +69,14 @@ export function useResponsiveGlobal(): ResponsiveState {
   if (!globalState) {
     const width = ref(window.innerWidth)
     const height = ref(window.innerHeight)
-    
+
     globalState = {
       width,
       height,
-      deviceType: computed(() => detectDeviceType(width.value)) as unknown as DeviceType,
-      isDesktop: computed(() => detectDeviceType(width.value) === 'desktop') as unknown as boolean,
-      isTablet: computed(() => detectDeviceType(width.value) === 'tablet') as unknown as boolean,
-      isMobile: computed(() => detectDeviceType(width.value) === 'mobile') as unknown as boolean,
+      deviceType: computed(() => detectDeviceType(width.value)),
+      isDesktop: computed(() => detectDeviceType(width.value) === 'desktop'),
+      isTablet: computed(() => detectDeviceType(width.value) === 'tablet'),
+      isMobile: computed(() => detectDeviceType(width.value) === 'mobile'),
       isTouch: detectTouch()
     }
 

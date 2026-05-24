@@ -350,14 +350,6 @@ const getStatusType = (status: string, enabled: boolean) => {
   return 'info'
 }
 
-const getDataTypeLabel = (type?: string) => {
-  if (type === 'bool') return '布尔'
-  if (type === 'int') return '整数'
-  if (type === 'float') return '浮点'
-  if (type === 'string') return '字符串'
-  return type || '-'
-}
-
 const showPointDialog = ref(false)
 const pointForm = ref({
   name: '',
