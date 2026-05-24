@@ -6,14 +6,18 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 
 import NodePalette from './NodePalette.vue'
+import NodeConfigPanel from './NodeConfigPanel.vue'
 import TriggerNode from './nodes/TriggerNode.vue'
 import ScheduleTriggerNode from './nodes/ScheduleTriggerNode.vue'
 import ConditionNode from './nodes/ConditionNode.vue'
 import LogicNode from './nodes/LogicNode.vue'
 import ActionNode from './nodes/ActionNode.vue'
+import NotificationNode from './nodes/NotificationNode.vue'
 
 import type { RuleNode, RuleEdge, RuleNodeData, NodeType } from '@/types/rule'
-import { createNode, validateGraph, exportRule, importRule } from '@/utils/ruleConverter'
+import { createNode, validateGraph } from '@/utils/ruleConverter'
+import { graphToBackendCreate, graphToBackendUpdate, backendToGraph } from '@/utils/ruleBridge'
+import { useRuleStore } from '@/stores/rules'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
@@ -22,7 +26,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'saved'): void
 }>()
+
+const ruleStore = useRuleStore()
 
 const { 
   onConnect, 
@@ -32,6 +39,7 @@ const {
   addNodes, 
   addEdges, 
   removeNodes,
+  findNode,
   project,
   fitView
 } = useVueFlow()
@@ -41,21 +49,34 @@ const edges = ref<RuleEdge[]>([])
 const selectedNodeId = ref<string | null>(null)
 const ruleName = ref('新规则')
 const ruleDescription = ref('')
+const saving = ref(false)
+const loading = ref(false)
 
 const nodeTypes = {
   trigger: markRaw(TriggerNode),
   'schedule-trigger': markRaw(ScheduleTriggerNode),
   condition: markRaw(ConditionNode),
   logic: markRaw(LogicNode),
-  action: markRaw(ActionNode)
+  action: markRaw(ActionNode),
+  notification: markRaw(NotificationNode)
 }
 
 const selectedNode = computed(() => {
   if (!selectedNodeId.value) return null
+  const node = findNode(selectedNodeId.value)
+  if (node) {
+    return {
+      id: node.id,
+      type: node.type as NodeType,
+      data: node.data as RuleNodeData,
+      position: node.position,
+    }
+  }
   return nodes.value.find(n => n.id === selectedNodeId.value) || null
 })
 
 const canSave = computed(() => {
+  if (saving.value) return false
   const result = validateGraph(nodes.value, edges.value)
   return result.valid
 })
@@ -118,11 +139,24 @@ onEdgesChange((changes: EdgeChange[]) => {
 
 onNodeClick(({ node }) => {
   selectedNodeId.value = node.id
+  const nodeIndex = nodes.value.findIndex(n => n.id === node.id)
+  if (nodeIndex !== -1 && node.data) {
+    const currentData = nodes.value[nodeIndex].data || {}
+    nodes.value[nodeIndex] = {
+      ...nodes.value[nodeIndex],
+      data: { ...currentData, ...node.data }
+    }
+  }
 })
 
 const handleNodeUpdate = (data: RuleNodeData) => {
   if (!selectedNodeId.value) return
   
+  const node = findNode(selectedNodeId.value)
+  if (node) {
+    node.data = { ...data }
+  }
+
   const nodeIndex = nodes.value.findIndex(n => n.id === selectedNodeId.value)
   if (nodeIndex !== -1) {
     nodes.value[nodeIndex] = {
@@ -139,21 +173,54 @@ const handleNodeDelete = (nodeId: string) => {
   }
 }
 
-const handleSave = () => {
-  const result = validateGraph(nodes.value, edges.value)
+const handleSave = async () => {
+  const currentNodes = nodes.value.map(n => {
+    const vfNode = findNode(n.id)
+    return vfNode ? { ...n, data: vfNode.data as RuleNodeData } : n
+  })
+
+  const result = validateGraph(currentNodes, edges.value)
   
   if (!result.valid) {
     ElMessage.error(result.errors[0])
     return
   }
   
-  const rule = exportRule(nodes.value, edges.value)
-  rule.name = ruleName.value
-  rule.description = ruleDescription.value
+  saving.value = true
   
-  console.log('保存规则:', rule)
-  ElMessage.success('规则保存成功！')
-  emit('close')
+  try {
+    if (props.ruleId) {
+      const currentRule = ruleStore.rules.find(r => r.id === props.ruleId)
+      const updateData = graphToBackendUpdate(
+        ruleName.value,
+        ruleDescription.value,
+        currentNodes,
+        edges.value,
+        currentRule?.enabled ?? true
+      )
+      await ruleStore.updateRule(props.ruleId, updateData)
+      ElMessage.success('规则更新成功')
+    } else {
+      const createData = graphToBackendCreate(
+        ruleName.value,
+        ruleDescription.value,
+        currentNodes,
+        edges.value
+      )
+      await ruleStore.createRule(createData)
+      ElMessage.success('规则创建成功')
+    }
+    emit('saved')
+    emit('close')
+  } catch (e: any) {
+    const detail = e.response?.data?.detail
+    const msg = detail
+      ? (Array.isArray(detail) ? detail.map((d: any) => d.msg || d).join('; ') : String(detail))
+      : e.message || '保存失败'
+    ElMessage.error(msg)
+  } finally {
+    saving.value = false
+  }
 }
 
 const handleClear = () => {
@@ -162,18 +229,50 @@ const handleClear = () => {
   selectedNodeId.value = null
 }
 
+const loadRule = async (ruleId: string) => {
+  loading.value = true
+  try {
+    const ruleResponse = await ruleStore.getRule(ruleId)
+    if (!ruleResponse) {
+      ElMessage.error('加载规则失败：规则不存在')
+      return
+    }
+
+    const graphData = backendToGraph(ruleResponse)
+    if (graphData) {
+      nodes.value = graphData.nodes
+      edges.value = graphData.edges
+      ruleName.value = graphData.name
+      ruleDescription.value = graphData.description
+      setTimeout(() => fitView(), 100)
+    } else {
+      ElMessage.warning('无法解析规则图形数据')
+    }
+  } catch (e: any) {
+    ElMessage.error('加载规则失败：' + (e.message || '未知错误'))
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
-  setTimeout(() => fitView(), 100)
+  if (props.ruleId) {
+    loadRule(props.ruleId)
+  } else {
+    setTimeout(() => fitView(), 100)
+  }
 })
 
 watch(() => props.ruleId, (newId) => {
   if (newId) {
-    // Load existing rule
+    loadRule(newId)
   } else {
     nodes.value = []
     edges.value = []
+    ruleName.value = '新规则'
+    ruleDescription.value = ''
   }
-}, { immediate: true })
+}, { immediate: false })
 </script>
 
 <template>
@@ -193,12 +292,19 @@ watch(() => props.ruleId, (newId) => {
       </div>
       <div class="toolbar-right">
         <span class="node-count">节点: {{ nodes.length }} | 连线: {{ edges.length }}</span>
-        <el-button @click="handleClear">清空</el-button>
-        <el-button type="primary" :disabled="!canSave" @click="handleSave">保存</el-button>
+        <el-button @click="handleClear" :disabled="loading">清空</el-button>
+        <el-button type="primary" :disabled="!canSave" :loading="saving" @click="handleSave">
+          {{ saving ? '保存中...' : '保存' }}
+        </el-button>
       </div>
     </div>
     
-    <div class="editor-main">
+    <div v-if="loading" class="editor-loading">
+      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <span>加载规则中...</span>
+    </div>
+
+    <div v-else class="editor-main">
       <NodePalette @drag-start="onDragStart" />
       
       <div class="editor-canvas" @drop="onDrop" @dragover="onDragOver">
@@ -245,6 +351,14 @@ watch(() => props.ruleId, (newId) => {
   </div>
 </template>
 
+<script lang="ts">
+import { Loading } from '@element-plus/icons-vue'
+
+export default {
+  components: { Loading }
+}
+</script>
+
 <style scoped>
 .rule-editor-canvas {
   height: 100%;
@@ -276,6 +390,17 @@ watch(() => props.ruleId, (newId) => {
 .node-count {
   font-size: 13px;
   color: #7f8c8d;
+}
+
+.editor-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #7f8c8d;
+  font-size: 14px;
 }
 
 .editor-main {

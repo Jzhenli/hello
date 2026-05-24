@@ -130,9 +130,11 @@ class CommandExecutor:
         
         target_plugin = None
         for plugin in south_plugins:
-            if plugin.name == command.target_service:
+            if plugin.plugin_id.endswith(f"_{command.target_asset}"):
                 target_plugin = plugin
                 break
+            if plugin.name == command.target_service:
+                target_plugin = plugin
         
         if target_plugin is None:
             raise RuntimeError(f"Target service not found: {command.target_service}")

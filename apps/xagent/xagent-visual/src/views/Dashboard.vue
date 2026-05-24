@@ -177,7 +177,10 @@ const cpuGaugeOption = ref({
 })
 
 onMounted(async () => {
-  await deviceStore.fetchDevices()
+  await Promise.all([
+    deviceStore.fetchDevices(),
+    ruleStore.fetchRules(),
+  ])
   timer = setInterval(() => {
     currentTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
   }, 1000)

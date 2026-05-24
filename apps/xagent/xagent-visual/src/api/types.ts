@@ -90,3 +90,84 @@ export interface PointWithValue extends PointConfig {
   lastUpdate?: string
   quality?: 'good' | 'bad' | 'uncertain'
 }
+
+export interface RulePluginConfig {
+  name: string
+  config: Record<string, any>
+}
+
+export interface RuleDataSubscription {
+  asset: string
+  point: string
+  mode?: 'single' | 'window'
+  window_size?: number
+  window_type?: 'sliding' | 'tumbling'
+  aggregation?: 'none' | 'avg' | 'sum' | 'min' | 'max'
+  min_data_points?: number
+  max_data_points?: number
+}
+
+export interface RuleNotificationConfig {
+  title?: string
+  message?: string
+  level?: 'info' | 'warning' | 'error' | 'critical'
+  threshold?: number | string
+  recipients?: string[]
+}
+
+export interface RuleResponse {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+  plugin: RulePluginConfig
+  data_subscriptions?: RuleDataSubscription[]
+  notification?: RuleNotificationConfig
+  pipeline_id?: string
+  channel_ids?: string[]
+  execution_count?: number
+  last_triggered?: number
+}
+
+export interface RuleListResponse {
+  count: number
+  rules: RuleResponse[]
+}
+
+export interface RuleCreateRequest {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+  plugin: RulePluginConfig
+  data_subscriptions?: RuleDataSubscription[]
+  notification?: RuleNotificationConfig
+  pipeline_id?: string
+  channel_ids?: string[]
+}
+
+export interface RuleUpdateRequest {
+  name?: string
+  description?: string
+  enabled?: boolean
+  plugin?: RulePluginConfig
+  data_subscriptions?: RuleDataSubscription[]
+  notification?: RuleNotificationConfig
+  pipeline_id?: string
+  channel_ids?: string[]
+}
+
+export interface RuleOperationResponse {
+  success: boolean
+  message: string
+  rule_id?: string
+}
+
+export interface RuleEngineStatusResponse {
+  running: boolean
+  loaded_rules: number
+  registered_channels: number
+  active_pipelines: number
+  aggregation_subscriptions: number
+  event_bus_connected: boolean
+}

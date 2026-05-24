@@ -52,25 +52,19 @@ class RuleEvaluator:
         self._rule_configs: Dict[str, Dict[str, Any]] = {}
         self._subscriptions: Dict[str, List[str]] = {}
 
-    def load_rule(self, rule_config: Dict[str, Any]) -> bool:
+    def load_rule(self, rule_config: Dict[str, Any]) -> tuple:
         """加载规则
 
         Args:
-            rule_config: 规则配置，包含:
-                - id: 规则ID
-                - name: 规则名称
-                - plugin: 插件配置
-                    - name: 插件名称
-                    - config: 插件配置
-                - data_subscriptions: 数据订阅配置列表（可选）
+            rule_config: 规则配置
 
         Returns:
-            是否加载成功
+            (是否加载成功, 错误信息)
         """
         rule_id = rule_config.get("id")
         if not rule_id:
             logger.error("Rule config missing 'id' field")
-            return False
+            return False, "Rule config missing 'id' field"
 
         plugin_config = rule_config.get("plugin", {})
         plugin_name = plugin_config.get("name")
@@ -78,7 +72,7 @@ class RuleEvaluator:
 
         if not plugin_name:
             logger.error(f"Rule {rule_id} missing plugin name")
-            return False
+            return False, f"Rule '{rule_id}' missing plugin name"
 
         full_plugin_name = f"rule_engine.rule:{plugin_name}"
 
@@ -87,7 +81,7 @@ class RuleEvaluator:
 
             if not isinstance(plugin, RulePlugin):
                 logger.error(f"Plugin {plugin_name} is not a RulePlugin")
-                return False
+                return False, f"Plugin '{plugin_name}' is not a RulePlugin"
 
             self._rule_plugins[rule_id] = plugin
             self._rule_configs[rule_id] = rule_config
@@ -95,11 +89,11 @@ class RuleEvaluator:
             self._setup_subscriptions(rule_id, rule_config)
 
             logger.info(f"Loaded rule: {rule_id} with plugin {plugin_name}")
-            return True
+            return True, None
 
         except Exception as e:
-            logger.error(f"Failed to load rule {rule_id}: {e}")
-            return False
+            logger.error(f"Failed to load rule {rule_id}: {e}", exc_info=True)
+            return False, f"Plugin '{plugin_name}' initialize() failed: {e}"
 
     def _setup_subscriptions(
         self, rule_id: str, rule_config: Dict[str, Any]
@@ -113,7 +107,7 @@ class RuleEvaluator:
         if not self.aggregation_engine:
             return
 
-        subscription_configs = rule_config.get("data_subscriptions", [])
+        subscription_configs = rule_config.get("data_subscriptions") or []
         sub_ids = []
 
         for sub_config in subscription_configs:

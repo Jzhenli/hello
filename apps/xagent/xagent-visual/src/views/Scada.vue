@@ -150,7 +150,6 @@ const handleExport = () => {
 <template>
   <div class="scada-page" :class="{ 'preview-mode': isPreviewMode }">
     <div v-if="!isPreviewMode" class="page-header">
-      <h2>🎨 组态面板</h2>
       <div class="header-actions">
         <el-button :icon="View" @click="handlePreview">预览</el-button>
         <el-button :icon="FullScreen" @click="handleFullscreen">全屏</el-button>
@@ -253,18 +252,12 @@ const handleExport = () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 12px 20px;
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #2c3e50;
 }
 
 .header-actions {

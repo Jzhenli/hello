@@ -35,7 +35,7 @@ const shouldCollapseSidebar = computed(() => {
 const menuItems = [
   { path: '/dashboard', title: '监控面板', icon: Odometer },
   { path: '/devices', title: '设备管理', icon: Monitor },
-  { path: '/rules', title: '规则编辑', icon: Connection },
+  { path: '/rules', title: '规则引擎', icon: Connection },
   { path: '/alerts', title: '告警配置', icon: Bell },
   { path: '/scada', title: '组态面板', icon: PictureFilled },
   { path: '/settings', title: '系统设置', icon: Setting }
@@ -94,11 +94,6 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
           >
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
-            <el-badge 
-              v-if="item.path === '/alerts' && alertStore.pendingAlerts > 0"
-              :value="alertStore.pendingAlerts" 
-              class="menu-badge"
-            />
           </el-menu-item>
         </el-menu>
         
@@ -141,11 +136,6 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
           >
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
-            <el-badge 
-              v-if="item.path === '/alerts' && alertStore.pendingAlerts > 0"
-              :value="alertStore.pendingAlerts" 
-              class="menu-badge"
-            />
           </el-menu-item>
         </el-menu>
         
@@ -274,10 +264,6 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
   height: 56px;
   line-height: 56px;
   font-size: 16px;
-}
-
-.menu-badge {
-  margin-left: auto;
 }
 
 .aside-footer {

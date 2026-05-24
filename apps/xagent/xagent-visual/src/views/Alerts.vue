@@ -127,10 +127,6 @@ const getChannelTypeLabel = (type: string) => {
 
 <template>
   <div class="alerts-page">
-    <div class="page-header">
-      <h2>告警配置</h2>
-    </div>
-    
     <el-tabs v-model="activeTab" class="alerts-tabs">
       <el-tab-pane label="告警记录" name="alerts">
         <div class="toolbar">
@@ -290,16 +286,6 @@ export default {
 <style scoped>
 .alerts-page {
   padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #2c3e50;
 }
 
 .alerts-tabs {

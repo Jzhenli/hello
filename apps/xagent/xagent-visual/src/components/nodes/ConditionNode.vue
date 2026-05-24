@@ -3,9 +3,9 @@ import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
 import type { RuleNodeData, ConditionData } from '@/types/rule'
 
-const { id, data } = useNode<RuleNodeData>()
+const { id, node } = useNode<RuleNodeData>()
 
-const nodeData = computed(() => data?.value?.condition)
+const nodeData = computed(() => node.data?.condition)
 const hasValidData = computed(() => 
   nodeData.value?.field && nodeData.value?.value
 )

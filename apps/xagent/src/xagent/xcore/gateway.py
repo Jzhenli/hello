@@ -161,11 +161,7 @@ class Gateway(ILifecycle):
         event_bus = self.container.try_resolve(EventBus)
         
         base_path = get_plugins_dir()
-        plugin_dirs = [
-            str(base_path / "rule"),
-            str(base_path / "filter"),
-            str(base_path / "delivery"),
-        ]
+        plugin_dirs = [str(base_path)]
         
         config = self.config_manager.config
         db_path = config.storage.database if hasattr(config.storage, 'database') else "./data/xagent.db"
@@ -183,7 +179,19 @@ class Gateway(ILifecycle):
         self.container.register_instance(RulePersistenceManager, persistence_manager)
         
         set_rule_engine(self.rule_engine)
-        
+
+        from .core.scheduler import Scheduler
+        scheduler = self.container.try_resolve(Scheduler)
+        if scheduler:
+            self.rule_engine.set_scheduler(scheduler)
+
+        from .api.services.command_executor import CommandExecutor
+        command_executor = self.container.try_resolve(CommandExecutor)
+        if command_executor:
+            from xagent.plugins.delivery.action.plugin import set_command_executor
+            set_command_executor(command_executor)
+            self.rule_engine.set_command_executor(command_executor)
+
         logger.info("Rule Engine initialized with persistence")
     
     async def start(self) -> None:

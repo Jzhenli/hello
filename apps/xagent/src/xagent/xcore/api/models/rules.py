@@ -61,6 +61,8 @@ class RuleResponse(BaseModel):
     notification: Optional[Dict[str, Any]] = None
     pipeline_id: Optional[str] = None
     channel_ids: Optional[List[str]] = None
+    execution_count: int = 0
+    last_triggered: Optional[float] = None
 
 
 class FilterConfig(BaseModel):
@@ -120,6 +122,8 @@ class RuleEngineStatusResponse(BaseModel):
     active_pipelines: int
     aggregation_subscriptions: int
     event_bus_connected: bool
+    schedule_rules: int = 0
+    scheduler_available: bool = False
 
 
 class RuleListResponse(BaseModel):

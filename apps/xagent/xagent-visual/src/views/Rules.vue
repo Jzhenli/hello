@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useRuleStore } from '@/stores/rules'
+import { ref, computed, onMounted } from 'vue'
+import { useRuleStore, type RuleViewItem } from '@/stores/rules'
 import { 
   Plus, 
   Upload, 
@@ -15,7 +14,6 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-const router = useRouter()
 const ruleStore = useRuleStore()
 
 const searchQuery = ref('')
@@ -57,29 +55,25 @@ const getTypeTag = (type: string) => {
   return tags[type] || 'info'
 }
 
-const handleToggleRule = (id: string) => {
-  ruleStore.toggleRule(id)
-  const rule = ruleStore.rules.find(r => r.id === id)
-  if (rule) {
-    ElMessage.success(rule.enabled ? '规则已启用' : '规则已禁用')
+const handleToggleRule = async (id: string) => {
+  try {
+    await ruleStore.toggleRule(id)
+    const rule = ruleStore.rules.find(r => r.id === id)
+    if (rule) {
+      ElMessage.success(rule.enabled ? '规则已启用' : '规则已禁用')
+    }
+  } catch {
+    ElMessage.error('操作失败')
   }
 }
 
-const handleEditRule = (id: string) => {
-  router.push({ path: '/rules', query: { edit: id } })
-}
-
-const handleCopyRule = (rule: any) => {
-  const newRule = {
-    ...rule,
-    id: `rule-${Date.now()}`,
-    name: `${rule.name} (副本)`,
-    executionCount: 0,
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+const handleCopyRule = async (rule: RuleViewItem) => {
+  try {
+    await ruleStore.copyRule(rule.id)
+    ElMessage.success('规则已复制')
+  } catch {
+    ElMessage.error('复制规则失败')
   }
-  ruleStore.rules.push(newRule)
-  ElMessage.success('规则已复制')
 }
 
 const handleDeleteRule = (id: string, name: string) => {
@@ -91,14 +85,90 @@ const handleDeleteRule = (id: string, name: string) => {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    ruleStore.deleteRule(id)
-    ElMessage.success('规则已删除')
+  ).then(async () => {
+    try {
+      await ruleStore.deleteRule(id)
+      ElMessage.success('规则已删除')
+    } catch {
+      ElMessage.error('删除规则失败')
+    }
   }).catch(() => {})
 }
 
-const handleCreateRule = () => {
-  router.push({ path: '/rules', query: { new: 'true' } })
+const handleRefresh = async () => {
+  await ruleStore.fetchRules()
+  ElMessage.success('规则列表已刷新')
+}
+
+const handleExportRules = () => {
+  const rules = ruleStore.rules
+  if (rules.length === 0) {
+    ElMessage.warning('没有可导出的规则')
+    return
+  }
+
+  const json = JSON.stringify(rules, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `rules-export-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success(`已导出 ${rules.length} 条规则`)
+}
+
+const handleImportRules = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const importedRules = JSON.parse(text)
+
+      if (!Array.isArray(importedRules)) {
+        throw new Error('无效的规则文件格式')
+      }
+
+      let successCount = 0
+      let failCount = 0
+
+      for (const rule of importedRules) {
+        try {
+          const createData = {
+            id: rule.id || `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: rule.name || '导入的规则',
+            description: rule.description,
+            enabled: rule.enabled ?? false,
+            plugin: rule.plugin || { name: 'threshold_rule', config: {} },
+            data_subscriptions: rule.data_subscriptions,
+            notification: rule.notification,
+            pipeline_id: rule.pipeline_id,
+            channel_ids: rule.channel_ids,
+          }
+          await ruleStore.createRule(createData)
+          successCount++
+        } catch {
+          failCount++
+        }
+      }
+
+      if (successCount > 0) {
+        ElMessage.success(`成功导入 ${successCount} 条规则${failCount > 0 ? `，${failCount} 条失败` : ''}`)
+      } else {
+        ElMessage.error('导入失败')
+      }
+    } catch (error) {
+      ElMessage.error('导入失败：' + (error as Error).message)
+    }
+  }
+
+  input.click()
 }
 
 const showEditor = ref(false)
@@ -108,14 +178,18 @@ const openEditor = (ruleId?: string) => {
   currentRuleId.value = ruleId || null
   showEditor.value = true
 }
+
+const handleEditorSaved = () => {
+  ruleStore.fetchRules()
+}
+
+onMounted(() => {
+  ruleStore.fetchRules()
+})
 </script>
 
 <template>
   <div class="rules-page">
-    <div class="page-header">
-      <h2>规则编辑</h2>
-    </div>
-    
     <div class="toolbar">
       <div class="toolbar-left">
         <el-input
@@ -141,13 +215,27 @@ const openEditor = (ruleId?: string) => {
         <el-button type="primary" :icon="Plus" @click="openEditor()">
           新建规则
         </el-button>
-        <el-button :icon="Upload">导入</el-button>
-        <el-button :icon="Download">导出</el-button>
-        <el-button :icon="Refresh" circle />
+        <el-button :icon="Upload" @click="handleImportRules">导入</el-button>
+        <el-button :icon="Download" @click="handleExportRules">导出</el-button>
+        <el-button :icon="Refresh" circle @click="handleRefresh" :loading="ruleStore.loading" />
       </div>
     </div>
+
+    <div v-if="ruleStore.loading && ruleStore.rules.length === 0" class="loading-state">
+      <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+      <span>加载规则列表中...</span>
+    </div>
+
+    <div v-else-if="ruleStore.error" class="error-state">
+      <span>{{ ruleStore.error }}</span>
+      <el-button size="small" @click="ruleStore.fetchRules()">重试</el-button>
+    </div>
+
+    <div v-else-if="filteredRules.length === 0" class="empty-state">
+      <span>{{ searchQuery || typeFilter ? '没有匹配的规则' : '暂无规则，点击"新建规则"开始创建' }}</span>
+    </div>
     
-    <div class="rules-list">
+    <div v-else class="rules-list">
       <el-card 
         v-for="rule in filteredRules" 
         :key="rule.id" 
@@ -174,7 +262,7 @@ const openEditor = (ruleId?: string) => {
         </div>
         
         <div class="rule-expression">
-          <code>{{ rule.expression }}</code>
+          <code>{{ rule.expression || '无表达式' }}</code>
         </div>
         
         <div class="rule-meta">
@@ -216,33 +304,23 @@ const openEditor = (ruleId?: string) => {
       size="80%"
       :with-header="true"
     >
-      <RuleEditorCanvas :rule-id="currentRuleId" @close="showEditor = false" />
+      <RuleEditorCanvas :rule-id="currentRuleId" @close="showEditor = false" @saved="handleEditorSaved" />
     </el-drawer>
   </div>
 </template>
 
 <script lang="ts">
-import { Search } from '@element-plus/icons-vue'
+import { Search, Loading } from '@element-plus/icons-vue'
 import RuleEditorCanvas from '@/components/RuleEditorCanvas.vue'
 
 export default {
-  components: { Search, RuleEditorCanvas }
+  components: { Search, Loading, RuleEditorCanvas }
 }
 </script>
 
 <style scoped>
 .rules-page {
   padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #2c3e50;
 }
 
 .toolbar {
@@ -264,6 +342,18 @@ export default {
 .toolbar-right {
   display: flex;
   gap: 8px;
+}
+
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px;
+  color: #7f8c8d;
+  font-size: 14px;
 }
 
 .rules-list {

@@ -12,6 +12,7 @@ Plugin Types:
 """
 
 ALL_PLUGINS = [
+    'xagent.plugins.delivery.action.plugin',
     'xagent.plugins.delivery.email.plugin',
     'xagent.plugins.delivery.webhook.plugin',
     'xagent.plugins.filter.dedup.plugin',
@@ -20,6 +21,7 @@ ALL_PLUGINS = [
     'xagent.plugins.north.mqtt_client.plugin',
     'xagent.plugins.north.xnc_client.plugin',
     'xagent.plugins.rule.expression.plugin',
+    'xagent.plugins.rule.schedule.plugin',
     'xagent.plugins.rule.threshold.plugin',
     'xagent.plugins.south.bacnet.plugin',
     'xagent.plugins.south.knx.plugin',

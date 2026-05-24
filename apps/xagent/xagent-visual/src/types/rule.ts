@@ -6,9 +6,11 @@ export type NodeType =
   | 'condition' 
   | 'logic' 
   | 'action'
+  | 'notification'
 
 export interface TriggerData {
   source: string
+  sourceService?: string
   field: string
   description?: string
 }
@@ -39,9 +41,16 @@ export interface LogicData {
 
 export interface ActionData {
   target_asset: string
+  targetService?: string
   operation: string
   parameters: Record<string, any>
   delay: number
+  description?: string
+}
+
+export interface NotificationData {
+  channel_type: 'email' | 'webhook' | 'system'
+  level: 'info' | 'warning' | 'error' | 'critical'
   description?: string
 }
 
@@ -51,6 +60,7 @@ export interface RuleNodeData {
   condition?: ConditionData
   logic?: LogicData
   action?: ActionData
+  notification?: NotificationData
   label?: string
 }
 
@@ -164,6 +174,21 @@ export const NODE_TEMPLATES: NodeTemplate[] = [
       },
       label: '执行动作'
     }
+  },
+  {
+    type: 'notification',
+    label: '通知告警',
+    icon: '📢',
+    color: '#e74c3c',
+    category: '通知',
+    defaultData: {
+      notification: {
+        channel_type: 'system',
+        level: 'warning',
+        description: ''
+      },
+      label: '通知告警'
+    }
   }
 ]
 
@@ -181,6 +206,19 @@ export const LOGIC_OPERATORS = [
   { value: 'and', label: 'AND (与)' },
   { value: 'or', label: 'OR (或)' },
   { value: 'not', label: 'NOT (非)' }
+]
+
+export const NOTIFICATION_LEVELS = [
+  { value: 'info', label: '提示 (info)', color: '#3b82f6' },
+  { value: 'warning', label: '警告 (warning)', color: '#f59e0b' },
+  { value: 'error', label: '错误 (error)', color: '#ef4444' },
+  { value: 'critical', label: '紧急 (critical)', color: '#dc2626' }
+]
+
+export const NOTIFICATION_CHANNEL_TYPES = [
+  { value: 'system', label: '🔔 系统通知' },
+  { value: 'email', label: '📧 邮件通知' },
+  { value: 'webhook', label: '🔗 Webhook' }
 ]
 
 export const SCHEDULE_MODES = [

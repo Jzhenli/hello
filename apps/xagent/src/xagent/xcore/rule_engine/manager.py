@@ -62,7 +62,6 @@ class PluginManager:
         if _HAS_CORE_DISCOVERY:
             self._discovery: Optional["_PluginDiscoveryCls"] = PluginDiscovery(
                 plugin_dirs=self.plugin_dirs if self.plugin_dirs else None,
-                module_prefix="rule_engine_plugins."
             )
         else:
             self._discovery: Optional["_PluginDiscoveryCls"] = None
@@ -108,7 +107,65 @@ class PluginManager:
         return discovered
 
     def _discover_builtin(self) -> Dict[str, PluginMetadata]:
-        """内置简化发现（core 不可用时的回退方案）"""
+        """内置简化发现（core 不可用时的回退方案）
+
+        优先使用 xagent.plugins.ALL_PLUGINS 列表直接导入，
+        确保模块名与原始路径一致，避免全局变量不共享问题。
+        """
+        import inspect
+
+        discovered = {}
+
+        try:
+            from xagent.plugins import ALL_PLUGINS
+            for module_path in ALL_PLUGINS:
+                try:
+                    module = importlib.import_module(module_path)
+                    for name in dir(module):
+                        try:
+                            obj = getattr(module, name)
+                            if not inspect.isclass(obj):
+                                continue
+                            if not hasattr(obj, '__plugin_type__'):
+                                continue
+                            if inspect.isabstract(obj):
+                                continue
+
+                            plugin_type = obj.__plugin_type__
+                            plugin_name = (
+                                getattr(obj, '__plugin_name__', None)
+                                or obj.__name__.lower()
+                            )
+                            key = f"{plugin_type}:{plugin_name}"
+
+                            if key in discovered:
+                                continue
+
+                            info = obj.plugin_info()
+                            discovered[key] = info
+                            self._registrations[key] = PluginRegistration(
+                                plugin_class=obj,
+                                info=info,
+                                config_schema=(
+                                    obj.config_schema()
+                                    if hasattr(obj, 'config_schema')
+                                    else {}
+                                ),
+                            )
+                        except Exception:
+                            logger.debug(f"Error processing class {name} in {module_path}", exc_info=True)
+                            continue
+                except Exception as e:
+                    logger.error(f"Error loading plugin {module_path}: {e}")
+        except ImportError:
+            logger.warning("xagent.plugins not available, falling back to file scan")
+            discovered = self._discover_builtin_file_scan()
+
+        logger.info(f"Discovered {len(discovered)} plugins via builtin")
+        return discovered
+
+    def _discover_builtin_file_scan(self) -> Dict[str, PluginMetadata]:
+        """文件扫描发现（ALL_PLUGINS 不可用时的最终回退）"""
         import importlib.util
         import inspect
         from pathlib import Path
@@ -177,7 +234,6 @@ class PluginManager:
                 except Exception as e:
                     logger.error(f"Error loading plugin {item}: {e}")
 
-        logger.info(f"Discovered {len(discovered)} plugins via builtin")
         return discovered
 
     def register(self, plugin_class: Type) -> None:

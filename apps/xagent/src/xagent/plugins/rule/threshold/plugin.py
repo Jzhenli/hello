@@ -34,6 +34,7 @@ class ThresholdRulePlugin(RulePlugin):
         self._duration: int = 0
         self._trigger_start_time: float = 0
         self._last_result: bool = False
+        self._already_triggered: bool = False
     
     @classmethod
     def plugin_info(cls) -> PluginMetadata:
@@ -165,10 +166,10 @@ class ThresholdRulePlugin(RulePlugin):
         timestamp: float,
         value: float
     ) -> RuleEvaluationResult:
-        """处理持续时间逻辑"""
         if result and not self._last_result:
             self._trigger_start_time = timestamp
             self._last_result = True
+            self._already_triggered = False
             return RuleEvaluationResult(
                 result=RuleResult.NOT_TRIGGERED,
                 triggered=False,
@@ -176,8 +177,15 @@ class ThresholdRulePlugin(RulePlugin):
             )
         
         elif result and self._last_result:
+            if self._already_triggered:
+                return RuleEvaluationResult(
+                    result=RuleResult.NOT_TRIGGERED,
+                    triggered=False,
+                    reason="Already triggered, waiting for condition to reset"
+                )
             elapsed = timestamp - self._trigger_start_time
             if elapsed >= self._duration:
+                self._already_triggered = True
                 return RuleEvaluationResult(
                     result=RuleResult.TRIGGERED,
                     triggered=True,
@@ -193,6 +201,7 @@ class ThresholdRulePlugin(RulePlugin):
         else:
             self._last_result = False
             self._trigger_start_time = 0
+            self._already_triggered = False
             return RuleEvaluationResult(
                 result=RuleResult.NOT_TRIGGERED,
                 triggered=False

@@ -34,7 +34,16 @@ export function createNode(
     },
     condition: { condition: { field: '', operator: '>', value: '', duration: 0 }, label: '条件判断' },
     logic: { logic: { operator: 'and' }, label: '逻辑运算' },
-    action: { action: { target_asset: '', operation: '', parameters: {}, delay: 0 }, label: '执行动作' }
+    action: { action: { target_asset: '', operation: '', parameters: {}, delay: 0 }, label: '执行动作' },
+    notification: { 
+      notification: { 
+        channel_type: 'system', 
+        level: 'warning', 
+        recipients: '', 
+        retention_days: 30 
+      }, 
+      label: '通知告警' 
+    }
   }
 
   return {
@@ -135,13 +144,14 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
   const triggerNodes = nodes.filter(n => n.type === 'trigger' || n.type === 'schedule-trigger')
   const conditionNodes = nodes.filter(n => n.type === 'condition')
   const actionNodes = nodes.filter(n => n.type === 'action')
+  const notificationNodes = nodes.filter(n => n.type === 'notification')
   
   if (triggerNodes.length === 0) {
     errors.push('缺少触发器节点')
   }
   
-  if (actionNodes.length === 0) {
-    errors.push('缺少执行动作节点')
+  if (actionNodes.length === 0 && notificationNodes.length === 0) {
+    errors.push('缺少执行动作或通知告警节点')
   }
   
   // 验证定时触发器
@@ -182,6 +192,22 @@ export function validateGraph(nodes: RuleNode[], edges: RuleEdge[]): {
     }
     if (!action?.operation) {
       errors.push(`动作节点 "${node.id}" 缺少操作类型`)
+    }
+  })
+
+  notificationNodes.forEach(node => {
+    const notif = node.data.notification
+    if (!notif?.channel_type) {
+      errors.push(`通知节点 "${node.id}" 缺少通知渠道`)
+    }
+    if (notif?.channel_type !== 'system' && !notif?.recipients) {
+      errors.push(`通知节点 "${node.id}" 缺少收件人`)
+    }
+    if (notif?.channel_type === 'email' && !notif.smtp_host) {
+      errors.push(`通知节点 "${node.id}" 缺少SMTP服务器`)
+    }
+    if (notif?.channel_type === 'webhook' && !notif.webhook_url) {
+      errors.push(`通知节点 "${node.id}" 缺少Webhook URL`)
     }
   })
   

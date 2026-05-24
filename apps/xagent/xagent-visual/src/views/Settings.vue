@@ -29,10 +29,6 @@ const handleTestEmail = () => {
 
 <template>
   <div class="settings-page">
-    <div class="page-header">
-      <h2>系统设置</h2>
-    </div>
-    
     <div class="settings-container">
       <div class="settings-sidebar">
         <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
@@ -236,16 +232,6 @@ const handleTestEmail = () => {
 <style scoped>
 .settings-page {
   padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #2c3e50;
 }
 
 .settings-container {
