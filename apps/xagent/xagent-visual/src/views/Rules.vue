@@ -199,13 +199,13 @@ onMounted(() => {
           placeholder="搜索规则..."
           :prefix-icon="Search"
           clearable
-          style="width: 250px"
+          class="toolbar-search"
         />
         <el-select 
           v-model="typeFilter" 
           placeholder="类型筛选" 
           clearable
-          style="width: 140px"
+          class="toolbar-filter"
         >
           <el-option label="全部类型" value="" />
           <el-option label="场景联动" value="scene" />
@@ -331,6 +331,8 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
   padding: 16px;
   background: #fff;
@@ -341,11 +343,21 @@ export default {
 .toolbar-left {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  width: 250px;
+}
+
+.toolbar-filter {
+  width: 140px;
 }
 
 .toolbar-right {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .loading-state,
@@ -453,5 +465,35 @@ export default {
 .rule-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1024px) {
+  .toolbar-search {
+    width: 200px;
+  }
+
+  .toolbar-filter {
+    width: 120px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 12px;
+  }
+
+  .toolbar-search {
+    width: 100%;
+  }
+
+  .toolbar-filter {
+    width: 100%;
+  }
+
+  .rule-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 </style>

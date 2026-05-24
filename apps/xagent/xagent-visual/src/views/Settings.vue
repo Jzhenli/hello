@@ -14,7 +14,12 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/users'
+import { useResponsive } from '@/utils/useResponsive'
 import type { UserInfo, RoleInfo } from '@/api/users'
+
+const { isTablet, isMobile, width } = useResponsive()
+
+const useCompactLayout = computed(() => isTablet.value || isMobile.value || width.value <= 1024)
 
 const activeMenu = ref('general')
 
@@ -320,30 +325,81 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 <template>
   <div class="settings-page">
     <div class="settings-container">
-      <div class="settings-sidebar">
-        <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
-          <el-menu-item index="general">
+      <template v-if="!useCompactLayout">
+        <div class="settings-sidebar">
+          <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
+            <el-menu-item index="general">
+              <el-icon><Setting /></el-icon>
+              <span>系统配置</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
+              <el-icon><Document /></el-icon>
+              <span>日志查看</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
+              <el-icon><Refresh /></el-icon>
+              <span>备份恢复</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
+              <el-icon><User /></el-icon>
+              <span>用户管理</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
+              <el-icon><Lock /></el-icon>
+              <span>权限矩阵</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="settings-tabs">
+          <div 
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'general' }"
+            @click="activeMenu = 'general'"
+          >
             <el-icon><Setting /></el-icon>
             <span>系统配置</span>
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
+          </div>
+          <div 
+            v-if="userStore.hasPermission('logs', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'logs' }"
+            @click="activeMenu = 'logs'"
+          >
             <el-icon><Document /></el-icon>
             <span>日志查看</span>
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
+          </div>
+          <div 
+            v-if="userStore.hasPermission('backup', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'backup' }"
+            @click="activeMenu = 'backup'"
+          >
             <el-icon><Refresh /></el-icon>
             <span>备份恢复</span>
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
+          </div>
+          <div 
+            v-if="userStore.hasPermission('users', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'users' }"
+            @click="activeMenu = 'users'"
+          >
             <el-icon><User /></el-icon>
             <span>用户管理</span>
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
+          </div>
+          <div 
+            v-if="userStore.hasPermission('users', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'permissions' }"
+            @click="activeMenu = 'permissions'"
+          >
             <el-icon><Lock /></el-icon>
             <span>权限矩阵</span>
-          </el-menu-item>
-        </el-menu>
-      </div>
+          </div>
+        </div>
+      </template>
 
       <div class="settings-content">
         <div v-if="activeMenu === 'general'" class="settings-section">
@@ -581,7 +637,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
       </div>
     </div>
 
-    <el-dialog v-model="userDialogVisible" :title="userDialogTitle" width="480px" destroy-on-close>
+    <el-dialog v-model="userDialogVisible" :title="userDialogTitle" width="min(480px, 92vw)" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="用户名" v-if="!editingUserId">
           <el-input v-model="userForm.username" placeholder="请输入用户名" />
@@ -617,7 +673,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="480px" destroy-on-close>
+    <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="min(480px, 92vw)" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="角色标识" v-if="!editingRoleName">
           <el-input v-model="roleForm.name" placeholder="请输入角色标识（英文）" />
@@ -638,7 +694,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="400px" destroy-on-close>
+    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="min(400px, 90vw)" destroy-on-close>
       <el-form label-width="80px">
         <el-form-item label="新密码">
           <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="请输入新密码" />
@@ -659,15 +715,76 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 
 .settings-container {
   display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  min-height: calc(100vh - 200px);
+  min-height: calc(100vh - 160px);
+}
+
+@media (min-width: 1025px) {
+  .settings-container {
+    flex-direction: row;
+    min-height: calc(100vh - 200px);
+  }
 }
 
 .settings-sidebar {
   width: 200px;
   border-right: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.settings-mobile-nav {
+  display: none;
+}
+
+.mobile-nav-title {
+  display: none;
+}
+
+.settings-mobile-menu {
+  display: none;
+}
+
+.settings-tabs {
+  display: flex;
+  background: #fff;
+  border-radius: 8px 8px 0 0;
+  padding: 4px;
+  gap: 4px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #e0e0e0;
+  overflow-x: auto;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #606266;
+  background: transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.settings-tab:hover {
+  background: #f5f7fa;
+}
+
+.settings-tab.active {
+  background: #409eff;
+  color: #fff;
+}
+
+.settings-tab .el-icon {
+  font-size: 16px;
 }
 
 .settings-sidebar .el-menu {
@@ -678,6 +795,40 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   flex: 1;
   padding: 24px;
   overflow-x: auto;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .settings-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-content {
+    padding: 12px;
+  }
+}
+
+@media (max-height: 700px) {
+  .settings-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+  }
+
+  .settings-content {
+    padding: 12px;
+  }
+
+  .settings-tabs {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .settings-tab {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }
 
 .settings-section h3 {

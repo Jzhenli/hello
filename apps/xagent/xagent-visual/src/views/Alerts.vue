@@ -2,13 +2,21 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
 import { useUserStore } from '@/stores/users'
+import { useResponsive } from '@/utils/useResponsive'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const alertStore = useAlertStore()
 const userStore = useUserStore()
+const { isTablet, isMobile } = useResponsive()
 
 onMounted(() => {
   alertStore.fetchAlerts()
+})
+
+const channelColSpan = computed(() => {
+  if (isMobile.value) return 24
+  if (isTablet.value) return 12
+  return 8
 })
 
 const activeTab = ref('alerts')
@@ -345,13 +353,13 @@ const sendTestInAppNotification = () => {
               placeholder="搜索告警..."
               :prefix-icon="Search"
               clearable
-              style="width: 250px"
+              class="toolbar-search"
             />
             <el-select 
               v-model="levelFilter" 
               placeholder="级别筛选" 
               clearable
-              style="width: 120px"
+              class="toolbar-filter"
             >
               <el-option label="全部" value="" />
               <el-option label="紧急" value="critical" />
@@ -362,7 +370,7 @@ const sendTestInAppNotification = () => {
               v-model="statusFilter" 
               placeholder="状态筛选" 
               clearable
-              style="width: 120px"
+              class="toolbar-filter"
             >
               <el-option label="全部" value="" />
               <el-option label="未处理" value="new" />
@@ -440,7 +448,7 @@ const sendTestInAppNotification = () => {
             <el-col 
               v-for="channel in alertStore.channels" 
               :key="channel.id" 
-              :span="8"
+              :span="channelColSpan"
             >
               <el-card class="channel-card" shadow="hover">
                 <div class="channel-header">
@@ -544,7 +552,7 @@ const sendTestInAppNotification = () => {
     <el-dialog
       v-model="systemConfigDialogVisible"
       title="系统通知配置"
-      width="560px"
+      width="min(560px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -648,7 +656,7 @@ const sendTestInAppNotification = () => {
     <el-dialog
       v-model="emailConfigDialogVisible"
       title="邮件通知配置"
-      width="520px"
+      width="min(520px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -697,7 +705,7 @@ const sendTestInAppNotification = () => {
     <el-dialog
       v-model="webhookConfigDialogVisible"
       title="Webhook 配置"
-      width="520px"
+      width="min(520px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -770,6 +778,15 @@ export default {
 .toolbar-left {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  width: 250px;
+}
+
+.toolbar-filter {
+  width: 120px;
 }
 
 .channels-section {
@@ -891,5 +908,33 @@ export default {
 
 .system-config-form .el-time-select {
   width: 160px;
+}
+
+@media (max-width: 1024px) {
+  .toolbar-search {
+    width: 200px;
+  }
+
+  .toolbar-filter {
+    width: 110px;
+  }
+
+  .alerts-tabs {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar-search {
+    width: 100%;
+  }
+
+  .toolbar-filter {
+    width: 100%;
+  }
+
+  .alerts-tabs {
+    padding: 8px;
+  }
 }
 </style>

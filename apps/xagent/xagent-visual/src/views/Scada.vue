@@ -220,7 +220,7 @@ const handleExport = () => {
       <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="showNewPanelDialog = true">创建面板</el-button>
     </div>
     
-    <el-dialog v-model="showNewPanelDialog" title="新建组态面板" width="400px">
+    <el-dialog v-model="showNewPanelDialog" title="新建组态面板" width="min(400px, 90vw)">
       <el-form label-width="80px">
         <el-form-item label="面板名称">
           <el-input v-model="newPanelName" placeholder="请输入面板名称" />

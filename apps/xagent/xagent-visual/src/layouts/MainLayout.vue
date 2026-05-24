@@ -205,7 +205,7 @@ function handleLogout() {
         </router-view>
       </el-main>
       
-      <el-footer v-if="!isFullscreenMode && !isMobile" class="app-footer" height="32px">
+      <el-footer v-if="!isFullscreenMode && !isMobile && height > 700" class="app-footer" height="32px">
         <span>设备在线 12/15</span>
         <span class="divider">|</span>
         <span>规则执行 156 次/今日</span>

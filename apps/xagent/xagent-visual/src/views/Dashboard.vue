@@ -562,12 +562,12 @@ onUnmounted(() => {
   }
   
   .chart-card {
-    height: 280px;
+    height: 260px;
   }
-  
+
   .info-card {
     height: auto;
-    min-height: 240px;
+    min-height: 220px;
   }
 }
 
@@ -612,6 +612,24 @@ onUnmounted(() => {
   
   .info-card {
     min-height: 200px;
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+  .chart-card {
+    height: 220px;
+  }
+
+  .info-card {
+    min-height: 180px;
+  }
+
+  .stat-cards {
+    margin-bottom: 12px;
+  }
+
+  .chart-row {
     margin-bottom: 12px;
   }
 }

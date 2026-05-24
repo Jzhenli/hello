@@ -27,7 +27,7 @@ import PointTrend from '@/components/PointTrend.vue'
 const deviceStore = useDeviceStore()
 const pointStore = usePointStore()
 const userStore = useUserStore()
-const { isTouch, width } = useResponsive()
+const { isTouch, isTablet, isMobile, width } = useResponsive()
 
 const searchQuery = ref('')
 const statusFilter = ref('')
@@ -37,7 +37,7 @@ const selectedPointForTrend = ref<{ deviceAsset: string; pointName: string } | n
 
 const activeTab = ref('devices')
 
-const isCompactMode = computed(() => width.value <= 1100)
+const isCompactMode = computed(() => isTablet.value || isMobile.value || width.value <= 1024)
 
 const filteredSouthDevices = computed(() => {
   let list = deviceStore.southDevices
@@ -1108,7 +1108,7 @@ onMounted(async () => {
     <el-dialog 
       v-model="showDeviceDialog" 
       :title="isEditing ? '编辑设备' : '新增设备'"
-      width="600px"
+      width="min(600px, 90vw)"
       :close-on-click-modal="false"
     >
       <el-form ref="deviceFormRef" :model="deviceForm" :rules="deviceFormRules" label-width="100px">
@@ -1216,7 +1216,7 @@ onMounted(async () => {
     <el-dialog 
       v-model="showPointDialog" 
       :title="isEditingPoint ? '编辑点位' : '新增点位'"
-      width="700px"
+      width="min(700px, 92vw)"
       :close-on-click-modal="false"
     >
       <el-form ref="pointFormRef" :model="pointForm" :rules="pointFormRules" label-width="100px">
@@ -1903,6 +1903,16 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 1024px) {
+  .toolbar-search {
+    width: 180px;
+  }
+
+  .toolbar-filter {
+    width: 110px;
+  }
+}
+
 @media (max-width: 900px) {
   .main-content {
     flex-direction: column;
@@ -2006,6 +2016,84 @@ onMounted(async () => {
 
   .el-table .el-button.is-link {
     padding: 4px 8px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .device-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .device-card-compact {
+    padding: 12px;
+  }
+
+  .compact-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .panel-header {
+    padding: 8px 12px;
+  }
+
+  .toolbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-height: 700px) {
+  .toolbar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .compact-tabs {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .compact-tab {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .device-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .device-card-compact {
+    padding: 10px;
+  }
+
+  .device-card-header {
+    margin-bottom: 6px;
+  }
+
+  .panel-header {
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+
+  .panel-title {
+    font-size: 14px;
+  }
+
+  .loading-state {
+    padding: 30px 0;
+  }
+
+  .empty-state {
+    padding: 30px 0;
   }
 }
 </style>
