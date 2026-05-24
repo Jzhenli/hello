@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { 
   Setting,
-  Bell,
   Document,
   Refresh,
   User
@@ -21,10 +20,6 @@ const systemConfig = ref({
 const handleSave = () => {
   ElMessage.success('配置已保存')
 }
-
-const handleTestEmail = () => {
-  ElMessage.success('测试邮件已发送')
-}
 </script>
 
 <template>
@@ -35,10 +30,6 @@ const handleTestEmail = () => {
           <el-menu-item index="general">
             <el-icon><Setting /></el-icon>
             <span>系统配置</span>
-          </el-menu-item>
-          <el-menu-item index="notifications">
-            <el-icon><Bell /></el-icon>
-            <span>通知设置</span>
           </el-menu-item>
           <el-menu-item index="logs">
             <el-icon><Document /></el-icon>
@@ -78,48 +69,6 @@ const handleTestEmail = () => {
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleSave">保存配置</el-button>
-            </el-form-item>
-          </el-form>
-        </div>
-        
-        <div v-if="activeMenu === 'notifications'" class="settings-section">
-          <h3>通知设置</h3>
-          <el-form label-width="120px" class="settings-form">
-            <el-divider content-position="left">邮件通知</el-divider>
-            <el-form-item label="SMTP服务器">
-              <el-input placeholder="smtp.example.com" style="width: 300px" />
-            </el-form-item>
-            <el-form-item label="SMTP端口">
-              <el-input-number :min="1" :max="65535" :value="587" />
-            </el-form-item>
-            <el-form-item label="用户名">
-              <el-input placeholder="user@example.com" style="width: 300px" />
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input type="password" placeholder="********" style="width: 300px" />
-            </el-form-item>
-            <el-form-item label="发件人地址">
-              <el-input placeholder="noreply@example.com" style="width: 300px" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleTestEmail">发送测试邮件</el-button>
-            </el-form-item>
-            
-            <el-divider content-position="left">短信通知</el-divider>
-            <el-form-item label="服务商">
-              <el-select placeholder="请选择" style="width: 200px">
-                <el-option label="阿里云" value="aliyun" />
-                <el-option label="腾讯云" value="tencent" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="AccessKey ID">
-              <el-input placeholder="请输入AccessKey ID" style="width: 300px" />
-            </el-form-item>
-            <el-form-item label="AccessKey Secret">
-              <el-input type="password" placeholder="请输入AccessKey Secret" style="width: 300px" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary">保存配置</el-button>
             </el-form-item>
           </el-form>
         </div>

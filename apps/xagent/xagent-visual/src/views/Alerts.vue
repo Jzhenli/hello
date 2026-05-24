@@ -42,6 +42,34 @@ const systemConfigRules = {
 
 const systemConfigFormRef = ref()
 
+const emailConfigDialogVisible = ref(false)
+const emailConfigForm = reactive({
+  smtpHost: '',
+  smtpPort: 587,
+  username: '',
+  password: '',
+  fromAddress: '',
+  useTls: true,
+})
+const emailConfigRules = {
+  smtpHost: [{ required: true, message: '请输入SMTP服务器', trigger: 'blur' }],
+  smtpPort: [{ required: true, message: '请输入SMTP端口', trigger: 'blur' }],
+  fromAddress: [{ required: true, message: '请输入发件人地址', trigger: 'blur' }],
+}
+const emailConfigFormRef = ref()
+
+const webhookConfigDialogVisible = ref(false)
+const webhookConfigForm = reactive({
+  url: '',
+  method: 'POST',
+  headers: '',
+  secret: '',
+})
+const webhookConfigRules = {
+  url: [{ required: true, message: '请输入Webhook URL', trigger: 'blur' }],
+}
+const webhookConfigFormRef = ref()
+
 const filteredAlerts = computed(() => {
   let alerts = [...alertStore.alerts]
   
@@ -188,6 +216,24 @@ const handleConfigureChannel = (channelId: string) => {
       notifyLevels: [...(channel.config.notifyLevels ?? ['critical', 'warning', 'info'])]
     })
     systemConfigDialogVisible.value = true
+  } else if (channel.type === 'email') {
+    Object.assign(emailConfigForm, {
+      smtpHost: channel.config.smtpHost ?? '',
+      smtpPort: channel.config.smtpPort ?? 587,
+      username: channel.config.username ?? '',
+      password: channel.config.password ?? '',
+      fromAddress: channel.config.fromAddress ?? '',
+      useTls: channel.config.useTls ?? true,
+    })
+    emailConfigDialogVisible.value = true
+  } else if (channel.type === 'webhook') {
+    Object.assign(webhookConfigForm, {
+      url: channel.config.url ?? '',
+      method: channel.config.method ?? 'POST',
+      headers: channel.config.headers ?? '',
+      secret: channel.config.secret ?? '',
+    })
+    webhookConfigDialogVisible.value = true
   }
 }
 
@@ -204,6 +250,38 @@ const handleSaveSystemConfig = async () => {
     alertStore.updateChannelConfig(systemChannel.id, { ...systemConfigForm })
     ElMessage.success('系统通知配置已保存')
     systemConfigDialogVisible.value = false
+  }
+}
+
+const handleSaveEmailConfig = async () => {
+  if (!emailConfigFormRef.value) return
+  try {
+    await emailConfigFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  const emailChannel = alertStore.channels.find(c => c.type === 'email')
+  if (emailChannel) {
+    alertStore.updateChannelConfig(emailChannel.id, { ...emailConfigForm })
+    ElMessage.success('邮件通知配置已保存')
+    emailConfigDialogVisible.value = false
+  }
+}
+
+const handleSaveWebhookConfig = async () => {
+  if (!webhookConfigFormRef.value) return
+  try {
+    await webhookConfigFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  const webhookChannel = alertStore.channels.find(c => c.type === 'webhook')
+  if (webhookChannel) {
+    alertStore.updateChannelConfig(webhookChannel.id, { ...webhookConfigForm })
+    ElMessage.success('Webhook 配置已保存')
+    webhookConfigDialogVisible.value = false
   }
 }
 
@@ -362,11 +440,6 @@ const sendTestInAppNotification = () => {
       
       <el-tab-pane label="通知渠道" name="channels">
         <div class="channels-section">
-          <div class="section-header">
-            <h3>通知渠道配置</h3>
-            <el-button type="primary" :icon="Plus">添加渠道</el-button>
-          </div>
-          
           <el-row :gutter="20">
             <el-col 
               v-for="channel in alertStore.channels" 
@@ -441,6 +514,7 @@ const sendTestInAppNotification = () => {
                     type="primary" 
                     link 
                     size="small"
+                    @click="handleConfigureChannel(channel.id)"
                   >
                     配置
                   </el-button>
@@ -458,6 +532,7 @@ const sendTestInAppNotification = () => {
                     type="primary" 
                     link 
                     size="small"
+                    @click="handleTestChannel(channel.id)"
                   >
                     测试
                   </el-button>
@@ -572,6 +647,100 @@ const sendTestInAppNotification = () => {
         <el-button type="primary" @click="handleSaveSystemConfig">保存配置</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="emailConfigDialogVisible"
+      title="邮件通知配置"
+      width="520px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form
+        ref="emailConfigFormRef"
+        :model="emailConfigForm"
+        :rules="emailConfigRules"
+        label-width="110px"
+        class="system-config-form"
+      >
+        <el-divider content-position="left">SMTP 服务器</el-divider>
+
+        <el-form-item label="服务器地址" prop="smtpHost">
+          <el-input v-model="emailConfigForm.smtpHost" placeholder="smtp.example.com" />
+        </el-form-item>
+
+        <el-form-item label="端口" prop="smtpPort">
+          <el-input-number v-model="emailConfigForm.smtpPort" :min="1" :max="65535" controls-position="right" />
+        </el-form-item>
+
+        <el-form-item label="启用 TLS">
+          <el-switch v-model="emailConfigForm.useTls" />
+        </el-form-item>
+
+        <el-divider content-position="left">认证信息</el-divider>
+
+        <el-form-item label="用户名">
+          <el-input v-model="emailConfigForm.username" placeholder="user@example.com" />
+        </el-form-item>
+
+        <el-form-item label="密码">
+          <el-input v-model="emailConfigForm.password" type="password" show-password placeholder="********" />
+        </el-form-item>
+
+        <el-form-item label="发件人地址" prop="fromAddress">
+          <el-input v-model="emailConfigForm.fromAddress" placeholder="noreply@example.com" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="emailConfigDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSaveEmailConfig">保存配置</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="webhookConfigDialogVisible"
+      title="Webhook 配置"
+      width="520px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form
+        ref="webhookConfigFormRef"
+        :model="webhookConfigForm"
+        :rules="webhookConfigRules"
+        label-width="110px"
+        class="system-config-form"
+      >
+        <el-form-item label="URL" prop="url">
+          <el-input v-model="webhookConfigForm.url" placeholder="https://hooks.example.com/alert" />
+        </el-form-item>
+
+        <el-form-item label="请求方法">
+          <el-select v-model="webhookConfigForm.method" style="width: 200px">
+            <el-option label="POST" value="POST" />
+            <el-option label="PUT" value="PUT" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="自定义请求头">
+          <el-input
+            v-model="webhookConfigForm.headers"
+            type="textarea"
+            :rows="3"
+            placeholder='{"Content-Type": "application/json"}'
+          />
+        </el-form-item>
+
+        <el-form-item label="签名密钥">
+          <el-input v-model="webhookConfigForm.secret" type="password" show-password placeholder="用于验证请求来源" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="webhookConfigDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSaveWebhookConfig">保存配置</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -625,6 +794,13 @@ export default {
 
 .channel-card {
   margin-bottom: 16px;
+  height: 100%;
+}
+
+.channel-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .channel-header {
@@ -663,6 +839,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
 }
 
 .config-item {

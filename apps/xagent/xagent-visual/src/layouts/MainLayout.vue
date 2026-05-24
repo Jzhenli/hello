@@ -74,7 +74,7 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
   <el-container class="app-layout">
     <template v-if="showSidebar">
       <el-aside 
-        :width="(isCollapsed || shouldCollapseSidebar) ? '64px' : '220px'" 
+        :width="(isCollapsed || shouldCollapseSidebar) ? '64px' : '200px'" 
         class="app-aside"
         :class="{ collapsed: isCollapsed || shouldCollapseSidebar, 'fullscreen-hidden': isFullscreenMode }"
       >
