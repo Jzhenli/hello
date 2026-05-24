@@ -196,6 +196,13 @@ class ExpressionRulePlugin(RulePlugin):
                 return self._handle_duration(result, context.timestamp)
 
             if result:
+                if self._already_triggered:
+                    return RuleEvaluationResult(
+                        result=RuleResult.NOT_TRIGGERED,
+                        triggered=False,
+                        reason="Already triggered, waiting for condition to reset"
+                    )
+                self._already_triggered = True
                 return RuleEvaluationResult(
                     result=RuleResult.TRIGGERED,
                     triggered=True,
@@ -206,6 +213,7 @@ class ExpressionRulePlugin(RulePlugin):
                     }
                 )
             else:
+                self._already_triggered = False
                 return RuleEvaluationResult(
                     result=RuleResult.NOT_TRIGGERED,
                     triggered=False

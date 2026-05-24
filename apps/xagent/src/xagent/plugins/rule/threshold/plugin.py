@@ -113,11 +113,18 @@ class ThresholdRulePlugin(RulePlugin):
                 )
             
             result = self._compare(value, self._threshold, self._operator)
-            
+
             if self._duration > 0:
                 return self._handle_duration(result, context.timestamp, value)
-            
+
             if result:
+                if self._already_triggered:
+                    return RuleEvaluationResult(
+                        result=RuleResult.NOT_TRIGGERED,
+                        triggered=False,
+                        reason="Already triggered, waiting for condition to reset"
+                    )
+                self._already_triggered = True
                 return RuleEvaluationResult(
                     result=RuleResult.TRIGGERED,
                     triggered=True,
@@ -129,6 +136,7 @@ class ThresholdRulePlugin(RulePlugin):
                     }
                 )
             else:
+                self._already_triggered = False
                 return RuleEvaluationResult(
                     result=RuleResult.NOT_TRIGGERED,
                     triggered=False,

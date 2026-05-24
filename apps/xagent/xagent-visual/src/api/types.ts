@@ -171,3 +171,25 @@ export interface RuleEngineStatusResponse {
   aggregation_subscriptions: number
   event_bus_connected: boolean
 }
+
+export interface AlertResponse {
+  id: string
+  rule_id: string
+  rule_name: string
+  title: string
+  message: string
+  level: string
+  status: string
+  asset: string
+  point_name: string
+  current_value: string
+  threshold: string
+  triggered_at: number | null
+  triggered_at_str: string
+  metadata: Record<string, any>
+}
+
+export interface AlertListResponse {
+  count: number
+  alerts: AlertResponse[]
+}

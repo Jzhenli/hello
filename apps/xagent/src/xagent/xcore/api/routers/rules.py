@@ -24,6 +24,8 @@ from ..models.rules import (
     ChannelOperationResponse,
     RuleEngineStatusResponse,
     BindChannelsRequest,
+    AlertResponse,
+    AlertListResponse,
 )
 from ...rule_engine.orchestrator import RuleEngineOrchestrator
 from ...rule_engine.pipeline import PipelineConfig, PipelineLocation
@@ -98,6 +100,76 @@ async def list_rules(
         ))
     
     return RuleListResponse(count=len(rules), rules=rules)
+
+
+# ==================== Alerts ====================
+
+@router.get("/alerts", response_model=AlertListResponse)
+async def list_alerts():
+    try:
+        from xagent.plugins.delivery.system.plugin import get_system_alerts
+        alerts = get_system_alerts()
+        alert_responses = [AlertResponse(**a) for a in alerts]
+        return AlertListResponse(
+            count=len(alert_responses),
+            alerts=alert_responses,
+        )
+    except Exception as e:
+        logger.error(f"Failed to list alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=RuleOperationResponse)
+async def acknowledge_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import acknowledge_alert as ack_fn
+        if not ack_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert acknowledged", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to acknowledge alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/resolve", response_model=RuleOperationResponse)
+async def resolve_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import resolve_alert as resolve_fn
+        if not resolve_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert resolved", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resolve alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/ignore", response_model=RuleOperationResponse)
+async def ignore_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import ignore_alert as ignore_fn
+        if not ignore_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert ignored", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to ignore alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/alerts/cleared", response_model=RuleOperationResponse)
+async def clear_resolved_alerts():
+    try:
+        from xagent.plugins.delivery.system.plugin import clear_resolved_alerts as clear_fn
+        count = clear_fn()
+        return RuleOperationResponse(success=True, message=f"Cleared {count} resolved alerts", rule_id="")
+    except Exception as e:
+        logger.error(f"Failed to clear alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
@@ -455,71 +527,3 @@ async def bind_rule_channels(
         message=f"Channels bound to rule '{rule_id}' successfully",
         rule_id=rule_id,
     )
-
-
-@router.get("/alerts", response_model=RuleListResponse)
-async def list_alerts():
-    try:
-        from ...plugins.delivery.system.plugin import get_system_alerts
-        alerts = get_system_alerts()
-        return RuleListResponse(
-            success=True,
-            rules=alerts,
-            total=len(alerts),
-        )
-    except Exception as e:
-        logger.error(f"Failed to list alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/alerts/{alert_id}/acknowledge", response_model=RuleOperationResponse)
-async def acknowledge_alert(alert_id: str):
-    try:
-        from ...plugins.delivery.system.plugin import acknowledge_alert as ack_fn
-        if not ack_fn(alert_id):
-            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-        return RuleOperationResponse(success=True, message="Alert acknowledged", rule_id=alert_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to acknowledge alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/alerts/{alert_id}/resolve", response_model=RuleOperationResponse)
-async def resolve_alert(alert_id: str):
-    try:
-        from ...plugins.delivery.system.plugin import resolve_alert as resolve_fn
-        if not resolve_fn(alert_id):
-            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-        return RuleOperationResponse(success=True, message="Alert resolved", rule_id=alert_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to resolve alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/alerts/{alert_id}/ignore", response_model=RuleOperationResponse)
-async def ignore_alert(alert_id: str):
-    try:
-        from ...plugins.delivery.system.plugin import ignore_alert as ignore_fn
-        if not ignore_fn(alert_id):
-            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-        return RuleOperationResponse(success=True, message="Alert ignored", rule_id=alert_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to ignore alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/alerts/cleared", response_model=RuleOperationResponse)
-async def clear_resolved_alerts():
-    try:
-        from ...plugins.delivery.system.plugin import clear_resolved_alerts as clear_fn
-        count = clear_fn()
-        return RuleOperationResponse(success=True, message=f"Cleared {count} resolved alerts", rule_id="")
-    except Exception as e:
-        logger.error(f"Failed to clear alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

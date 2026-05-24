@@ -5,7 +5,8 @@ import type {
   RuleCreateRequest,
   RuleUpdateRequest,
   RuleOperationResponse,
-  RuleEngineStatusResponse
+  RuleEngineStatusResponse,
+  AlertListResponse
 } from './types'
 
 export interface ChannelCreateRequest {
@@ -57,6 +58,31 @@ export const ruleApi = {
 
   async bindRuleChannels(ruleId: string, channelIds: string[]): Promise<any> {
     const res = await api.post(`/api/rules/${ruleId}/channels`, { channel_ids: channelIds })
+    return res.data
+  },
+
+  async listAlerts(): Promise<AlertListResponse> {
+    const res = await api.get('/api/rules/alerts')
+    return res.data
+  },
+
+  async acknowledgeAlert(alertId: string): Promise<RuleOperationResponse> {
+    const res = await api.post(`/api/rules/alerts/${alertId}/acknowledge`)
+    return res.data
+  },
+
+  async resolveAlert(alertId: string): Promise<RuleOperationResponse> {
+    const res = await api.post(`/api/rules/alerts/${alertId}/resolve`)
+    return res.data
+  },
+
+  async ignoreAlert(alertId: string): Promise<RuleOperationResponse> {
+    const res = await api.post(`/api/rules/alerts/${alertId}/ignore`)
+    return res.data
+  },
+
+  async clearResolvedAlerts(): Promise<RuleOperationResponse> {
+    const res = await api.delete('/api/rules/alerts/cleared')
     return res.data
   }
 }

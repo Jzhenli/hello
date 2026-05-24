@@ -159,5 +159,27 @@ class ChannelOperationResponse(BaseModel):
     channel_id: Optional[str] = None
 
 
+class AlertResponse(BaseModel):
+    id: str
+    rule_id: str = ""
+    rule_name: str = ""
+    title: str = ""
+    message: str = ""
+    level: str = "info"
+    status: str = "new"
+    asset: str = ""
+    point_name: str = ""
+    current_value: str = ""
+    threshold: str = ""
+    triggered_at: Optional[float] = None
+    triggered_at_str: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AlertListResponse(BaseModel):
+    count: int
+    alerts: List[AlertResponse]
+
+
 class BindChannelsRequest(BaseModel):
     channel_ids: List[str] = Field(..., description="List of channel IDs to bind")

@@ -44,7 +44,9 @@ const menuItems = [
 const activeMenu = computed(() => route.path)
 
 const handleMenuSelect = (path: string) => {
-  router.push(path)
+  if (route.path !== path) {
+    router.push(path).catch(() => {})
+  }
   if (isTablet.value || isMobile.value) {
     isDrawerVisible.value = false
   }
