@@ -533,7 +533,8 @@ class FilterPipelineExecutor:
     def shutdown(self) -> None:
         """关闭管道"""
         for plugin in self._filters:
-            if hasattr(plugin, 'shutdown'):
+            if hasattr(plugin, 'shutdown') and not getattr(plugin, '_shutdown', False):
+                plugin._shutdown = True
                 plugin.shutdown()
 
         self._filters.clear()

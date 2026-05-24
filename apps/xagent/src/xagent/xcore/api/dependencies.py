@@ -27,6 +27,7 @@ class AppState:
         self.cleanup_task: Optional[Any] = None
         self._gateway_owned: bool = False
         self._config_manager: Optional[ConfigManager] = None
+        self.user_permission_service: Optional[Any] = None
     
     def is_initialized(self) -> bool:
         """Check if the application state is initialized"""
@@ -93,7 +94,8 @@ def set_gateway_storage(
     metadata_manager: Optional[MetadataManager] = None,
     command_executor: Optional[CommandExecutor] = None,
     gateway: Optional["Gateway"] = None,
-    cleanup_task: Optional[Any] = None
+    cleanup_task: Optional[Any] = None,
+    user_permission_service: Optional[Any] = None
 ) -> None:
     """Set gateway storage instances (called during initialization)"""
     state = get_app_state()
@@ -103,3 +105,4 @@ def set_gateway_storage(
     state.command_executor = command_executor
     state.gateway = gateway
     state.cleanup_task = cleanup_task
+    state.user_permission_service = user_permission_service

@@ -20,7 +20,8 @@ from .routers import (
     config_router,
     metadata_router,
     rules_router,
-    devices_router
+    devices_router,
+    users_router
 )
 
 if TYPE_CHECKING:
@@ -73,6 +74,7 @@ app.include_router(config_router)
 app.include_router(metadata_router)
 app.include_router(rules_router)
 app.include_router(devices_router)
+app.include_router(users_router)
 
 _static_dir = get_resource_dir() / "static"
 if _static_dir.exists():

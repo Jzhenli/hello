@@ -15,12 +15,14 @@ import {
 } from '@element-plus/icons-vue'
 import { useAlertStore } from '@/stores/alerts'
 import { useScadaStore } from '@/stores/scada'
+import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
 
 const route = useRoute()
 const router = useRouter()
 const alertStore = useAlertStore()
 const scadaStore = useScadaStore()
+const userStore = useUserStore()
 const { isTablet, isMobile, isTouch, width, height } = useResponsive()
 
 const isCollapsed = ref(false)
@@ -168,8 +170,11 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
             </el-avatar>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item>个人设置</el-dropdown-item>
-                <el-dropdown-item divided>退出登录</el-dropdown-item>
+                <el-dropdown-item v-if="userStore.isLoggedIn" disabled>
+                  {{ userStore.currentUser?.display_name || userStore.currentUser?.username }}
+                </el-dropdown-item>
+                <el-dropdown-item @click="router.push('/settings')">个人设置</el-dropdown-item>
+                <el-dropdown-item divided @click="userStore.logout()">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>

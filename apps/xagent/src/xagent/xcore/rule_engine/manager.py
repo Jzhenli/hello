@@ -85,6 +85,15 @@ class PluginManager:
         discovered_classes = self._discovery.discover_plugins()
 
         for key, plugin_class in discovered_classes.items():
+            plugin_type = getattr(plugin_class, '__plugin_type__', '')
+            if not plugin_type.startswith('rule_engine.'):
+                logger.debug(f"Skipping non-rule-engine plugin: {key}")
+                continue
+
+            if not hasattr(plugin_class, 'plugin_info'):
+                logger.debug(f"Plugin {key} has no plugin_info, skipping")
+                continue
+
             try:
                 info = plugin_class.plugin_info()
                 discovered[key] = info
@@ -712,6 +721,8 @@ class PluginManager:
         对于异步 shutdown，优先尝试在已有事件循环中调度执行，
         否则使用线程安全的方式创建新事件循环执行。
 
+        通过 _shutdown 标志实现幂等关闭，避免重复调用。
+
         Args:
             instance: 插件实例
             key: 实例缓存键（用于日志）
@@ -719,10 +730,14 @@ class PluginManager:
         if instance is None:
             return
 
+        if getattr(instance, '_shutdown', False):
+            return
+
         try:
             if not hasattr(instance, 'shutdown'):
                 return
 
+            instance._shutdown = True
             result = instance.shutdown()
 
             if asyncio.iscoroutine(result):
