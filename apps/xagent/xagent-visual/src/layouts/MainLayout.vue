@@ -34,14 +34,18 @@ const shouldCollapseSidebar = computed(() => {
   return width.value <= 1280 || height.value <= 700
 })
 
-const menuItems = [
-  { path: '/dashboard', title: '监控面板', icon: Odometer },
-  { path: '/devices', title: '设备管理', icon: Monitor },
-  { path: '/rules', title: '规则引擎', icon: Connection },
-  { path: '/alerts', title: '告警配置', icon: Bell },
-  { path: '/scada', title: '组态面板', icon: PictureFilled },
-  { path: '/settings', title: '系统设置', icon: Setting }
+const allMenuItems = [
+  { path: '/dashboard', title: '监控面板', icon: Odometer, resource: 'dashboard' },
+  { path: '/devices', title: '设备管理', icon: Monitor, resource: 'devices' },
+  { path: '/rules', title: '规则引擎', icon: Connection, resource: 'rules' },
+  { path: '/alerts', title: '告警配置', icon: Bell, resource: 'alerts' },
+  { path: '/scada', title: '组态面板', icon: PictureFilled, resource: 'scada' },
+  { path: '/settings', title: '系统设置', icon: Setting, resource: 'settings' }
 ]
+
+const menuItems = computed(() =>
+  allMenuItems.filter(item => userStore.hasPermission(item.resource, 'view'))
+)
 
 const activeMenu = computed(() => route.path)
 
@@ -70,6 +74,11 @@ const isFullscreenMode = computed(() => scadaStore.isFullscreenPreview)
 
 const showSidebar = computed(() => !isTablet.value && !isMobile.value)
 const showDrawer = computed(() => isTablet.value || isMobile.value)
+
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
 </script>
 
 <template>
@@ -165,16 +174,23 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
             <el-button :icon="Bell" circle @click="router.push('/alerts')" />
           </el-badge>
           <el-dropdown>
-            <el-avatar :size="32" class="user-avatar">
-              <el-icon><User /></el-icon>
-            </el-avatar>
+            <div class="user-info">
+              <el-avatar :size="32" class="user-avatar">
+                <el-icon><User /></el-icon>
+              </el-avatar>
+              <span v-if="!isMobile && !isTablet" class="user-name">
+                {{ userStore.currentUser?.display_name || userStore.currentUser?.username || '未登录' }}
+              </span>
+            </div>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-if="userStore.isLoggedIn" disabled>
-                  {{ userStore.currentUser?.display_name || userStore.currentUser?.username }}
+                  <el-tag size="small" :type="userStore.currentUser?.role_name === 'admin' ? 'danger' : 'primary'">
+                    {{ userStore.currentUser?.role_display_name || userStore.currentUser?.role_name }}
+                  </el-tag>
                 </el-dropdown-item>
                 <el-dropdown-item @click="router.push('/settings')">个人设置</el-dropdown-item>
-                <el-dropdown-item divided @click="userStore.logout()">退出登录</el-dropdown-item>
+                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -351,6 +367,23 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
 .user-avatar {
   cursor: pointer;
   background: #3498db;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.user-name {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-main {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
+import { useUserStore } from '@/stores/users'
 import { 
   Bell,
   Check,
@@ -10,6 +11,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const alertStore = useAlertStore()
+const userStore = useUserStore()
 
 onMounted(() => {
   alertStore.fetchAlerts()
@@ -377,7 +379,7 @@ const sendTestInAppNotification = () => {
           </div>
           <div class="toolbar-right">
             <el-button @click="alertStore.fetchAlerts()" :loading="alertStore.loading">刷新</el-button>
-            <el-button type="danger" @click="handleClearAll">清除已解决</el-button>
+            <el-button type="danger" @click="handleClearAll" v-if="userStore.hasPermission('alerts', 'delete')">清除已解决</el-button>
           </div>
         </div>
         
@@ -407,7 +409,7 @@ const sendTestInAppNotification = () => {
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button 
-                v-if="row.status === 'new'"
+                v-if="row.status === 'new' && userStore.hasPermission('alerts', 'update')"
                 type="primary" 
                 size="small" 
                 link
@@ -416,7 +418,7 @@ const sendTestInAppNotification = () => {
                 确认
               </el-button>
               <el-button 
-                v-if="row.status !== 'resolved' && row.status !== 'ignored'"
+                v-if="(row.status !== 'resolved' && row.status !== 'ignored') && userStore.hasPermission('alerts', 'update')"
                 type="success" 
                 size="small" 
                 link
@@ -425,7 +427,7 @@ const sendTestInAppNotification = () => {
                 解决
               </el-button>
               <el-button 
-                v-if="row.status === 'new'"
+                v-if="row.status === 'new' && userStore.hasPermission('alerts', 'update')"
                 type="warning" 
                 size="small" 
                 link
@@ -459,6 +461,7 @@ const sendTestInAppNotification = () => {
                     <el-tag size="small">{{ getChannelTypeLabel(channel.type) }}</el-tag>
                   </div>
                   <el-switch 
+                    v-if="userStore.hasPermission('alerts', 'update')"
                     :model-value="channel.enabled"
                     @change="handleToggleChannel(channel.id)"
                   />
@@ -501,7 +504,7 @@ const sendTestInAppNotification = () => {
                 </div>
                 <div class="channel-footer">
                   <el-button 
-                    v-if="channel.type === 'system'"
+                    v-if="channel.type === 'system' && userStore.hasPermission('alerts', 'update')"
                     type="primary" 
                     link 
                     size="small"
@@ -510,7 +513,7 @@ const sendTestInAppNotification = () => {
                     配置
                   </el-button>
                   <el-button 
-                    v-else
+                    v-else-if="userStore.hasPermission('alerts', 'update')"
                     type="primary" 
                     link 
                     size="small"
@@ -519,7 +522,7 @@ const sendTestInAppNotification = () => {
                     配置
                   </el-button>
                   <el-button 
-                    v-if="channel.type === 'system'"
+                    v-if="channel.type === 'system' && userStore.hasPermission('alerts', 'update')"
                     type="primary" 
                     link 
                     size="small"
@@ -528,7 +531,7 @@ const sendTestInAppNotification = () => {
                     测试
                   </el-button>
                   <el-button 
-                    v-else
+                    v-else-if="userStore.hasPermission('alerts', 'update')"
                     type="primary" 
                     link 
                     size="small"
@@ -644,7 +647,7 @@ const sendTestInAppNotification = () => {
 
       <template #footer>
         <el-button @click="systemConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveSystemConfig">保存配置</el-button>
+        <el-button type="primary" @click="handleSaveSystemConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
       </template>
     </el-dialog>
 
@@ -693,7 +696,7 @@ const sendTestInAppNotification = () => {
 
       <template #footer>
         <el-button @click="emailConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveEmailConfig">保存配置</el-button>
+        <el-button type="primary" @click="handleSaveEmailConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
       </template>
     </el-dialog>
 
@@ -738,7 +741,7 @@ const sendTestInAppNotification = () => {
 
       <template #footer>
         <el-button @click="webhookConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveWebhookConfig">保存配置</el-button>
+        <el-button type="primary" @click="handleSaveWebhookConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
       </template>
     </el-dialog>
   </div>

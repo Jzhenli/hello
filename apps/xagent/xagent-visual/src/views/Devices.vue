@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useDeviceStore } from '@/stores/devices'
 import { usePointStore } from '@/stores/points'
+import { useUserStore } from '@/stores/users'
 import type { DeviceConfig, PointConfig, StandardDataType } from '@/api/types'
 import type { DeviceListItem } from '@/stores/devices'
 import { useResponsive } from '@/utils/useResponsive'
@@ -25,6 +26,7 @@ import PointTrend from '@/components/PointTrend.vue'
 
 const deviceStore = useDeviceStore()
 const pointStore = usePointStore()
+const userStore = useUserStore()
 const { isTouch, width } = useResponsive()
 
 const searchQuery = ref('')
@@ -795,13 +797,13 @@ onMounted(async () => {
         </div>
       </div>
       <div class="toolbar-right">
-        <el-button type="primary" :icon="Plus" @click="handleAddDevice">
+        <el-button v-if="userStore.hasPermission('devices', 'create')" type="primary" :icon="Plus" @click="handleAddDevice">
           新增设备
         </el-button>
         <el-button :icon="Download" @click="handleExportYaml">
           导出
         </el-button>
-        <el-button :icon="Upload" @click="handleImportYaml">
+        <el-button v-if="userStore.hasPermission('devices', 'create')" :icon="Upload" @click="handleImportYaml">
           导入
         </el-button>
         <el-button :icon="Refresh" @click="handleRefresh" :loading="deviceStore.loading">
@@ -877,17 +879,18 @@ onMounted(async () => {
               </el-tag>
             </div>
             <div class="device-card-actions">
-              <el-switch 
+              <el-switch
+                v-if="userStore.hasPermission('devices', 'update')"
                 :model-value="device.enabled" 
                 :size="isTouch ? 'default' : 'small'"
                 @change="handleToggleDevice(device.asset)"
                 @click.stop
               />
               <div class="action-buttons" @click.stop>
-                <el-button type="primary" link :size="isTouch ? 'default' : 'small'" @click="handleEditDevice(device)">
+                <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link :size="isTouch ? 'default' : 'small'" @click="handleEditDevice(device)">
                   编辑
                 </el-button>
-                <el-button type="danger" link :size="isTouch ? 'default' : 'small'" @click="handleDeleteDevice(device)">
+                <el-button v-if="userStore.hasPermission('devices', 'delete')" type="danger" link :size="isTouch ? 'default' : 'small'" @click="handleDeleteDevice(device)">
                   删除
                 </el-button>
               </div>
@@ -912,7 +915,7 @@ onMounted(async () => {
               </el-button>
             </div>
             <span class="panel-title">{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name || selectedDeviceAsset }}</span>
-            <el-button type="primary" :icon="Plus" size="small" @click="handleAddPoint">
+            <el-button v-if="userStore.hasPermission('devices', 'create')" type="primary" :icon="Plus" size="small" @click="handleAddPoint">
               新增点位
             </el-button>
           </div>
@@ -950,10 +953,10 @@ onMounted(async () => {
                 <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
                 </el-button>
-                <el-button type="primary" link size="small" @click="handleEditPoint(row)">
+                <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link size="small" @click="handleEditPoint(row)">
                   编辑
                 </el-button>
-                <el-button type="danger" link size="small" @click="handleDeletePoint(row.name)">
+                <el-button v-if="userStore.hasPermission('devices', 'delete')" type="danger" link size="small" @click="handleDeletePoint(row.name)">
                   删除
                 </el-button>
               </template>
@@ -1007,7 +1010,8 @@ onMounted(async () => {
               </div>
             </div>
             <div class="device-item-actions" @click.stop>
-              <el-switch 
+              <el-switch
+                v-if="userStore.hasPermission('devices', 'update')"
                 :model-value="device.enabled" 
                 :size="isTouch ? 'default' : 'small'"
                 @change="handleToggleDevice(device.asset)"
@@ -1022,9 +1026,9 @@ onMounted(async () => {
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="edit" :icon="Edit">编辑</el-dropdown-item>
-                    <el-dropdown-item command="reload" :icon="RefreshRight">热重载</el-dropdown-item>
-                    <el-dropdown-item command="delete" :icon="Delete" divided>
+                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="edit" :icon="Edit">编辑</el-dropdown-item>
+                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="reload" :icon="RefreshRight">热重载</el-dropdown-item>
+                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'delete')" command="delete" :icon="Delete" divided>
                       <span style="color: #f56c6c">删除</span>
                     </el-dropdown-item>
                   </el-dropdown-menu>
@@ -1045,7 +1049,7 @@ onMounted(async () => {
           <div class="panel-header">
             <span class="panel-title">{{ deviceStore.getDeviceByAsset(selectedDeviceAsset)?.name || selectedDeviceAsset }} 点位列表</span>
             <div class="points-actions">
-              <el-button type="primary" :icon="Plus" size="small" @click="handleAddPoint">
+              <el-button v-if="userStore.hasPermission('devices', 'create')" type="primary" :icon="Plus" size="small" @click="handleAddPoint">
                 新增点位
               </el-button>
             </div>
@@ -1096,10 +1100,10 @@ onMounted(async () => {
                 <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
                 </el-button>
-                <el-button type="primary" link size="small" @click="handleEditPoint(row)">
+                <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link size="small" @click="handleEditPoint(row)">
                   编辑
                 </el-button>
-                <el-button type="danger" link size="small" @click="handleDeletePoint(row.name)">
+                <el-button v-if="userStore.hasPermission('devices', 'delete')" type="danger" link size="small" @click="handleDeletePoint(row.name)">
                   删除
                 </el-button>
               </template>

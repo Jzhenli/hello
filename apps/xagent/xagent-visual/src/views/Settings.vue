@@ -326,19 +326,19 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             <el-icon><Setting /></el-icon>
             <span>系统配置</span>
           </el-menu-item>
-          <el-menu-item index="logs">
+          <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
             <el-icon><Document /></el-icon>
             <span>日志查看</span>
           </el-menu-item>
-          <el-menu-item index="backup">
+          <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
             <el-icon><Refresh /></el-icon>
             <span>备份恢复</span>
           </el-menu-item>
-          <el-menu-item index="users">
+          <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
             <el-icon><User /></el-icon>
             <span>用户管理</span>
           </el-menu-item>
-          <el-menu-item index="permissions">
+          <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
             <el-icon><Lock /></el-icon>
             <span>权限矩阵</span>
           </el-menu-item>
@@ -452,7 +452,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
               <template #header>
                 <div class="card-header">
                   <span class="card-title">用户列表</span>
-                  <el-button type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">添加用户</el-button>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">添加用户</el-button>
                 </div>
               </template>
               <el-table :data="userStore.users" stripe v-loading="userStore.loading">
@@ -475,9 +475,9 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 </el-table-column>
                 <el-table-column label="操作" width="200" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button type="primary" link size="small" :icon="Edit" @click="openEditUserDialog(row)">编辑</el-button>
-                    <el-button type="warning" link size="small" :icon="Lock" @click="openChangePasswordDialog(row)">改密</el-button>
-                    <el-button type="danger" link size="small" :icon="Delete" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" :icon="Edit" @click="openEditUserDialog(row)">编辑</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" :icon="Lock" @click="openChangePasswordDialog(row)">改密</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" :icon="Delete" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -487,7 +487,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
               <template #header>
                 <div class="card-header">
                   <span class="card-title">角色列表</span>
-                  <el-button type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">添加角色</el-button>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">添加角色</el-button>
                 </div>
               </template>
               <el-table :data="userStore.roles" stripe>
@@ -503,8 +503,8 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 </el-table-column>
                 <el-table-column label="操作" width="140" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button type="primary" link size="small" :icon="Edit" @click="openEditRoleDialog(row)">编辑</el-button>
-                    <el-button type="danger" link size="small" :icon="Delete" @click="handleDeleteRole(row)" :disabled="row.is_system">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" :icon="Edit" @click="openEditRoleDialog(row)">编辑</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" :icon="Delete" @click="handleDeleteRole(row)" :disabled="row.is_system">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -524,7 +524,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                   :value="role.name"
                 />
               </el-select>
-              <div v-if="!isEditingPermissions" class="permission-actions">
+              <div v-if="!isEditingPermissions && userStore.hasPermission('users', 'update')" class="permission-actions">
                 <el-button type="primary" :icon="Edit" @click="startEditPermissions">编辑权限</el-button>
               </div>
               <div v-else class="permission-actions">

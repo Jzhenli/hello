@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useScadaStore } from '@/stores/scada'
+import { useUserStore } from '@/stores/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { FullScreen, View, Upload } from '@element-plus/icons-vue'
 import ComponentPalette from '@/components/ComponentPalette.vue'
@@ -8,6 +9,7 @@ import ScadaCanvas from '@/components/ScadaCanvas.vue'
 import ComponentConfig from '@/components/ComponentConfig.vue'
 
 const scadaStore = useScadaStore()
+const userStore = useUserStore()
 
 const showNewPanelDialog = ref(false)
 const newPanelName = ref('')
@@ -154,11 +156,11 @@ const handleExport = () => {
         <el-button :icon="View" @click="handlePreview">预览</el-button>
         <el-button :icon="FullScreen" @click="handleFullscreen">全屏</el-button>
         <el-button @click="handleExport">导出</el-button>
-        <el-button type="primary" :icon="Upload" @click="handlePublish">发布</el-button>
-        <el-button type="primary" @click="showNewPanelDialog = true">
+        <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">发布</el-button>
+        <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="showNewPanelDialog = true">
           + 新建面板
         </el-button>
-        <el-button @click="handleSave">保存</el-button>
+        <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">保存</el-button>
       </div>
     </div>
     
@@ -178,7 +180,7 @@ const handleExport = () => {
         @click="handleSelectPanel(panel.id)"
       >
         <span class="tab-name">{{ panel.name }}</span>
-        <span class="tab-close" @click.stop="handleDeletePanel(panel.id, panel.name)">×</span>
+        <span class="tab-close" v-if="userStore.hasPermission('scada', 'delete')" @click.stop="handleDeletePanel(panel.id, panel.name)">×</span>
       </div>
     </div>
     
@@ -216,7 +218,7 @@ const handleExport = () => {
     <div v-else class="empty-state">
       <span class="empty-icon">📊</span>
       <p>请选择或创建一个组态面板</p>
-      <el-button type="primary" @click="showNewPanelDialog = true">创建面板</el-button>
+      <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="showNewPanelDialog = true">创建面板</el-button>
     </div>
     
     <el-dialog v-model="showNewPanelDialog" title="新建组态面板" width="400px">
@@ -230,7 +232,7 @@ const handleExport = () => {
       </el-form>
       <template #footer>
         <el-button @click="showNewPanelDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreatePanel">创建</el-button>
+        <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="handleCreatePanel">创建</el-button>
       </template>
     </el-dialog>
   </div>

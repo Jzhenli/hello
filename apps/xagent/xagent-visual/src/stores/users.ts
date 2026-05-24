@@ -34,6 +34,11 @@ export const useUserStore = defineStore('user', () => {
         currentUser.value = data.user
         isAuthenticated.value = true
         localStorage.setItem('xagent_user', JSON.stringify(data.user))
+        try {
+          await fetchRoles()
+        } catch {
+          // ignore
+        }
         return true
       }
       return false
@@ -56,6 +61,9 @@ export const useUserStore = defineStore('user', () => {
       try {
         currentUser.value = JSON.parse(stored)
         isAuthenticated.value = true
+        if (roles.value.length === 0) {
+          fetchRoles().catch(() => {})
+        }
       } catch {
         localStorage.removeItem('xagent_user')
       }

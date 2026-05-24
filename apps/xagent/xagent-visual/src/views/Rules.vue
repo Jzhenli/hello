@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRuleStore, type RuleViewItem } from '@/stores/rules'
+import { useUserStore } from '@/stores/users'
 import { 
   Plus, 
   Upload, 
@@ -15,6 +16,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const ruleStore = useRuleStore()
+const userStore = useUserStore()
 
 const searchQuery = ref('')
 const typeFilter = ref('')
@@ -212,10 +214,10 @@ onMounted(() => {
         </el-select>
       </div>
       <div class="toolbar-right">
-        <el-button type="primary" :icon="Plus" @click="openEditor()">
+        <el-button type="primary" :icon="Plus" @click="openEditor()" v-if="userStore.hasPermission('rules', 'create')">
           新建规则
         </el-button>
-        <el-button :icon="Upload" @click="handleImportRules">导入</el-button>
+        <el-button :icon="Upload" @click="handleImportRules" v-if="userStore.hasPermission('rules', 'create')">导入</el-button>
         <el-button :icon="Download" @click="handleExportRules">导出</el-button>
         <el-button :icon="Refresh" circle @click="handleRefresh" :loading="ruleStore.loading" />
       </div>
@@ -258,6 +260,7 @@ onMounted(() => {
             v-model="rule.enabled"
             size="small"
             @change="handleToggleRule(rule.id)"
+            v-if="userStore.hasPermission('rules', 'update')"
           />
         </div>
         
@@ -277,20 +280,21 @@ onMounted(() => {
         </div>
         
         <div class="rule-actions">
-          <el-button type="primary" :icon="Edit" size="small" @click="openEditor(rule.id)">
+          <el-button type="primary" :icon="Edit" size="small" @click="openEditor(rule.id)" v-if="userStore.hasPermission('rules', 'update')">
             编辑
           </el-button>
-          <el-button :icon="CopyDocument" size="small" @click="handleCopyRule(rule)">
+          <el-button :icon="CopyDocument" size="small" @click="handleCopyRule(rule)" v-if="userStore.hasPermission('rules', 'create')">
             复制
           </el-button>
           <el-button 
             :type="rule.enabled ? 'warning' : 'success'" 
             size="small"
             @click="handleToggleRule(rule.id)"
+            v-if="userStore.hasPermission('rules', 'update')"
           >
             {{ rule.enabled ? '禁用' : '启用' }}
           </el-button>
-          <el-button type="danger" :icon="Delete" size="small" @click="handleDeleteRule(rule.id, rule.name)">
+          <el-button type="danger" :icon="Delete" size="small" @click="handleDeleteRule(rule.id, rule.name)" v-if="userStore.hasPermission('rules', 'delete')">
             删除
           </el-button>
         </div>

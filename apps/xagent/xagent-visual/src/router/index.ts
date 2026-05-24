@@ -1,6 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '@/stores/users'
+
+const ROUTE_PERMISSION_MAP: Record<string, string> = {
+  '/dashboard': 'dashboard',
+  '/devices': 'devices',
+  '/rules': 'rules',
+  '/alerts': 'alerts',
+  '/scada': 'scada',
+  '/settings': 'settings',
+}
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/Login.vue'),
+    meta: { title: '登录', public: true }
+  },
   {
     path: '/',
     redirect: '/dashboard'
@@ -48,9 +64,52 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, _from, next) => {
+function findFirstAllowedPath(userStore: ReturnType<typeof useUserStore>): string {
+  const paths = ['/dashboard', '/devices', '/rules', '/alerts', '/scada', '/settings']
+  for (const p of paths) {
+    const resource = ROUTE_PERMISSION_MAP[p]
+    if (!resource || userStore.hasPermission(resource, 'view')) {
+      return p
+    }
+  }
+  return '/dashboard'
+}
+
+router.beforeEach(async (to, _from, next) => {
   document.title = `${to.meta.title || 'XAgent'} - XAgent 控制台`
+
+  if (to.meta.public) {
+    next()
+    return
+  }
+
+  const userStore = useUserStore()
+  if (!userStore.isLoggedIn) {
+    userStore.restoreSession()
+  }
+
+  if (!userStore.isLoggedIn) {
+    next({ name: 'Login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  if (userStore.roles.length === 0) {
+    await userStore.fetchRoles()
+  }
+
+  const resource = ROUTE_PERMISSION_MAP[to.path]
+  if (resource && !userStore.hasPermission(resource, 'view')) {
+    const allowed = findFirstAllowedPath(userStore)
+    if (allowed === to.path) {
+      next()
+    } else {
+      next(allowed)
+    }
+    return
+  }
+
   next()
 })
 
 export default router
+export { ROUTE_PERMISSION_MAP }
