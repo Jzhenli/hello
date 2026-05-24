@@ -160,7 +160,7 @@ const showDrawer = computed(() => isTablet.value || isMobile.value)
         </div>
         <div class="header-right">
           <el-badge :value="alertStore.pendingAlerts" :hidden="alertStore.pendingAlerts === 0">
-            <el-button :icon="Bell" circle />
+            <el-button :icon="Bell" circle @click="router.push('/alerts')" />
           </el-badge>
           <el-dropdown>
             <el-avatar :size="32" class="user-avatar">
