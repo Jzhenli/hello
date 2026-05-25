@@ -22,16 +22,29 @@ export interface DeviceListItem {
 
 function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
   const pluginConfig = device.plugin?.config || {}
+  const pluginName = device.plugin?.name || ''
+  
+  let host = ''
+  let port = 0
+  
+  if (pluginName === 'knx') {
+    host = (pluginConfig.gateway_ip as string) || ''
+    port = (pluginConfig.gateway_port as number) || 0
+  } else {
+    host = (pluginConfig.host as string) || ''
+    port = (pluginConfig.port as number) || 0
+  }
+  
   return {
     asset: device.asset,
     name: device.name || device.asset,
     enabled: device.enabled,
     status: device.status || 'active',
-    pluginName: device.plugin?.name || '',
+    pluginName: pluginName,
     pointCount: device.points?.length || 0,
     connection: {
-      host: (pluginConfig.host as string) || '',
-      port: (pluginConfig.port as number) || 0
+      host: host,
+      port: port
     },
     pluginConfig: pluginConfig as Record<string, unknown>,
     tags: device.tags || [],
