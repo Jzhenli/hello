@@ -372,6 +372,7 @@ class KNXPlugin(SouthPluginBase):
         
         type_config = DATA_TYPE_MAPPING.get(data_type, DATA_TYPE_MAPPING["switch"])
         device_class_name = type_config["device_class"]
+        dpt_value = type_config.get("dpt", 1)
         
         try:
             read_ga = _GroupAddress(read_address) if read_address else None
@@ -380,7 +381,7 @@ class KNXPlugin(SouthPluginBase):
             logger.error(f"Invalid group address: {e}")
             return None
         
-        device = self._construct_device(device_class_name, name, read_ga, write_ga)
+        device = self._construct_device(device_class_name, name, read_ga, write_ga, dpt_value)
         
         if device:
             self._xknx.devices.add(device)
@@ -392,7 +393,8 @@ class KNXPlugin(SouthPluginBase):
         device_class_name: str, 
         name: str, 
         read_ga: Any, 
-        write_ga: Any
+        write_ga: Any,
+        dpt_value: Any = 1
     ) -> Any:
         """根据设备类名构造xknx设备对象"""
         constructors = {
@@ -422,7 +424,7 @@ class KNXPlugin(SouthPluginBase):
         if factory:
             return factory()
         
-        return _Sensor(self._xknx, name=name, group_address_state=read_ga)
+        return _Sensor(self._xknx, name=name, group_address_state=read_ga, value_type=dpt_value)
     
     async def poll(self) -> List[Reading]:
         poll_start = time.time()

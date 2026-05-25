@@ -5,10 +5,10 @@ DATA_TYPE_MAPPING = {
     "binary": {"device_class": "BinarySensor", "value_attr": "state", "dpt": 1, "data_type": "bool"},
     "bool": {"device_class": "BinarySensor", "value_attr": "state", "dpt": 1, "data_type": "bool"},
     "temperature": {"device_class": "Climate", "value_attr": "temperature", "dpt": 9, "data_type": "float", "unit": "°C"},
-    "percent": {"device_class": "Sensor", "value_attr": "resolve", "dpt": 5, "data_type": "int", "unit": "%"},
-    "brightness": {"device_class": "Sensor", "value_attr": "resolve", "dpt": 5, "data_type": "int", "unit": "%"},
-    "dimming": {"device_class": "Light", "value_attr": "current_brightness", "dpt": 5, "data_type": "int", "unit": "%"},
-    "blinds": {"device_class": "Cover", "value_attr": "current_position", "dpt": 5, "data_type": "int", "unit": "%"},
+    "percent": {"device_class": "Sensor", "value_attr": "resolve", "dpt": "5.001", "data_type": "int", "unit": "%"},
+    "brightness": {"device_class": "Sensor", "value_attr": "resolve", "dpt": "5.001", "data_type": "int", "unit": "%"},
+    "dimming": {"device_class": "Light", "value_attr": "current_brightness", "dpt": "5.001", "data_type": "int", "unit": "%"},
+    "blinds": {"device_class": "Cover", "value_attr": "current_position", "dpt": "5.001", "data_type": "int", "unit": "%"},
     "color_rgb": {"device_class": "Light", "value_attr": "current_color", "dpt": 232, "data_type": "string"},
     "string": {"device_class": "Sensor", "value_attr": "resolve", "dpt": 16, "data_type": "string"},
     "float": {"device_class": "Sensor", "value_attr": "resolve", "dpt": 9, "data_type": "float"},
@@ -29,7 +29,7 @@ DEFAULT_POLL_INTERVAL = 5
 ERROR_CODE_DEVICE_OFFLINE = 10
 
 VALUE_RANGES = {
-    "temperature": (-273.15, 1000),
+    "temperature": (-40, 120),
     "humidity": (0, 100),
     "percent": (0, 100),
     "brightness": (0, 100),
