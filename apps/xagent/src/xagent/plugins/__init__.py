@@ -14,6 +14,7 @@ Plugin Types:
 ALL_PLUGINS = [
     'xagent.plugins.delivery.action.plugin',
     'xagent.plugins.delivery.email.plugin',
+    'xagent.plugins.delivery.system.plugin',
     'xagent.plugins.delivery.webhook.plugin',
     'xagent.plugins.filter.dedup.plugin',
     'xagent.plugins.filter.rename.plugin',
