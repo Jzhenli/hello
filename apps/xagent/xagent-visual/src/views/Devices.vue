@@ -72,6 +72,7 @@ const handleToggleDevice = async (asset: string) => {
 
 const handleRefresh = async () => {
   await deviceStore.fetchDevices()
+  await deviceStore.fetchConnectionStatus()
   await pointStore.fetchDevicesWithPoints()
 }
 
@@ -332,22 +333,6 @@ const handleCloseTrend = () => {
 
 const getDevicePoints = (asset: string) => {
   return pointStore.getDevicePoints(asset)
-}
-
-const getStatusLabel = (status: string, enabled: boolean) => {
-  if (!enabled) return '已停用'
-  if (status === 'active') return '在线'
-  if (status === 'error') return '错误'
-  if (status === 'maintenance') return '维护中'
-  return '离线'
-}
-
-const getStatusType = (status: string, enabled: boolean) => {
-  if (!enabled) return 'info'
-  if (status === 'active') return 'success'
-  if (status === 'error') return 'danger'
-  if (status === 'maintenance') return 'warning'
-  return 'info'
 }
 
 const showPointDialog = ref(false)
@@ -720,6 +705,7 @@ const handleImportFileChange = async (e: Event) => {
 
 onMounted(async () => {
   await deviceStore.fetchDevices()
+  await deviceStore.fetchConnectionStatus()
   await pointStore.fetchDevicesWithPoints()
 })
 </script>
@@ -820,14 +806,14 @@ onMounted(async () => {
             :key="device.asset" 
             class="device-card-compact"
             :class="{ 
-              offline: !device.enabled || device.status !== 'active',
+              offline: device.connectionStatus !== 'online',
               selected: selectedDeviceAsset === device.asset 
             }"
             @click="handleViewPoints(device.asset); activeTab = 'points'"
           >
             <div class="device-card-header">
-              <div class="device-card-status" :class="{ online: device.enabled && device.status === 'active' }">
-                <el-icon v-if="device.enabled && device.status === 'active'"><CircleCheck /></el-icon>
+              <div class="device-card-status" :class="{ online: device.connectionStatus === 'online' }">
+                <el-icon v-if="device.connectionStatus === 'online'"><CircleCheck /></el-icon>
                 <el-icon v-else><CircleClose /></el-icon>
               </div>
               <div class="device-card-info">
@@ -837,9 +823,6 @@ onMounted(async () => {
                   <span>{{ device.pointCount }} 点位</span>
                 </div>
               </div>
-              <el-tag size="small" :type="getStatusType(device.status, device.enabled)">
-                {{ getStatusLabel(device.status, device.enabled) }}
-              </el-tag>
             </div>
             <div class="device-card-actions">
               <el-switch
@@ -951,21 +934,18 @@ onMounted(async () => {
             :key="device.asset" 
             class="device-item"
             :class="{ 
-              offline: !device.enabled || device.status !== 'active',
+              offline: device.connectionStatus !== 'online',
               selected: selectedDeviceAsset === device.asset 
             }"
             @click="handleViewPoints(device.asset)"
           >
-            <div class="device-item-status" :class="{ online: device.enabled && device.status === 'active' }">
-              <el-icon v-if="device.enabled && device.status === 'active'"><CircleCheck /></el-icon>
+            <div class="device-item-status" :class="{ online: device.connectionStatus === 'online' }">
+              <el-icon v-if="device.connectionStatus === 'online'"><CircleCheck /></el-icon>
               <el-icon v-else><CircleClose /></el-icon>
             </div>
             <div class="device-item-content">
               <div class="device-item-header">
                 <span class="device-item-name">{{ device.name }}</span>
-                <el-tag size="small" :type="getStatusType(device.status, device.enabled)">
-                  {{ getStatusLabel(device.status, device.enabled) }}
-                </el-tag>
               </div>
               <div class="device-item-meta">
                 <span>{{ device.pluginName }}</span>

@@ -8,6 +8,7 @@ export interface DeviceListItem {
   name: string
   enabled: boolean
   status: DeviceStatus
+  connectionStatus: 'online' | 'offline' | 'unknown'
   pluginName: string
   pointCount: number
   connection: {
@@ -20,7 +21,7 @@ export interface DeviceListItem {
   updated_at?: string
 }
 
-function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
+function mapDeviceToListItem(device: DeviceConfig, connectionStatusMap: Record<string, string> = {}): DeviceListItem {
   const pluginConfig = device.plugin?.config || {}
   const pluginName = device.plugin?.name || ''
   
@@ -35,11 +36,14 @@ function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
     port = (pluginConfig.port as number) || 0
   }
   
+  const connectionStatus = connectionStatusMap[device.asset] || 'unknown'
+  
   return {
     asset: device.asset,
     name: device.name || device.asset,
     enabled: device.enabled,
     status: device.status || 'active',
+    connectionStatus: connectionStatus as 'online' | 'offline' | 'unknown',
     pluginName: pluginName,
     pointCount: device.points?.length || 0,
     connection: {
@@ -55,15 +59,16 @@ function mapDeviceToListItem(device: DeviceConfig): DeviceListItem {
 
 export const useDeviceStore = defineStore('devices', () => {
   const devices = ref<DeviceConfig[]>([])
+  const connectionStatusMap = ref<Record<string, string>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
 
   const deviceList = computed<DeviceListItem[]>(() =>
-    devices.value.map(mapDeviceToListItem)
+    devices.value.map(d => mapDeviceToListItem(d, connectionStatusMap.value))
   )
 
   const onlineDevices = computed(() =>
-    deviceList.value.filter(d => d.status === 'active' && d.enabled).length
+    deviceList.value.filter(d => d.connectionStatus === 'online').length
   )
 
   const totalDevices = computed(() => devices.value.length)
@@ -88,6 +93,14 @@ export const useDeviceStore = defineStore('devices', () => {
       console.error('Failed to fetch devices:', e)
     } finally {
       loading.value = false
+    }
+  }
+
+  async function fetchConnectionStatus() {
+    try {
+      connectionStatusMap.value = await deviceApi.getConnectionStatus()
+    } catch (e: unknown) {
+      console.error('Failed to fetch connection status:', e)
     }
   }
 
@@ -143,7 +156,9 @@ export const useDeviceStore = defineStore('devices', () => {
     onlineDevices,
     totalDevices,
     totalPoints,
+    connectionStatusMap,
     fetchDevices,
+    fetchConnectionStatus,
     createDevice,
     updateDevice,
     deleteDevice,

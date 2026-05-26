@@ -27,6 +27,11 @@ export const deviceApi = {
     return res.data
   },
 
+  async getConnectionStatus(): Promise<Record<string, string>> {
+    const res = await api.get('/api/devices/connection-status')
+    return res.data
+  },
+
   async get(asset: string): Promise<DeviceConfig> {
     const res = await api.get(`/api/devices/${asset}`)
     return res.data
