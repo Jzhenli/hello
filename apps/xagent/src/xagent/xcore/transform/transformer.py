@@ -108,6 +108,8 @@ class DataTransformer(ABC):
             return None
         
         try:
+            value = raw_value
+            
             if data_type == "int":
                 value = int(raw_value)
             elif data_type == "float":
@@ -115,10 +117,10 @@ class DataTransformer(ABC):
             elif data_type == "bool":
                 if isinstance(raw_value, bool):
                     value = raw_value
-                elif isinstance(raw_value, (int, float)):
-                    value = bool(raw_value)
                 elif isinstance(raw_value, str):
                     value = raw_value.lower() in ("true", "1", "yes", "on")
+                elif isinstance(raw_value, (int, float)):
+                    value = raw_value != 0
                 else:
                     value = bool(raw_value)
             elif data_type == "string":
@@ -138,7 +140,7 @@ class DataTransformer(ABC):
             elif data_type == "int64":
                 v = int(raw_value) & 0xFFFFFFFFFFFFFFFF
                 value = v if v < 0x8000000000000000 else v - 0x10000000000000000
-            elif data_type == "float32":
+            elif data_type in ("float32", "float64"):
                 value = float(raw_value)
             elif data_type == "float32_swap":
                 import struct
@@ -147,10 +149,10 @@ class DataTransformer(ABC):
             else:
                 value = raw_value
             
-            if scale is not None and isinstance(value, (int, float)):
-                value = value * scale
-            if offset is not None and isinstance(value, (int, float)):
-                value = value + offset
+            from .scale_offset import ScaleOffsetTransformer
+            transformer = ScaleOffsetTransformer(scale=scale, offset=offset)
+            if transformer.has_transform:
+                return transformer.forward(value, base_type=data_type)
             
             return value
         except (ValueError, TypeError) as e:

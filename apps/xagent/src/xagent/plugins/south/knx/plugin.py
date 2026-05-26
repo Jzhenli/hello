@@ -663,9 +663,15 @@ class KNXPlugin(SouthPluginBase):
             device = write_device_info["device"]
             data_type = write_device_info["data_type"]
             address = write_device_info["address"]
+            point_config = write_device_info.get("config")
+            
+            raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+            if raw_value is None and value is not None:
+                logger.error(f"Failed to reverse transform value {value} for point {point}")
+                return False
             
             try:
-                success = await self._write_device_value(device, data_type, value)
+                success = await self._write_device_value(device, data_type, raw_value)
                 if success:
                     logger.info(f"Successfully wrote value {value} to point {point} at address {address}")
                 else:
@@ -689,9 +695,15 @@ class KNXPlugin(SouthPluginBase):
         device = device_info["device"]
         data_type = device_info["data_type"]
         address = device_info.get("write_address", "unknown")
+        point_config = device_info.get("config")
+        
+        raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+        if raw_value is None and value is not None:
+            logger.error(f"Failed to reverse transform value {value} for point {point}")
+            return False
         
         try:
-            success = await self._write_device_value(device, data_type, value)
+            success = await self._write_device_value(device, data_type, raw_value)
             if success:
                 logger.info(f"Successfully wrote value {value} to point {point} at address {address}")
             else:

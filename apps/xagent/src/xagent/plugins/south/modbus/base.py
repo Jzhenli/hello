@@ -654,13 +654,18 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
         byte_order = self._get_point_config(point_config, "byte_order", "big")
         word_order = self._get_point_config(point_config, "word_order", "big")
 
-        if register_type == "coil":
-            if isinstance(value, bool):
-                return await self.write_single_coil(address, value)
-            else:
-                return await self.write_single_coil(address, bool(value))
+        raw_value = self._reverse_transform_value(value, point_config)
+        if raw_value is None and value is not None:
+            logger.error(f"Failed to reverse transform value {value} for point {point}")
+            return False
 
-        registers = self._encode_value_to_registers(value, data_type, byte_order, word_order)
+        if register_type == "coil":
+            if isinstance(raw_value, bool):
+                return await self.write_single_coil(address, raw_value)
+            else:
+                return await self.write_single_coil(address, bool(raw_value))
+
+        registers = self._encode_value_to_registers(raw_value, data_type, byte_order, word_order)
         if registers is None:
             return False
 

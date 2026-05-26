@@ -321,8 +321,14 @@ class BACnetPlugin(SouthPluginBase):
             logger.error(f"Point {point} not found or not writable")
             return False
         
+        point_config = write_info.get("config")
+        raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+        if raw_value is None and value is not None:
+            logger.error(f"Failed to reverse transform value {value} for point {point}")
+            return False
+        
         try:
-            success = await self._write_point_value(write_info, value)
+            success = await self._write_point_value(write_info, raw_value)
             if success:
                 logger.info(f"Successfully wrote {value} to {point}")
             else:

@@ -10,7 +10,7 @@ from ..core.event_bus import EventBus, EventType, Event
 from ..core.plugin_loader import PluginType
 from ..core.exceptions import PluginStartError
 from ..core.interfaces import IPlugin
-from ..transform import StandardDataPoint
+from ..transform import StandardDataPoint, ScaleOffsetTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,17 @@ class SouthPluginBase(IPlugin):
         if key in point:
             return point[key]
         return default
+
+    def _create_transformer(self, point_config: Dict[str, Any]) -> ScaleOffsetTransformer:
+        """从点位配置创建 ScaleOffsetTransformer"""
+        return ScaleOffsetTransformer.from_point_config(
+            point_config, self._get_point_config
+        )
+
+    def _reverse_transform_value(self, value: Any, point_config: Dict[str, Any]) -> Any:
+        """逆向转换值（用于写操作）"""
+        transformer = self._create_transformer(point_config)
+        return transformer.reverse(value)
     
     def shutdown(self) -> None:
         if self._running:

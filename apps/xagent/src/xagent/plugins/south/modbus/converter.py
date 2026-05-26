@@ -11,6 +11,7 @@ from .constants import (
     WORD_ORDER_BIG,
     WORD_ORDER_LITTLE,
 )
+from xagent.xcore.transform import ScaleOffsetTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,9 @@ class ModbusConverter:
                 "point_name": point_name,
                 "value": converted_value,
                 "data_type": data_type,
-                "standard_data_type": MODBUS_TO_STANDARD_TYPE.get(data_type, "string"),
+                "standard_data_type": ScaleOffsetTransformer(scale, offset).infer_standard_type(
+                    MODBUS_TO_STANDARD_TYPE.get(data_type, "string")
+                ),
                 "unit": unit,
                 "quality": quality,
                 "metadata": metadata
@@ -150,22 +153,9 @@ class ModbusConverter:
         if raw_value is None:
             return None
 
-        value = raw_value
-
         try:
-            if scale is not None:
-                value = float(value) * scale
-            if offset is not None:
-                value = float(value) + offset
-
-            if data_type == "bool":
-                value = bool(value)
-            elif data_type in ("uint16", "int16", "uint32", "int32", "uint64", "int64"):
-                value = int(value)
-            elif data_type in ("float32", "float32_swap", "float64", "float"):
-                value = float(value)
-
-            return value
+            transformer = ScaleOffsetTransformer(scale=scale, offset=offset)
+            return transformer.forward(raw_value, base_type=data_type)
         except (ValueError, TypeError) as e:
             logger.warning(f"Failed to convert value {raw_value}: {e}")
             return None
