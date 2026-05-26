@@ -86,7 +86,36 @@ class KNXPlugin(SouthPluginBase):
     """
     
     __plugin_name__ = "knx"
-    
+
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "gateway_ip": {"type": "string", "default": "192.168.1.100", "title": "网关IP地址"},
+                "gateway_port": {"type": "integer", "default": 3671, "title": "网关端口"},
+                "local_ip": {"type": ["string", "null"], "default": None, "title": "本地IP地址"},
+                "route_back": {"type": "boolean", "default": False, "title": "路由回传"},
+                "connection_type": {"type": "string", "default": "automatic", "enum": ["automatic", "tunneling", "tunneling_tcp", "routing", "tunneling_tcp_secure", "routing_secure"], "title": "连接模式"},
+                "interval": {"type": "number", "default": 5, "title": "轮询间隔(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "heartbeat_timeout": {"type": "number", "default": 2.0, "title": "心跳超时(秒)"},
+                "heartbeat_retries": {"type": "integer", "default": 2, "title": "心跳重试次数"},
+                "point_timeout": {"type": "number", "default": 3.0, "title": "点位超时(秒)"},
+                "point_retries": {"type": "integer", "default": 2, "title": "点位重试次数"},
+                "sync_mode": {"type": "string", "default": "smart", "enum": ["passive", "always", "smart"], "title": "同步模式"},
+                "sync_interval": {"type": "number", "default": 60, "title": "同步间隔(秒)"},
+                "max_concurrent_syncs": {"type": "integer", "default": 5, "title": "最大并发同步数"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "read_group_address",
+            "write_group_address",
+        ]
+
     HEARTBEAT_TIMEOUT = 2.0
     HEARTBEAT_RETRIES = 2
     HEARTBEAT_RETRY_INTERVAL = 0.3
@@ -109,8 +138,9 @@ class KNXPlugin(SouthPluginBase):
         self._gateway_port = config.get("gateway_port", 3671)
         self._local_ip = config.get("local_ip")
         self._route_back = config.get("route_back", False)
-        self._reconnect_interval = config.get("reconnect_interval", 5)
         self._connection_type = config.get("connection_type", "automatic")
+        self._interval = config.get("interval", 5)
+        self._reconnect_interval = config.get("reconnect_interval", 5)
         
         self._heartbeat_timeout = config.get("heartbeat_timeout", self.HEARTBEAT_TIMEOUT)
         self._heartbeat_retries = config.get("heartbeat_retries", self.HEARTBEAT_RETRIES)

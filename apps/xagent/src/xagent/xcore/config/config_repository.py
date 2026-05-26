@@ -713,6 +713,133 @@ class ConfigRepository:
             )
         )
     
+    async def commit(self) -> None:
+        """提交当前事务"""
+        await self._db.commit()
+
     def _compute_hash(self, content: str) -> str:
         """计算配置哈希值"""
         return hashlib.md5(content.encode()).hexdigest()
+
+    async def upsert_plugin_meta(
+        self,
+        name: str,
+        plugin_type: str,
+        version: str = "1.0.0",
+        description: Optional[str] = None,
+        defaults: Optional[Dict[str, Any]] = None,
+        capabilities: Optional[List[str]] = None,
+    ) -> None:
+        """写入或更新插件元信息到 plugin_registry 表
+
+        Args:
+            name: 插件名称
+            plugin_type: 插件类型 (south/north/filter 等)
+            version: 插件版本
+            description: 插件描述
+            defaults: 默认配置参数
+            capabilities: 插件能力列表
+        """
+        now = time.time()
+        await self._db.execute(
+            """
+            INSERT INTO plugin_registry (
+                name, type, version, description, defaults, capabilities,
+                enabled, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, 'registered', ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                type = excluded.type,
+                version = excluded.version,
+                description = excluded.description,
+                defaults = excluded.defaults,
+                capabilities = excluded.capabilities,
+                updated_at = excluded.updated_at
+            """,
+            (
+                name,
+                plugin_type,
+                version,
+                description,
+                json.dumps(defaults) if defaults else None,
+                json.dumps(capabilities) if capabilities else None,
+                now,
+                now,
+            ),
+        )
+
+    async def get_plugin_defaults(self, plugin_name: str) -> Dict[str, Any]:
+        """获取插件默认配置
+
+        Args:
+            plugin_name: 插件名称
+
+        Returns:
+            默认配置字典，不存在则返回空字典
+        """
+        async with self._db.execute(
+            "SELECT defaults FROM plugin_registry WHERE name = ?",
+            (plugin_name,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and row[0]:
+                return json.loads(row[0])
+            return {}
+
+    async def list_plugins_by_type(
+        self, plugin_type: str
+    ) -> List[Dict[str, Any]]:
+        """按类型列出已注册插件
+
+        Args:
+            plugin_type: 插件类型
+
+        Returns:
+            插件信息列表
+        """
+        async with self._db.execute(
+            """
+            SELECT name, type, version, description, defaults, capabilities, status
+            FROM plugin_registry WHERE type = ?
+            ORDER BY name
+            """,
+            (plugin_type,),
+        ) as cursor:
+            plugins = []
+            async for row in cursor:
+                plugins.append(
+                    {
+                        "name": row[0],
+                        "type": row[1],
+                        "version": row[2],
+                        "description": row[3],
+                        "defaults": json.loads(row[4]) if row[4] else {},
+                        "capabilities": json.loads(row[5]) if row[5] else [],
+                        "status": row[6],
+                    }
+                )
+            return plugins
+
+    async def get_affected_device_assets(
+        self, plugin_names: List[str]
+    ) -> List[str]:
+        """查询使用指定插件的设备资产标识列表
+
+        Args:
+            plugin_names: 插件名称列表
+
+        Returns:
+            受影响的设备 asset 列表
+        """
+        if not plugin_names:
+            return []
+        placeholders = ",".join("?" for _ in plugin_names)
+        async with self._db.execute(
+            f"""
+            SELECT asset FROM device_registry
+            WHERE plugin_name IN ({placeholders}) AND status != 'deleted'
+            ORDER BY asset
+            """,
+            plugin_names,
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]

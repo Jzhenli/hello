@@ -1,7 +1,7 @@
 """设备加载服务（数据库为中心）
 
 负责在启动时从数据库加载设备并启动插件实例。
-数据库是唯一数据源，YAML文件仅用于导入导出。
+数据库是唯一数据源。
 """
 
 import logging
@@ -24,7 +24,7 @@ class DeviceLoader:
     """设备加载服务（数据库为中心）
     
     在系统启动时从数据库加载设备并启动插件实例。
-    数据库是唯一数据源，YAML文件仅用于导入导出。
+    数据库是唯一数据源。
     """
     
     SOUTH_PLUGINS = {
@@ -61,25 +61,17 @@ class DeviceLoader:
         """加载所有设备
         
         从数据库加载所有启用的设备并启动插件实例。
-        如果数据库中没有设备，尝试从YAML文件迁移。
         """
         logger.info("Loading devices from database...")
         
-        self.config_repo = ConfigRepository(self.metadata_manager._db)
+        self.config_repo = ConfigRepository(self.metadata_manager.db)
         
         devices = await self.config_repo.list_devices(enabled=True)
         
         if not devices:
             logger.info("No enabled devices found in database")
-            
-            migrated = await self._try_migrate_from_yaml()
-            if not migrated:
-                logger.info("No devices to load")
-                return
-            
-            devices = await self.config_repo.list_devices(enabled=True)
-            if not devices:
-                return
+            self._check_legacy_yaml_devices()
+            return
         
         logger.info(f"Found {len(devices)} enabled devices in database")
         
@@ -100,59 +92,30 @@ class DeviceLoader:
         for device in north_devices:
             await self._load_device(device, PluginType.NORTH)
     
-    async def _try_migrate_from_yaml(self) -> bool:
-        """尝试从YAML文件迁移设备到数据库
+    def _check_legacy_yaml_devices(self) -> None:
+        """检测用户配置目录下是否残留 YAML 设备文件
         
-        注意：默认模板文件（包含example/template）不会被迁移
-        
-        Returns:
-            是否成功迁移了设备
+        如果发现残留的 YAML 设备文件，输出警告日志引导用户
+        通过 API 或 import_from_yaml 方法导入设备配置。
         """
         try:
             devices_dir = self.config_manager.paths.config_dir / 'devices'
-            
             if not devices_dir.exists():
-                logger.info("No devices directory found")
-                return False
+                return
             
-            yaml_files = list(devices_dir.glob("*.yaml"))
-            if not yaml_files:
-                logger.info("No YAML device files found")
-                return False
-            
-            non_template_files = [
-                f for f in yaml_files
-                if not any(keyword in f.stem.lower() for keyword in ['example', 'template', 'sample', 'demo'])
+            yaml_files = [
+                f for f in devices_dir.glob("*.yaml")
+                if not any(kw in f.stem.lower() for kw in ['example', 'template', 'sample', 'demo'])
             ]
-            
-            if not non_template_files:
-                logger.info("Only template files found, skipping auto-migration")
-                logger.info("Use CLI tool to manually migrate if needed:")
-                logger.info("  python -m xagent.tools.migrate_config migrate --devices-dir <path> --database <path>")
-                return False
-            
-            logger.info(f"Found {len(non_template_files)} non-template YAML device files, migrating to database...")
-            
-            from ...tools.config_migrator import ConfigMigrator
-            migrator = ConfigMigrator(self.config_repo)
-            
-            result = await migrator.migrate_from_yaml(
-                devices_dir,
-                user="auto_migration",
-                skip_existing=True
-            )
-            
-            if result['succeeded'] > 0:
-                logger.info(f"Successfully migrated {result['succeeded']} devices from YAML to database")
-                return True
-            else:
-                logger.info("No devices were migrated")
-                return False
-        
-        except Exception as e:
-            logger.error(f"Failed to migrate devices from YAML: {e}")
-            return False
-    
+            if yaml_files:
+                logger.warning(
+                    f"Found {len(yaml_files)} legacy YAML device config(s) in {devices_dir}. "
+                    "YAML device configs are no longer auto-migrated. "
+                    "Use the API (POST /api/devices/import) or import_from_yaml() to import them."
+                )
+        except Exception:
+            pass
+
     async def _load_device(
         self, 
         device, 
@@ -238,7 +201,7 @@ class DeviceLoader:
             是否成功
         """
         if not self.config_repo:
-            self.config_repo = ConfigRepository(self.metadata_manager._db)
+            self.config_repo = ConfigRepository(self.metadata_manager.db)
         
         try:
             device = await self.config_repo.get_device(asset)

@@ -1,7 +1,6 @@
 """统一的路径管理器，使用 platformdirs 管理所有应用路径"""
 
 import logging
-import shutil
 import sys
 import warnings
 from pathlib import Path
@@ -94,8 +93,6 @@ class AppPaths:
             self.data_dir,
             self.log_dir,
             self.cache_dir,
-            self.plugin_config_dir,
-            self.device_config_dir,
         ]
         
         for directory in directories:
@@ -106,8 +103,6 @@ class AppPaths:
                 logger.warning(f"No permission to create directory: {directory}")
             except Exception as e:
                 logger.warning(f"Error creating directory {directory}: {e}")
-        
-        self._copy_default_configs()
     
     @property
     def app_dir(self) -> Path:
@@ -152,16 +147,6 @@ class AppPaths:
         return self.app_dir / "cache"
     
     @property
-    def plugin_config_dir(self) -> Path:
-        """插件配置目录"""
-        return self.config_dir / "plugins"
-    
-    @property
-    def device_config_dir(self) -> Path:
-        """设备配置目录"""
-        return self.config_dir / "devices"
-    
-    @property
     def packaged_resources_dir(self) -> Path:
         """打包资源目录（包含默认配置模板）"""
         return get_resource_dir()
@@ -180,10 +165,6 @@ class AppPaths:
         if self.site_config_dir:
             return self.site_config_dir / "config.yaml"
         return None
-    
-    def get_plugin_config_file(self, plugin_name: str) -> Path:
-        """获取插件配置文件路径"""
-        return self.plugin_config_dir / f"{plugin_name}.yaml"
     
     def get_data_file(self, filename: str) -> Path:
         """获取数据文件路径"""
@@ -230,75 +211,6 @@ class AppPaths:
         
         return result
     
-    def _copy_default_configs(self) -> None:
-        """复制默认配置模板到用户配置目录
-        
-        如果用户配置目录中不存在对应的配置文件，则从打包资源目录复制。
-        """
-        resources_dir = self.packaged_resources_dir
-        
-        if not resources_dir.exists():
-            logger.debug(f"Packaged resources directory not found: {resources_dir}")
-            return
-        
-        plugin_count = self._copy_directory_contents(
-            resources_dir / "config" / "plugins",
-            self.plugin_config_dir,
-            "plugin"
-        )
-        
-        device_count = self._copy_directory_contents(
-            resources_dir / "config" / "devices",
-            self.device_config_dir,
-            "device"
-        )
-        
-        total = plugin_count + device_count
-        if total > 0:
-            logger.info(f"Copied {total} default config templates ({plugin_count} plugins, {device_count} devices)")
-    
-    def _copy_directory_contents(
-        self,
-        source_dir: Path,
-        target_dir: Path,
-        config_type: str
-    ) -> int:
-        """复制目录内容
-        
-        Args:
-            source_dir: 源目录
-            target_dir: 目标目录
-            config_type: 配置类型（用于日志）
-            
-        Returns:
-            复制的文件数量
-        """
-        if not source_dir.exists():
-            logger.debug(f"Source directory not found: {source_dir}")
-            return 0
-        
-        if not target_dir.exists():
-            target_dir.mkdir(parents=True, exist_ok=True)
-        
-        copied_count = 0
-        for source_file in source_dir.glob("*.yaml"):
-            target_file = target_dir / source_file.name
-            
-            if target_file.exists():
-                logger.debug(f"{config_type} config already exists, skipping: {target_file}")
-                continue
-            
-            try:
-                shutil.copy2(source_file, target_file)
-                logger.debug(f"Copied default {config_type} config: {source_file.name}")
-                copied_count += 1
-            except PermissionError:
-                logger.warning(f"No permission to copy {config_type} config: {source_file}")
-            except Exception as e:
-                logger.warning(f"Error copying {config_type} config {source_file}: {e}")
-        
-        return copied_count
-    
     def get_all_paths_info(self) -> dict:
         """获取所有路径信息（用于调试和日志）"""
         return {
@@ -310,8 +222,6 @@ class AppPaths:
             "log_dir": str(self.log_dir),
             "log_file": str(self.log_file),
             "cache_dir": str(self.cache_dir),
-            "plugin_config_dir": str(self.plugin_config_dir),
-            "device_config_dir": str(self.device_config_dir),
             "packaged_resources_dir": str(self.packaged_resources_dir),
             "site_config_dir": str(self.site_config_dir) if self.site_config_dir else None,
         }

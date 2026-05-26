@@ -136,6 +136,13 @@ class MetadataManager:
             raise ValueError("Database connection or storage is required for initialization")
         
         logger.info("MetadataManager initialized with shared database connection")
+
+    @property
+    def db(self) -> aiosqlite.Connection:
+        """获取数据库连接"""
+        if self._db is None:
+            raise RuntimeError("MetadataManager not initialized")
+        return self._db
     
     def _compute_hash(self, config: Dict[str, Any]) -> str:
         import json

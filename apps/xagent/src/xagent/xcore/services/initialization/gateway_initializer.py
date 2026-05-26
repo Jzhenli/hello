@@ -180,7 +180,9 @@ class GatewayInitializer(ILifecycle):
         
         plugin_classes = self.plugin_loader.discover_plugins()
         logger.info(f"Discovered {len(plugin_classes)} plugin classes: {list(plugin_classes.keys())}")
-        
+
+        await self.plugin_loader.sync_plugin_registry()
+
         if self.command_executor:
             self.command_executor.set_plugin_loader(self.plugin_loader)
         

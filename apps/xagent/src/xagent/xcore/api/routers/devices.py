@@ -53,7 +53,6 @@ def get_device_service(state = Depends(get_app_state)):
         )
     
     return DeviceService(
-        config_dir=state.gateway.config_manager.paths.config_dir,
         metadata_manager=state.metadata_manager,
         plugin_loader=state.gateway.plugin_loader
     )
@@ -351,7 +350,7 @@ async def remove_point_from_device(
         HTTPException: 404 - 设备或点位不存在
     """
     try:
-        await service.remove_point(asset, point_name)
+        await service.delete_point(asset, point_name)
     except ValueError as e:
         raise handle_value_error(e)
     except Exception as e:

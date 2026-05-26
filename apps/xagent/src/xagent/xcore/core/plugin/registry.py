@@ -83,6 +83,11 @@ class PluginRegistry:
             plugin_classes: 插件类字典
         """
         self._plugin_classes = plugin_classes
+
+    @property
+    def plugin_classes(self) -> Dict[str, Type]:
+        """获取已注册的插件类字典"""
+        return self._plugin_classes
     
     def register_plugin_instance(self, plugin_info: PluginInfo) -> None:
         """注册插件实例

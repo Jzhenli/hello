@@ -301,3 +301,67 @@ class PluginLoader(ILifecycle):
         logger.info("Config reloaded")
         
         logger.info("Note: Device configuration is now managed via device files in config/devices/")
+
+    async def sync_plugin_registry(self) -> None:
+        """将已发现的插件元信息同步到 plugin_registry 数据库表
+
+        从每个插件类的 config_schema() 和 capabilities() 方法
+        读取配置 Schema 和能力声明，写入数据库以便运行时查询。
+        """
+        if not self.metadata_manager:
+            logger.debug("MetadataManager not available, skipping plugin registry sync")
+            return
+
+        from ...config.config_repository import ConfigRepository
+
+        config_repo = ConfigRepository(self.metadata_manager.db)
+
+        for key, plugin_class in self.registry.plugin_classes.items():
+            try:
+                parts = key.split(":", 1)
+                plugin_type = parts[0] if len(parts) == 2 else ""
+                plugin_name = parts[1] if len(parts) == 2 else parts[0]
+
+                schema = None
+                caps = None
+                version = getattr(plugin_class, "__plugin_version__", "1.0.0")
+                description = getattr(plugin_class, "__plugin_description__", None)
+
+                if callable(getattr(plugin_class, "config_schema", None)):
+                    schema = plugin_class.config_schema()
+
+                if callable(getattr(plugin_class, "capabilities", None)):
+                    caps = plugin_class.capabilities()
+
+                defaults = self._extract_defaults_from_schema(schema) if schema else {}
+
+                await config_repo.upsert_plugin_meta(
+                    name=plugin_name,
+                    plugin_type=plugin_type,
+                    version=version,
+                    description=description,
+                    defaults=defaults,
+                    capabilities=caps,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to sync plugin meta for {key}: {e}")
+
+        await config_repo.commit()
+        logger.info(f"Synced {len(self.registry.plugin_classes)} plugins to plugin_registry")
+
+    @staticmethod
+    def _extract_defaults_from_schema(schema: dict) -> dict:
+        """从 JSON Schema 中提取默认值
+
+        Args:
+            schema: config_schema() 返回的 JSON Schema 字典
+
+        Returns:
+            字段名 -> 默认值的字典
+        """
+        defaults = {}
+        properties = schema.get("properties", {})
+        for field_name, field_schema in properties.items():
+            if "default" in field_schema:
+                defaults[field_name] = field_schema["default"]
+        return defaults

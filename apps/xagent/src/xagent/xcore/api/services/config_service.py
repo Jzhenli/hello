@@ -32,8 +32,9 @@ class ConfigService:
     MAX_FILE_COUNT = 1000
     CHUNK_SIZE = 8192
     
-    def __init__(self, paths: Optional[AppPaths] = None):
+    def __init__(self, paths: Optional[AppPaths] = None, config_repo=None):
         self._paths = paths or get_paths()
+        self._config_repo = config_repo
     
     @property
     def config_file(self) -> Path:
@@ -144,7 +145,7 @@ class ConfigService:
             "validation_errors": warnings,
         }
     
-    def upload_config_zip(
+    async def upload_config_zip(
         self,
         zip_file: BinaryIO,
         validate_only: bool = False,
@@ -302,7 +303,7 @@ class ConfigService:
                 )
                 
                 changes = self._analyze_config_changes(files_to_extract)
-                reload_strategy = self._determine_reload_strategy(changes)
+                reload_strategy = await self._determine_reload_strategy(changes)
                 
                 requires_restart = reload_strategy["type"] == "restart"
                 
@@ -471,7 +472,7 @@ class ConfigService:
         
         return changes
     
-    def _determine_reload_strategy(self, changes: Dict[str, Any]) -> Dict[str, Any]:
+    async def _determine_reload_strategy(self, changes: Dict[str, Any]) -> Dict[str, Any]:
         """Determine reload strategy based on configuration changes
         
         Args:
@@ -498,7 +499,7 @@ class ConfigService:
             }
         
         if changes["plugins"]:
-            affected_devices = self._get_affected_devices(changes["plugins"])
+            affected_devices = await self._get_affected_devices(changes["plugins"])
             if affected_devices:
                 return {
                     "type": "plugin_reload",
@@ -523,34 +524,24 @@ class ConfigService:
             "suggestion": "Use POST /api/config/reload to reload configuration"
         }
     
-    def _get_affected_devices(self, plugin_names: List[str]) -> List[str]:
+    async def _get_affected_devices(self, plugin_names: List[str]) -> List[str]:
         """Get devices that use the specified plugins
-        
+
         Args:
             plugin_names: List of plugin names
-            
+
         Returns:
             List of affected device asset names
         """
-        affected_devices = []
-        devices_dir = self._paths.device_config_dir
-        
-        if not devices_dir.exists():
-            return affected_devices
-        
-        for device_file in devices_dir.glob("*.yaml"):
+        if self._config_repo is not None:
             try:
-                with open(device_file, 'r', encoding='utf-8') as f:
-                    import yaml
-                    config = yaml.safe_load(f)
-                    if config and 'plugin' in config:
-                        plugin_name = config['plugin'].get('name', '')
-                        if plugin_name in plugin_names:
-                            affected_devices.append(device_file.stem)
+                return await self._config_repo.get_affected_device_assets(plugin_names)
             except Exception as e:
-                logger.warning(f"Failed to read device config {device_file}: {e}")
-        
-        return affected_devices
+                logger.warning(f"Failed to query affected devices from database: {e}")
+                return []
+
+        logger.debug("config_repo not available, returning empty affected devices list")
+        return []
     
     def _check_critical_config_changed(self, changes: Dict[str, Any]) -> bool:
         """Check if critical configuration has changed

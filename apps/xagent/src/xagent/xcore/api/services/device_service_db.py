@@ -31,22 +31,15 @@ class DeviceService:
     
     def __init__(
         self,
-        config_dir: Path,
         metadata_manager: MetadataManager,
         plugin_loader: Any
     ):
-        self.config_dir = Path(config_dir)
-        self.devices_dir = self.config_dir / 'devices'
-        self.plugins_dir = self.config_dir / 'plugins'
         self.metadata_manager = metadata_manager
         self.plugin_loader = plugin_loader
         self._lock: Optional[asyncio.Lock] = None
         
-        self.devices_dir.mkdir(parents=True, exist_ok=True)
-        self.plugins_dir.mkdir(parents=True, exist_ok=True)
-        
-        self._config_repo = DbConfigRepository(metadata_manager._db)
-        self._audit_service = AuditService(metadata_manager._db)
+        self._config_repo = DbConfigRepository(metadata_manager.db)
+        self._audit_service = AuditService(metadata_manager.db)
         self._config_service: Optional[ConfigService] = None
     
     def _get_config_service(self) -> ConfigService:
@@ -80,6 +73,13 @@ class DeviceService:
         config_service = self._get_config_service()
         
         db_device = self._convert_api_device_to_db_device(device)
+        
+        plugin_name = device.plugin.name if device.plugin else ""
+        if plugin_name:
+            db_device.plugin_config = await self.merge_plugin_config(
+                plugin_name, db_device.plugin_config
+            )
+        
         await config_service.create_device(db_device, user="api")
         
         logger.info(f"Device {device.asset} created successfully")
@@ -278,7 +278,89 @@ class DeviceService:
         config_service = self._get_config_service()
         
         return await config_service.import_devices(data, user="api", overwrite=overwrite)
-    
+
+    async def batch_create_devices(
+        self,
+        devices: List[DeviceConfig]
+    ) -> Dict[str, Any]:
+        """批量创建设备
+
+        Args:
+            devices: 设备配置列表
+
+        Returns:
+            批量操作结果
+        """
+        results = {
+            'total': len(devices),
+            'succeeded': 0,
+            'failed': 0,
+            'details': []
+        }
+
+        for device in devices:
+            try:
+                await self.create_device(device)
+                results['succeeded'] += 1
+                results['details'].append({
+                    'asset': device.asset,
+                    'action': 'created',
+                    'success': True
+                })
+            except Exception as e:
+                results['failed'] += 1
+                results['details'].append({
+                    'asset': device.asset,
+                    'action': 'failed',
+                    'success': False,
+                    'message': str(e)
+                })
+
+        return results
+
+    async def reload_devices(
+        self,
+        assets: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """重载设备插件
+
+        Args:
+            assets: 要重载的设备列表，None表示重载所有启用的设备
+
+        Returns:
+            重载结果
+        """
+        if assets is None:
+            devices = await self._config_repo.list_devices(enabled=True)
+            assets = [d.asset for d in devices]
+
+        results = {
+            'total': len(assets),
+            'succeeded': 0,
+            'failed': 0,
+            'details': []
+        }
+
+        for asset in assets:
+            try:
+                await self.reload_device(asset)
+                results['succeeded'] += 1
+                results['details'].append({
+                    'asset': asset,
+                    'action': 'reloaded',
+                    'success': True
+                })
+            except Exception as e:
+                results['failed'] += 1
+                results['details'].append({
+                    'asset': asset,
+                    'action': 'failed',
+                    'success': False,
+                    'message': str(e)
+                })
+
+        return results
+
     def _convert_api_device_to_db_device(self, api_device: DeviceConfig):
         """将API设备模型转换为数据库设备配置
         
@@ -294,18 +376,43 @@ class DeviceService:
         for point in api_device.points:
             points.append(point.model_dump())
         
+        plugin_config = api_device.plugin.config if api_device.plugin else {}
+        
         return DbDeviceConfig(
             asset=api_device.asset,
             name=api_device.name,
             description=api_device.description,
             plugin_name=api_device.plugin.name if api_device.plugin else "",
-            plugin_config=api_device.plugin.config if api_device.plugin else {},
+            plugin_config=plugin_config,
             enabled=api_device.enabled,
             status=api_device.status.value if api_device.status else "active",
             metadata=api_device.metadata or {},
             tags=api_device.tags or [],
             points=points
         )
+
+    async def merge_plugin_config(
+        self,
+        plugin_name: str,
+        device_config: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """合并插件默认配置与设备配置
+
+        从 plugin_registry 数据库表读取插件默认参数，
+        与设备特定配置合并（设备配置优先级更高）。
+
+        Args:
+            plugin_name: 插件名称
+            device_config: 设备插件配置
+
+        Returns:
+            合并后的配置
+        """
+        plugin_defaults = await self._config_repo.get_plugin_defaults(plugin_name)
+        if plugin_defaults:
+            merged = {**plugin_defaults, **device_config}
+            return merged
+        return device_config
     
     def _convert_api_updates_to_db_updates(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         """将API更新字段转换为数据库更新字段

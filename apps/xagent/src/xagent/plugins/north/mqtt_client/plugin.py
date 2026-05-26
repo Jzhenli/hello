@@ -113,6 +113,37 @@ class MQTTClientPlugin(NorthPluginBase):
     __plugin_name__ = "mqtt_client"
     __plugin_type__ = PluginType.NORTH.value
 
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "broker": {"type": "string", "default": "localhost", "title": "Broker地址"},
+                "port": {"type": "integer", "default": 1883, "title": "Broker端口"},
+                "username": {"type": ["string", "null"], "default": None, "title": "用户名"},
+                "password": {"type": ["string", "null"], "default": None, "title": "密码"},
+                "client_id": {"type": "string", "default": "xagent_mqtt_uploader", "title": "客户端ID"},
+                "topic": {"type": "string", "default": "xagent/data", "title": "数据发布主题"},
+                "command_topic": {"type": "string", "default": "xagent/command", "title": "命令订阅主题"},
+                "qos": {"type": "integer", "default": 1, "enum": [0, 1, 2], "title": "QoS等级"},
+                "keepalive": {"type": "integer", "default": 60, "title": "心跳间隔(秒)"},
+                "publish_mode": {"type": "string", "default": "single", "enum": ["single", "batch"], "title": "发布模式"},
+                "batch_size": {"type": "integer", "default": 100, "title": "批量大小"},
+                "interval": {"type": "number", "default": 5, "title": "上传间隔(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "reconnect_max_delay": {"type": "number", "default": 60, "title": "重连最大延迟(秒)"},
+                "retry_count": {"type": "integer", "default": 3, "title": "发送重试次数"},
+                "retry_delay": {"type": "integer", "default": 1, "title": "发送重试延迟(秒)"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "publish",
+            "subscribe",
+        ]
+
     def _create_data_adapter(self) -> Any:
         """
         创建数据适配器

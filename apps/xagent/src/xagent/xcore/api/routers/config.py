@@ -20,7 +20,7 @@ from ..models.config import (
     ConfigBackupListResponse
 )
 from ..services.config_service import ConfigService
-from ..dependencies import get_config_manager
+from ..dependencies import get_config_manager, get_app_state
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,15 @@ security = HTTPBearer()
 
 DEFAULT_API_TOKEN = "xagent_47808"
 
-_config_service = ConfigService()
+
+def _get_config_service() -> ConfigService:
+    """Get ConfigService with config_repo injected if available"""
+    state = get_app_state()
+    config_repo = None
+    if state.metadata_manager:
+        from ...config.config_repository import ConfigRepository
+        config_repo = ConfigRepository(state.metadata_manager.db)
+    return ConfigService(config_repo=config_repo)
 
 
 def verify_api_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
@@ -49,7 +57,7 @@ def verify_api_token(credentials: HTTPAuthorizationCredentials = Depends(securit
 @router.get("/info", response_model=ConfigInfoResponse)
 async def get_config_info():
     """Get configuration file information"""
-    info = _config_service.get_config_info()
+    info = _get_config_service().get_config_info()
     return ConfigInfoResponse(**info)
 
 
@@ -73,7 +81,7 @@ async def upload_config(
         )
     
     if file.filename.endswith('.zip'):
-        result = _config_service.upload_config_zip(file.file, validate_only, create_backup)
+        result = await _get_config_service().upload_config_zip(file.file, validate_only, create_backup)
     elif file.filename.endswith(('.yaml', '.yml')):
         try:
             content = await file.read()
@@ -84,7 +92,7 @@ async def upload_config(
                 detail=f"Failed to read file content: {str(e)}"
             )
         
-        result = _config_service.upload_config(content_str, validate_only, create_backup)
+        result = _get_config_service().upload_config(content_str, validate_only, create_backup)
     else:
         raise HTTPException(
             status_code=400,
@@ -152,7 +160,7 @@ async def reload_configuration(
 @router.post("/validate", response_model=ConfigValidationResponse)
 async def validate_config(request: ConfigValidationRequest):
     """Validate configuration file content"""
-    is_valid, errors, warnings = _config_service.validate_content(request.config_content)
+    is_valid, errors, warnings = _get_config_service().validate_content(request.config_content)
     
     return ConfigValidationResponse(
         valid=is_valid,
@@ -182,7 +190,7 @@ async def download_config(
         )
     
     if output_format == "yaml":
-        config_file = _config_service.config_file
+        config_file = _get_config_service().config_file
         
         if not config_file.exists():
             raise HTTPException(
@@ -196,7 +204,7 @@ async def download_config(
             media_type="application/x-yaml"
         )
     else:
-        zip_path, error = _config_service.create_config_zip()
+        zip_path, error = _get_config_service().create_config_zip()
         
         if error:
             raise HTTPException(
@@ -220,7 +228,7 @@ async def download_config(
 @router.get("/backups", response_model=ConfigBackupListResponse)
 async def list_config_backups(token: str = Depends(verify_api_token)):
     """List configuration file backups"""
-    backups = _config_service.list_backups()
+    backups = _get_config_service().list_backups()
     
     return ConfigBackupListResponse(
         backups=backups,
@@ -234,7 +242,7 @@ async def restore_config_backup(
     token: str = Depends(verify_api_token)
 ):
     """Restore a configuration backup"""
-    result = _config_service.restore_backup(backup_name)
+    result = _get_config_service().restore_backup(backup_name)
     
     if not result.get("success"):
         raise HTTPException(
@@ -252,7 +260,7 @@ async def restart_application(
     token: str = Depends(verify_api_token)
 ):
     """Restart application"""
-    result = await _config_service.schedule_restart(request.delay)
+    result = await _get_config_service().schedule_restart(request.delay)
     
     background_tasks.add_task(result["task"], result["delay"])
     
@@ -269,7 +277,7 @@ async def cleanup_old_backups(
     token: str = Depends(verify_api_token)
 ):
     """Clean up old configuration backups"""
-    return _config_service.cleanup_old_backups(keep_count)
+    return _get_config_service().cleanup_old_backups(keep_count)
 
 
 @router.get("/paths")
