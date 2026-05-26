@@ -1353,12 +1353,14 @@ onMounted(async () => {
         <el-divider content-position="left">通用配置</el-divider>
         
         <el-form-item label="标准类型">
-          <el-select v-model="pointForm.standard_data_type" placeholder="可选，由插件自动推导" clearable>
-            <el-option label="布尔 (bool)" value="bool" />
-            <el-option label="整数 (int)" value="int" />
-            <el-option label="浮点 (float)" value="float" />
-            <el-option label="字符串 (string)" value="string" />
-          </el-select>
+          <el-input 
+            :value="pointForm.standard_data_type || '自动推导'" 
+            disabled 
+            placeholder="由插件根据数据类型自动推导"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            此字段由系统根据数据类型自动推导，无需手动设置
+          </div>
         </el-form-item>
         <el-form-item label="单位">
           <el-input v-model="pointForm.unit" placeholder="如 °C, %, V, A" />
