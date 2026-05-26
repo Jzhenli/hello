@@ -370,6 +370,18 @@ const isEditingPoint = ref(false)
 const editingPointName = ref('')
 const savingPoint = ref(false)
 
+const showWriteDialog = ref(false)
+const writeForm = ref({
+  deviceAsset: '',
+  pointName: '',
+  pointType: '' as 'analog' | 'digital' | '',
+  unit: '',
+  currentValue: '' as string,
+  value: '' as string,
+  boolValue: false
+})
+const writing = ref(false)
+
 const currentDevicePluginName = computed(() => {
   if (!selectedDeviceAsset.value) return ''
   const device = deviceStore.getDeviceByAsset(selectedDeviceAsset.value)
@@ -615,6 +627,57 @@ const handleDeletePoint = (pointName: string) => {
       ElMessage.error('删除失败: ' + (e instanceof Error ? e.message : '未知错误'))
     }
   }).catch(() => {})
+}
+
+const handleWritePoint = (point: any) => {
+  if (!selectedDeviceAsset.value) return
+  const isDigital = point.type === 'digital' || point.standard_data_type === 'bool'
+  writeForm.value = {
+    deviceAsset: selectedDeviceAsset.value,
+    pointName: point.name,
+    pointType: isDigital ? 'digital' : 'analog',
+    unit: point.unit || '',
+    currentValue: point.currentValue !== undefined && point.currentValue !== null
+      ? String(point.currentValue)
+      : '--',
+    value: '',
+    boolValue: point.currentValue === true || point.currentValue === 1
+  }
+  showWriteDialog.value = true
+}
+
+const handleWriteSubmit = async () => {
+  writing.value = true
+  try {
+    let value: number | boolean | string
+    if (writeForm.value.pointType === 'digital') {
+      value = writeForm.value.boolValue
+    } else {
+      const numVal = Number(writeForm.value.value)
+      if (writeForm.value.value.trim() !== '' && !isNaN(numVal)) {
+        value = numVal
+      } else {
+        value = writeForm.value.value
+      }
+    }
+
+    const result = await pointStore.writePoint(
+      writeForm.value.deviceAsset,
+      writeForm.value.pointName,
+      value
+    )
+
+    if (result.success) {
+      ElMessage.success(result.message)
+      showWriteDialog.value = false
+    } else {
+      ElMessage.error(result.message)
+    }
+  } catch (e: unknown) {
+    ElMessage.error('写值失败: ' + (e instanceof Error ? e.message : '未知错误'))
+  } finally {
+    writing.value = false
+  }
 }
 
 const handleExportYaml = () => {
@@ -894,10 +957,13 @@ onMounted(async () => {
                 <span v-else class="text-muted">--</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
+                </el-button>
+                <el-button v-if="row.writable && userStore.hasPermission('devices', 'update')" type="warning" link size="small" @click="handleWritePoint(row)">
+                  写值
                 </el-button>
                 <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link size="small" @click="handleEditPoint(row)">
                   编辑
@@ -1038,10 +1104,13 @@ onMounted(async () => {
                 <span class="config-preview">{{ JSON.stringify(row.config) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link size="small" @click="handleViewTrend(selectedDeviceAsset!, row.name)">
                   趋势
+                </el-button>
+                <el-button v-if="row.writable && userStore.hasPermission('devices', 'update')" type="warning" link size="small" @click="handleWritePoint(row)">
+                  写值
                 </el-button>
                 <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link size="small" @click="handleEditPoint(row)">
                   编辑
@@ -1354,6 +1423,65 @@ onMounted(async () => {
       <template #footer>
         <el-button @click="showPointDialog = false">取消</el-button>
         <el-button type="primary" @click="handleSavePoint" :loading="savingPoint">保存</el-button>
+      </template>
+    </el-dialog>
+    
+    <el-dialog 
+      v-model="showWriteDialog" 
+      title="写入点位值"
+      width="min(480px, 90vw)"
+      :close-on-click-modal="false"
+    >
+      <div class="write-info">
+        <div class="write-info-row">
+          <span class="write-info-label">设备</span>
+          <span class="write-info-value">{{ deviceStore.getDeviceByAsset(writeForm.deviceAsset)?.name || writeForm.deviceAsset }}</span>
+        </div>
+        <div class="write-info-row">
+          <span class="write-info-label">点位</span>
+          <span class="write-info-value">{{ writeForm.pointName }}</span>
+        </div>
+        <div class="write-info-row">
+          <span class="write-info-label">当前值</span>
+          <span class="write-info-value current-value">{{ writeForm.currentValue }}{{ writeForm.unit ? ' ' + writeForm.unit : '' }}</span>
+        </div>
+      </div>
+      <el-divider />
+      <div class="write-form">
+        <template v-if="writeForm.pointType === 'digital'">
+          <div class="write-bool-control">
+            <span class="write-bool-label">目标值</span>
+            <el-switch 
+              v-model="writeForm.boolValue"
+              active-text="开"
+              inactive-text="关"
+              style="--el-switch-on-color: #27ae60"
+            />
+          </div>
+        </template>
+        <template v-else>
+          <el-input 
+            v-model="writeForm.value" 
+            :placeholder="writeForm.currentValue !== '--' ? `当前值: ${writeForm.currentValue}` : '请输入要写入的值'"
+            clearable
+          >
+            <template v-if="writeForm.unit" #append>{{ writeForm.unit }}</template>
+          </el-input>
+          <div v-if="writeForm.unit" class="write-hint">
+            输入数值后将下发到设备，请确认写入值在合理范围内
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="showWriteDialog = false">取消</el-button>
+        <el-button 
+          type="warning" 
+          :loading="writing" 
+          :disabled="writeForm.pointType !== 'digital' && !writeForm.value.trim()"
+          @click="handleWriteSubmit"
+        >
+          确认写入
+        </el-button>
       </template>
     </el-dialog>
     
@@ -1821,6 +1949,57 @@ onMounted(async () => {
 .current-value {
   font-weight: 600;
   color: #409eff;
+}
+
+.write-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.write-info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.write-info-label {
+  width: 60px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+.write-info-value {
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.write-info-value.current-value {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.write-form {
+  padding: 0 4px;
+}
+
+.write-bool-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.write-bool-label {
+  font-size: 14px;
+  color: #606266;
+}
+
+.write-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+  line-height: 1.5;
 }
 
 .loading-state {

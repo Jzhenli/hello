@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { deviceApi } from '@/api/devices'
 import { dataApi } from '@/api/data'
+import { controlApi } from '@/api/control'
 import type { Reading, StandardPoint } from '@/api/data'
 import type { DeviceConfig, PointConfig } from '@/api/types'
 
@@ -16,6 +17,7 @@ export interface PointDisplay {
   metadata: Record<string, unknown>
   tags: string[]
   type?: 'analog' | 'digital'
+  writable: boolean
   currentValue?: number | boolean | string
   minValue?: number
   maxValue?: number
@@ -42,6 +44,17 @@ export interface DeviceWithPoints {
   points: PointDisplay[]
 }
 
+function isPointWritable(point: PointConfig): boolean {
+  const config = point.config || {}
+  if (config.writable === true) return true
+  const registerType = config.register_type as string | undefined
+  if (registerType === 'coil' || registerType === 'holding') return true
+  const objectType = (config.object_type as string) || point.data_type
+  if (objectType && (objectType.includes('Output') || objectType.includes('Value'))) return true
+  if (config.control_address) return true
+  return false
+}
+
 function mapPointToDisplay(point: PointConfig, readingData?: { data: Record<string, unknown>; standardPoints: Map<string, StandardPoint>; timestamp?: number }): PointDisplay {
   const metadata = point.metadata || {}
   const isDigital = point.standard_data_type === 'bool'
@@ -64,6 +77,7 @@ function mapPointToDisplay(point: PointConfig, readingData?: { data: Record<stri
     metadata: point.metadata || {},
     tags: point.tags || [],
     type: isDigital ? 'digital' : 'analog',
+    writable: isPointWritable(point),
     currentValue,
     minValue: (metadata.minValue as number) ?? (metadata.range as number[])?.[0],
     maxValue: (metadata.maxValue as number) ?? (metadata.range as number[])?.[1],
@@ -332,6 +346,41 @@ export const usePointStore = defineStore('points', () => {
     return data
   }
 
+  async function writePoint(deviceAsset: string, pointName: string, value: number | boolean | string): Promise<{ success: boolean; message: string }> {
+    const device = devices.value.find(d => d.asset === deviceAsset)
+    if (!device) {
+      return { success: false, message: `设备 ${deviceAsset} 不存在` }
+    }
+
+    const point = device.points.find(p => p.name === pointName)
+    if (!point) {
+      return { success: false, message: `点位 ${pointName} 不存在` }
+    }
+
+    if (!point.writable) {
+      return { success: false, message: `点位 ${pointName} 不可写` }
+    }
+
+    try {
+      const res = await controlApi.writeSetpoint(
+        device.pluginName,
+        deviceAsset,
+        pointName,
+        value
+      )
+
+      if (res.status === 'ACCEPTED') {
+        setTimeout(() => fetchDevicePoints(deviceAsset), 2000)
+        return { success: true, message: `写值命令已下发 (命令ID: ${res.command_id.slice(0, 8)}...)` }
+      }
+
+      return { success: false, message: `命令状态异常: ${res.status}` }
+    } catch (e: unknown) {
+      const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : '写值失败')
+      return { success: false, message: detail }
+    }
+  }
+
   return {
     devices,
     loading,
@@ -356,6 +405,7 @@ export const usePointStore = defineStore('points', () => {
     selectPoint,
     clearSelection,
     getDevicePoints,
-    generateTrendData
+    generateTrendData,
+    writePoint
   }
 })

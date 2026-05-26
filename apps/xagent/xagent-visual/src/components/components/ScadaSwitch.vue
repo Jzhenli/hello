@@ -2,7 +2,8 @@
 import { computed, ref, onMounted } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
 import { usePointStore } from '@/stores/points'
-import { ElMessageBox } from 'element-plus'
+import { controlApi } from '@/api/control'
+import { ElMessageBox, ElMessage } from 'element-plus'
 
 const props = defineProps<{
   config: ScadaComponent
@@ -15,6 +16,7 @@ const switchConfig = computed(() => props.config.switchConfig)
 const binding = computed(() => props.config.binding)
 
 const isOn = ref(false)
+const writing = ref(false)
 
 onMounted(() => {
   if (binding.value) {
@@ -36,12 +38,39 @@ const handleToggle = async () => {
         '操作确认',
         { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
       )
-      isOn.value = !isOn.value
     } catch {
-      // Cancelled
+      return
+    }
+  }
+
+  const targetValue = !isOn.value
+  const writeTarget = switchConfig.value?.writePoint || binding.value
+
+  if (writeTarget) {
+    writing.value = true
+    try {
+      const device = pointStore.devices.find(d => d.asset === writeTarget.deviceId || d.name === writeTarget.deviceId)
+      const pluginName = device?.pluginName || ''
+      const res = await controlApi.writeSetpoint(
+        pluginName,
+        writeTarget.deviceId,
+        writeTarget.pointName,
+        targetValue
+      )
+      if (res.status === 'ACCEPTED') {
+        isOn.value = targetValue
+        ElMessage.success('操作命令已下发')
+      } else {
+        ElMessage.error(`命令状态异常: ${res.status}`)
+      }
+    } catch (e: unknown) {
+      const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : '操作失败')
+      ElMessage.error(detail)
+    } finally {
+      writing.value = false
     }
   } else {
-    isOn.value = !isOn.value
+    isOn.value = targetValue
   }
 }
 </script>
@@ -49,7 +78,7 @@ const handleToggle = async () => {
 <template>
   <div class="switch-container" @click="handleToggle">
     <div class="switch-label">{{ switchConfig?.onText || '开' }}</div>
-    <div class="switch-track" :class="{ on: isOn }">
+    <div class="switch-track" :class="{ on: isOn, writing }">
       <div class="switch-thumb" :class="{ on: isOn }"></div>
     </div>
     <div class="switch-label">{{ switchConfig?.offText || '关' }}</div>
@@ -86,6 +115,10 @@ const handleToggle = async () => {
 
 .switch-track.on {
   background: #27ae60;
+}
+
+.switch-track.writing {
+  opacity: 0.7;
 }
 
 .switch-thumb {
