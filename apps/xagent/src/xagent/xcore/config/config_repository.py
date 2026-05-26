@@ -610,7 +610,6 @@ class ConfigRepository:
                     'name': row[0],
                     'description': row[1],
                     'data_type': row[2],
-                    'standard_data_type': None,
                     'unit': row[3],
                     'config': json.loads(row[4]) if row[4] else {},
                     'metadata': json.loads(row[5]) if row[5] else {},

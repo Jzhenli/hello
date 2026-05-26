@@ -355,7 +355,7 @@ const pointForm = ref({
   name: '',
   description: '',
   data_type: 'uint16',
-  standard_data_type: 'float' as StandardDataType | '',
+  standard_data_type: '' as StandardDataType | '',
   unit: '',
   enabled: true,
   configJson: '{}',
@@ -449,7 +449,7 @@ const handleAddPoint = () => {
     name: '',
     description: '',
     data_type: pluginName === 'knx' ? 'switch' : pluginName === 'bacnet' ? 'analogInput' : 'uint16',
-    standard_data_type: 'float',
+    standard_data_type: '',
     unit: '',
     enabled: true,
     configJson: '{}',
@@ -521,50 +521,24 @@ const buildPointConfig = (): Record<string, unknown> => {
   if (pluginName === 'modbus_tcp' || pluginName === 'modbus_rtu') {
     config.address = pointForm.value.address
     config.register_type = pointForm.value.register_type
-    if (pointForm.value.count && pointForm.value.count > 1) {
-      config.count = pointForm.value.count
-    }
-    if (pointForm.value.scale !== null) {
-      config.scale = pointForm.value.scale
-    }
-    if (pointForm.value.offset !== null) {
-      config.offset = pointForm.value.offset
-    }
-    if (pointForm.value.byte_order !== 'big') {
-      config.byte_order = pointForm.value.byte_order
-    }
-    if (pointForm.value.word_order !== 'big') {
-      config.word_order = pointForm.value.word_order
-    }
+    config.count = pointForm.value.count
+    config.scale = pointForm.value.scale
+    config.offset = pointForm.value.offset
+    config.byte_order = pointForm.value.byte_order
+    config.word_order = pointForm.value.word_order
   } else if (pluginName === 'knx') {
     config.group_address = pointForm.value.group_address
-    if (pointForm.value.status_address) {
-      config.status_address = pointForm.value.status_address
-    }
-    if (pointForm.value.control_address) {
-      config.control_address = pointForm.value.control_address
-    }
-    if (pointForm.value.writable) {
-      config.writable = true
-    }
-    if (pointForm.value.scale !== null) {
-      config.scale = pointForm.value.scale
-    }
-    if (pointForm.value.offset !== null) {
-      config.offset = pointForm.value.offset
-    }
+    config.status_address = pointForm.value.status_address || null
+    config.control_address = pointForm.value.control_address || null
+    config.writable = pointForm.value.writable
+    config.scale = pointForm.value.scale
+    config.offset = pointForm.value.offset
   } else if (pluginName === 'bacnet') {
     config.object_type = pointForm.value.object_type
     config.object_instance = pointForm.value.object_instance
-    if (pointForm.value.property !== 'presentValue') {
-      config.property = pointForm.value.property
-    }
-    if (pointForm.value.scale !== null) {
-      config.scale = pointForm.value.scale
-    }
-    if (pointForm.value.offset !== null) {
-      config.offset = pointForm.value.offset
-    }
+    config.property = pointForm.value.property
+    config.scale = pointForm.value.scale
+    config.offset = pointForm.value.offset
   }
   
   return config
@@ -607,7 +581,6 @@ const handleSavePoint = async () => {
       const updates: Record<string, unknown> = {
         description: pointForm.value.description,
         data_type: pointForm.value.data_type,
-        standard_data_type: pointForm.value.standard_data_type || undefined,
         unit: pointForm.value.unit,
         enabled: pointForm.value.enabled,
         config,
@@ -621,7 +594,6 @@ const handleSavePoint = async () => {
         name: pointForm.value.name,
         description: pointForm.value.description || undefined,
         data_type: pointForm.value.data_type,
-        standard_data_type: (pointForm.value.standard_data_type || undefined) as StandardDataType | undefined,
         unit: pointForm.value.unit || undefined,
         enabled: pointForm.value.enabled,
         config,
@@ -678,7 +650,6 @@ const handleExportYaml = () => {
           config: p.config
         }
         if (p.description) pt.description = p.description
-        if (p.standard_data_type) pt.standard_data_type = p.standard_data_type
         if (p.unit) pt.unit = p.unit
         if (p.metadata && Object.keys(p.metadata).length > 0) pt.metadata = p.metadata
         if (p.tags && p.tags.length > 0) pt.tags = p.tags
