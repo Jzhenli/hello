@@ -99,11 +99,21 @@ class ConfigService:
         
         updated_device = await self.config_repo.update_device(asset, updates, user)
         
-        if reload and updated_device.enabled:
-            try:
-                await self._reload_device_plugin(updated_device)
-            except Exception as e:
-                logger.error(f"Failed to reload plugin for device {asset}: {e}")
+        if reload:
+            old_enabled = old_device.enabled
+            new_enabled = updated_device.enabled
+            
+            if old_enabled and not new_enabled:
+                await self._unload_device_plugin(asset)
+                logger.info(f"Device '{asset}' disabled, plugin unloaded")
+            elif not old_enabled and new_enabled:
+                await self._load_device_plugin(updated_device)
+                logger.info(f"Device '{asset}' enabled, plugin loaded")
+            elif new_enabled:
+                try:
+                    await self._reload_device_plugin(updated_device)
+                except Exception as e:
+                    logger.error(f"Failed to reload plugin for device {asset}: {e}")
         
         await self.audit_service.log_action(
             action='update',

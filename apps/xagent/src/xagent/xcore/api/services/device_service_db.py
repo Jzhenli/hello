@@ -475,3 +475,35 @@ class DeviceService:
             created_at=datetime.fromtimestamp(db_device.created_at) if db_device.created_at else None,
             updated_at=datetime.fromtimestamp(db_device.updated_at) if db_device.updated_at else None
         )
+    
+    def get_devices_connection_status(self) -> Dict[str, str]:
+        """获取所有设备的运行时连接状态
+        
+        从插件注册表中获取所有南向插件实例，调用其 get_device_status() 方法。
+        
+        Returns:
+            设备资产标识到连接状态的映射 {"asset": "online"|"offline"}
+        """
+        from ...core.plugin import PluginType
+        
+        connection_status: Dict[str, str] = {}
+        
+        if not self.plugin_loader or not hasattr(self.plugin_loader, 'registry'):
+            return connection_status
+        
+        south_plugins = self.plugin_loader.registry.get_plugins_by_type(PluginType.SOUTH)
+        
+        for plugin_info in south_plugins:
+            asset = plugin_info.config.get('asset_name', plugin_info.name)
+            
+            if plugin_info.instance and hasattr(plugin_info.instance, 'get_device_status'):
+                try:
+                    status = plugin_info.instance.get_device_status()
+                    connection_status[asset] = status
+                except Exception as e:
+                    logger.warning(f"Failed to get device status for {asset}: {e}")
+                    connection_status[asset] = "offline"
+            else:
+                connection_status[asset] = "offline"
+        
+        return connection_status

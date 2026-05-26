@@ -162,6 +162,20 @@ async def get_devices_latest(
     return {"count": len(readings), "devices": [r.to_dict() for r in readings]}
 
 
+@router.get("/connection-status")
+async def get_devices_connection_status(
+    service: DeviceService = Depends(get_device_service)
+):
+    """获取所有设备的运行时连接状态
+    
+    连接状态反映设备是否真正连接成功，与配置状态（active/inactive）不同。
+    
+    Returns:
+        设备连接状态映射 {"asset": "online"|"offline", ...}
+    """
+    return service.get_devices_connection_status()
+
+
 @router.get("/{asset}", response_model=DeviceConfig)
 async def get_device(
     asset: str,
