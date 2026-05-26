@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from .base import Notification, DeliveryResult, DeliveryStatus
 from .plugins import DeliveryPlugin
-from .manager import PluginManager
+from .plugin_protocol import IRuleEnginePluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class DeliveryRouter:
         _channel_configs: 渠道配置字典
     """
 
-    def __init__(self, plugin_manager: PluginManager):
+    def __init__(self, plugin_manager: IRuleEnginePluginManager):
         """初始化交付路由器
 
         Args:

@@ -16,7 +16,7 @@ from .base import (
     SubscriptionMode,
 )
 from .plugins import RulePlugin
-from .manager import PluginManager
+from .plugin_protocol import IRuleEnginePluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class RuleEvaluator:
 
     def __init__(
         self,
-        plugin_manager: PluginManager,
+        plugin_manager: IRuleEnginePluginManager,
         aggregation_engine: Any = None,
     ):
         """初始化规则评估器

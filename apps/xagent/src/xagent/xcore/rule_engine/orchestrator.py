@@ -23,7 +23,7 @@ from .base import (
     RuleContext,
     Notification,
 )
-from .manager import PluginManager
+from .plugin_manager import RuleEnginePluginManager
 from .evaluator import RuleEvaluator
 from .pipeline import PipelineManager, PipelineConfig
 from .router import DeliveryRouter
@@ -32,6 +32,7 @@ from ._core_compat import HAS_CORE, EventType, Event, ILifecycleBase, is_reading
 
 if TYPE_CHECKING:
     from .persistence import RulePersistenceManager
+    from ..core.plugin.interfaces import IPluginRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         6. 发布 RULE_TRIGGERED / RULE_EVALUATED 事件
 
     Attributes:
-        plugin_manager: 插件管理器
+        plugin_manager: 规则引擎插件管理器
         event_bus: 事件总线
         evaluator: 规则评估器
         router: 交付路由器
@@ -66,15 +67,25 @@ class RuleEngineOrchestrator(ILifecycleBase):
         event_bus: Optional[Any] = None,
         plugin_dirs: Optional[List[str]] = None,
         persistence_manager: Optional["RulePersistenceManager"] = None,
+        plugin_registry: Optional["IPluginRegistry"] = None,
     ):
         """初始化规则引擎编排器
 
         Args:
             event_bus: 事件总线实例，为 None 时内部创建
-            plugin_dirs: 插件目录列表
+            plugin_dirs: 插件目录列表（已废弃，保留向后兼容）
             persistence_manager: 持久化管理器实例
+            plugin_registry: 插件注册表接口（必需）
         """
-        self.plugin_manager = PluginManager(plugin_dirs=plugin_dirs)
+        if plugin_registry is None:
+            raise ValueError(
+                "plugin_registry is required. "
+                "Please provide the shared plugin registry from PluginLoader."
+            )
+        
+        # 使用新的 RuleEnginePluginManager
+        self.plugin_manager = RuleEnginePluginManager(registry=plugin_registry)
+        
         self._event_bus = event_bus
         self.aggregation_engine = AggregationEngine()
         self.evaluator = RuleEvaluator(
@@ -125,7 +136,8 @@ class RuleEngineOrchestrator(ILifecycleBase):
 
         self._running = True
 
-        discovered = self.plugin_manager.discover()
+        # 从共享注册表获取规则引擎插件
+        discovered = self.plugin_manager.discover_rule_plugins()
         logger.info(
             f"Plugin discovery completed: {len(discovered)} plugins found "
             f"({', '.join(discovered.keys()) if discovered else 'none'})"

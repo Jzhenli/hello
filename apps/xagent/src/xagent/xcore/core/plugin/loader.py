@@ -1,6 +1,7 @@
 """插件加载器
 
 整合插件发现、注册和生命周期管理的协调器。
+使用 PluginDiscoveryService 实现一次性插件发现，避免重复扫描。
 """
 
 import asyncio
@@ -9,6 +10,7 @@ from typing import Any, Dict, List, Optional, Type
 
 from .types import PluginType, PluginStatus, PluginInfo, SystemHealthStatus
 from .discovery import PluginDiscovery
+from .discovery_service import PluginDiscoveryService
 from .registry import PluginRegistry
 from .lifecycle import PluginLifecycle
 from ..config import ConfigManager, model_to_dict
@@ -25,6 +27,8 @@ class PluginLoader(ILifecycle):
     
     整合插件发现、注册和生命周期管理的主协调器。
     实现ILifecycle接口，支持统一的启动和停止。
+    
+    使用 PluginDiscoveryService 实现一次性插件发现，避免重复扫描文件系统。
     """
     
     def __init__(
@@ -34,7 +38,9 @@ class PluginLoader(ILifecycle):
         scheduler: Scheduler,
         storage: Any = None,
         metadata_manager: Optional[Any] = None,
-        plugin_dirs: Optional[List[str]] = None
+        plugin_dirs: Optional[List[str]] = None,
+        discovery_service: Optional[PluginDiscoveryService] = None,
+        registry: Optional[PluginRegistry] = None
     ):
         """初始化插件加载器
         
@@ -45,16 +51,23 @@ class PluginLoader(ILifecycle):
             storage: 存储对象
             metadata_manager: 元数据管理器
             plugin_dirs: 插件目录列表
+            discovery_service: 插件发现服务（可选，用于共享发现结果）
+            registry: 插件注册表（可选，用于共享注册表）
         """
         self.config_manager = config_manager
         self.event_bus = event_bus
         self.scheduler = scheduler
         self.storage = storage
         self.metadata_manager = metadata_manager
+        self._plugin_dirs = plugin_dirs
         
-        # 初始化子模块
+        # 使用注入的服务或创建默认实例
+        self._discovery_service = discovery_service or PluginDiscoveryService()
+        self.registry = registry or PluginRegistry()
+        
+        # 保留 discovery 属性以向后兼容
         self.discovery = PluginDiscovery(plugin_dirs)
-        self.registry = PluginRegistry()
+        
         self.lifecycle = PluginLifecycle(
             registry=self.registry,
             event_bus=event_bus,
@@ -64,6 +77,7 @@ class PluginLoader(ILifecycle):
         
         self._running: bool = False
         self._recovery_task_id: Optional[str] = None
+        self._discovery_done: bool = False
     
     @property
     def is_running(self) -> bool:
@@ -110,13 +124,40 @@ class PluginLoader(ILifecycle):
         logger.info("Plugin Loader stopped")
     
     def discover_plugins(self) -> Dict[str, Type]:
-        """发现插件
+        """发现插件（同步版本，向后兼容）
+        
+        注意：推荐使用 discover_plugins_async() 以避免阻塞事件循环。
         
         Returns:
             发现的插件类字典
         """
+        if self._discovery_done:
+            logger.debug("Plugin discovery already done, returning cached results")
+            return self.registry.plugin_classes
+        
+        # 使用旧的发现方式（向后兼容）
         discovered = self.discovery.discover_plugins()
         self.registry.set_plugin_classes(discovered)
+        self._discovery_done = True
+        return discovered
+    
+    async def discover_plugins_async(self) -> Dict[str, Type]:
+        """异步发现插件（推荐）
+        
+        使用 PluginDiscoveryService 实现一次性发现，避免重复扫描。
+        
+        Returns:
+            发现的插件类字典
+        """
+        if self._discovery_done:
+            logger.debug("Plugin discovery already done, returning cached results")
+            return self.registry.plugin_classes
+        
+        # 使用 PluginDiscoveryService 进行一次性发现
+        plugin_dirs = self._plugin_dirs or [self.discovery._get_default_plugin_dir()]
+        discovered = await self._discovery_service.discover_once(plugin_dirs)
+        self.registry.set_plugin_classes(discovered)
+        self._discovery_done = True
         return discovered
     
     def register_plugin_class(self, plugin_type: Any, name: str, plugin_class: Type) -> None:
@@ -147,21 +188,10 @@ class PluginLoader(ILifecycle):
         """
         # 确保插件类已发现
         if not self.registry.has_plugin_class(plugin_type, name):
-            await self.discover_plugins_async()
+            if not self._discovery_done:
+                await self.discover_plugins_async()
         
         return await self.lifecycle.load_plugin(plugin_type, name, config)
-    
-    async def discover_plugins_async(self) -> Dict[str, Type]:
-        """异步发现插件
-        
-        使用线程池执行同步的插件发现操作，避免阻塞事件循环。
-        
-        Returns:
-            发现的插件类字典
-        """
-        loop = asyncio.get_event_loop()
-        discovered = await loop.run_in_executor(None, self.discover_plugins)
-        return discovered
     
     async def start_plugin(self, plugin_id: str) -> bool:
         """启动插件

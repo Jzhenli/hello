@@ -161,11 +161,13 @@ class Gateway(ILifecycle):
         from .rule_engine.persistence import RulePersistenceManager
         from .api.routers.rules import set_rule_engine
         from .core.event_bus import EventBus
+        from .core.plugin_loader import PluginLoader
         
         event_bus = self.container.try_resolve(EventBus)
         
-        base_path = get_plugins_dir()
-        plugin_dirs = [str(base_path)]
+        # 获取 PluginLoader 实例，从中获取共享的 PluginRegistry
+        plugin_loader = self.container.try_resolve(PluginLoader)
+        plugin_registry = plugin_loader.registry if plugin_loader else None
         
         config = self.config_manager.config
         db_path = config.storage.database if hasattr(config.storage, 'database') else "./data/xagent.db"
@@ -173,9 +175,10 @@ class Gateway(ILifecycle):
         persistence_manager = RulePersistenceManager(db_path=db_path)
         await persistence_manager.initialize()
         
+        # 使用新的架构：传入 plugin_registry
         self.rule_engine = RuleEngineOrchestrator(
             event_bus=event_bus,
-            plugin_dirs=plugin_dirs,
+            plugin_registry=plugin_registry,
             persistence_manager=persistence_manager,
         )
         
@@ -196,7 +199,7 @@ class Gateway(ILifecycle):
             set_command_executor(command_executor)
             self.rule_engine.set_command_executor(command_executor)
 
-        logger.info("Rule Engine initialized with persistence")
+        logger.info("Rule Engine initialized with persistence and shared plugin registry")
     
     async def _initialize_user_permission_service(self) -> None:
         """初始化用户权限服务"""
