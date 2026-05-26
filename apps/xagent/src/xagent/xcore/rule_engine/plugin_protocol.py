@@ -15,8 +15,25 @@ class IRuleEnginePluginManager(Protocol):
     适用于 PluginManager 和 RuleEnginePluginManager。
     """
     
+    def create_instance(self, plugin_name: str, config: Dict[str, Any]) -> Any:
+        """创建插件实例
+        
+        根据插件名称和配置创建新的插件实例。
+        注意：每次调用都会创建新实例，调用者负责缓存。
+        
+        Args:
+            plugin_name: 插件名称（可以是简称或完整键）
+            config: 插件配置
+            
+        Returns:
+            插件实例
+        """
+        ...
+    
     def get_instance(self, plugin_name: str, config: Dict[str, Any]) -> Any:
         """获取或创建插件实例
+        
+        此方法是 create_instance 的别名，保持向后兼容。
         
         Args:
             plugin_name: 插件名称
