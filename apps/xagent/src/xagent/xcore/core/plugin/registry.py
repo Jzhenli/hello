@@ -1,6 +1,7 @@
 """插件注册表模块
 
 管理已加载的插件类和实例。
+实现 IPluginRegistry 接口，提供统一的插件访问方式。
 """
 
 import logging
@@ -16,6 +17,7 @@ class PluginRegistry:
     """插件注册表
     
     管理已发现的插件类和已加载的插件实例。
+    实现 IPluginRegistry 接口，提供统一的插件访问方式。
     """
     
     def __init__(self):
@@ -23,6 +25,7 @@ class PluginRegistry:
         self._plugin_classes: Dict[str, Type] = {}
         self._plugins: Dict[str, PluginInfo] = {}
         self._plugin_counters: Dict[str, int] = {}
+        self._type_index: Dict[str, Dict[str, Type]] = {}
     
     def register_plugin_class(
         self, 
@@ -83,6 +86,52 @@ class PluginRegistry:
             plugin_classes: 插件类字典
         """
         self._plugin_classes = plugin_classes
+        self._build_type_index()
+    
+    def _build_type_index(self) -> None:
+        """构建类型索引，用于快速按类型查询"""
+        self._type_index.clear()
+        for key, plugin_class in self._plugin_classes.items():
+            plugin_type = getattr(plugin_class, '__plugin_type__', 'unknown')
+            if plugin_type not in self._type_index:
+                self._type_index[plugin_type] = {}
+            self._type_index[plugin_type][key] = plugin_class
+        logger.debug(f"Built type index for {len(self._type_index)} plugin types")
+
+    @property
+    def plugin_classes(self) -> Dict[str, Type]:
+        """获取已注册的插件类字典"""
+        return self._plugin_classes
+    
+    def get_all_plugin_classes(self) -> Dict[str, Type]:
+        """获取所有插件类（实现 IPluginRegistry 接口）
+        
+        Returns:
+            所有插件类字典
+        """
+        return self._plugin_classes.copy()
+    
+    def get_plugin_classes_by_type(self, plugin_type: str) -> Dict[str, Type]:
+        """按类型获取插件类（实现 IPluginRegistry 接口）
+        
+        Args:
+            plugin_type: 插件类型（如 'south', 'north', 'rule_engine.rule'）
+            
+        Returns:
+            指定类型的插件类字典
+        """
+        return self._type_index.get(plugin_type, {}).copy()
+    
+    def get_plugin_class_by_key(self, plugin_key: str) -> Optional[Type]:
+        """根据 key 获取插件类（实现 IPluginRegistry 接口）
+        
+        Args:
+            plugin_key: 插件键（格式：'plugin_type:plugin_name'）
+            
+        Returns:
+            插件类，如果不存在返回 None
+        """
+        return self._plugin_classes.get(plugin_key)
     
     def register_plugin_instance(self, plugin_info: PluginInfo) -> None:
         """注册插件实例
@@ -231,4 +280,5 @@ class PluginRegistry:
         self._plugin_classes.clear()
         self._plugins.clear()
         self._plugin_counters.clear()
+        self._type_index.clear()
         logger.debug("Plugin registry cleared")

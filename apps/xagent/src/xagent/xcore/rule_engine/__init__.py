@@ -28,7 +28,7 @@ from .plugins import (
     RuleFilterPlugin,
 )
 
-from .manager import PluginManager
+from .plugin_manager import RuleEnginePluginManager
 from .evaluator import RuleEvaluator
 from .pipeline import (
     FilterPipeline,
@@ -60,7 +60,7 @@ __all__ = [
     "RulePlugin",
     "DeliveryPlugin",
     "RuleFilterPlugin",
-    "PluginManager",
+    "RuleEnginePluginManager",
     "RuleEvaluator",
     "FilterPipeline",
     "PipelineConfig",

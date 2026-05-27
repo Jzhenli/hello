@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 KNX_AVAILABLE = None
 _XKNX = None
 _ConnectionConfig = None
+_ConnectionType = None
 _Switch = None
 _BinarySensor = None
 _Climate = None
@@ -27,7 +28,7 @@ _XknxConnectionState = None
 
 
 def _check_knx_available():
-    global KNX_AVAILABLE, _XKNX, _ConnectionConfig
+    global KNX_AVAILABLE, _XKNX, _ConnectionConfig, _ConnectionType
     global _Switch, _BinarySensor, _Climate, _Light, _Cover, _Sensor, _GroupAddress
     global _XknxConnectionState
 
@@ -38,11 +39,12 @@ def _check_knx_available():
         from xknx import XKNX
         from xknx.devices import Switch, BinarySensor, Climate, Light, Cover, Sensor
         from xknx.telegram import GroupAddress
-        from xknx.io import ConnectionConfig
+        from xknx.io import ConnectionConfig, ConnectionType
         from xknx.core.connection_manager import XknxConnectionState
 
         _XKNX = XKNX
         _ConnectionConfig = ConnectionConfig
+        _ConnectionType = ConnectionType
         _Switch = Switch
         _BinarySensor = BinarySensor
         _Climate = Climate
@@ -68,10 +70,52 @@ class KNXPlugin(SouthPluginBase):
     - Light: 灯光（亮度、颜色）
     - Cover: 遮阳帘
     - Sensor: 通用传感器
+    
+    连接模式配置 (connection_type):
+    - automatic: 自动模式，依次尝试TCP隧道→UDP隧道→路由模式（默认）
+    - tunneling: UDP隧道模式，需要gateway_ip
+    - tunneling_tcp: TCP隧道模式，需要gateway_ip
+    - routing: 路由模式，使用多播通信，不占用连接槽
+    - tunneling_tcp_secure: 安全TCP隧道模式
+    - routing_secure: 安全路由模式
+    
+    注意：
+    - 当指定gateway_ip时，automatic模式可能只尝试TUNNELING
+    - routing模式适合解决连接数满的问题
+    - routing模式依赖多播，可能不适用于跨网段环境
     """
     
     __plugin_name__ = "knx"
-    
+
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "gateway_ip": {"type": "string", "default": "192.168.1.100", "title": "网关IP地址"},
+                "gateway_port": {"type": "integer", "default": 3671, "title": "网关端口"},
+                "local_ip": {"type": ["string", "null"], "default": None, "title": "本地IP地址"},
+                "route_back": {"type": "boolean", "default": False, "title": "路由回传"},
+                "connection_type": {"type": "string", "default": "automatic", "enum": ["automatic", "tunneling", "tunneling_tcp", "routing", "tunneling_tcp_secure", "routing_secure"], "title": "连接模式"},
+                "interval": {"type": "number", "default": 5, "title": "轮询间隔(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "heartbeat_timeout": {"type": "number", "default": 2.0, "title": "心跳超时(秒)"},
+                "heartbeat_retries": {"type": "integer", "default": 2, "title": "心跳重试次数"},
+                "point_timeout": {"type": "number", "default": 3.0, "title": "点位超时(秒)"},
+                "point_retries": {"type": "integer", "default": 2, "title": "点位重试次数"},
+                "sync_mode": {"type": "string", "default": "smart", "enum": ["passive", "always", "smart"], "title": "同步模式"},
+                "sync_interval": {"type": "number", "default": 60, "title": "同步间隔(秒)"},
+                "max_concurrent_syncs": {"type": "integer", "default": 5, "title": "最大并发同步数"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "read_group_address",
+            "write_group_address",
+        ]
+
     HEARTBEAT_TIMEOUT = 2.0
     HEARTBEAT_RETRIES = 2
     HEARTBEAT_RETRY_INTERVAL = 0.3
@@ -82,6 +126,20 @@ class KNXPlugin(SouthPluginBase):
     DEFAULT_SYNC_MODE = "smart"
     DEFAULT_SYNC_INTERVAL = 60
     DEFAULT_MAX_CONCURRENT_SYNCS = 5
+    
+    def _get_base_type(self, data_type: str, point_config: Dict[str, Any]) -> str:
+        """
+        将KNX业务类型转换为基础类型
+        
+        Args:
+            data_type: KNX业务类型（如 "switch", "percent"）
+            point_config: 点位配置
+        
+        Returns:
+            基础类型（如 "bool", "int", "float"）
+        """
+        type_info = DATA_TYPE_MAPPING.get(data_type, {})
+        return type_info.get("data_type", data_type)
     
     def _create_data_converter(self) -> KNXConverter:
         """创建数据转换器"""
@@ -94,6 +152,8 @@ class KNXPlugin(SouthPluginBase):
         self._gateway_port = config.get("gateway_port", 3671)
         self._local_ip = config.get("local_ip")
         self._route_back = config.get("route_back", False)
+        self._connection_type = config.get("connection_type", "automatic")
+        self._interval = config.get("interval", 5)
         self._reconnect_interval = config.get("reconnect_interval", 5)
         
         self._heartbeat_timeout = config.get("heartbeat_timeout", self.HEARTBEAT_TIMEOUT)
@@ -145,11 +205,19 @@ class KNXPlugin(SouthPluginBase):
         try:
             logger.info(f"Connecting to KNX gateway {self._gateway_ip}:{self._gateway_port}...")
             
+            if self._connection_type.lower() == "routing":
+                xknx_logger = logging.getLogger('xknx.cemi')
+                xknx_logger.setLevel(logging.ERROR)
+                logger.info("ROUTING mode: adjusted xknx.cemi log level to ERROR to suppress expected warnings")
+            
             if _ConnectionConfig is None:
                 logger.error("ConnectionConfig is not available")
                 return False
             
+            connection_type = self._get_connection_type()
+            
             connection_config = _ConnectionConfig(
+                connection_type=connection_type,
                 gateway_ip=self._gateway_ip,
                 gateway_port=self._gateway_port,
                 local_ip=self._local_ip if self._local_ip else None,
@@ -199,6 +267,56 @@ class KNXPlugin(SouthPluginBase):
                 logger.debug("Error creating offline reading during connect failure", exc_info=True)
             
             return False
+    
+    def _get_connection_type(self) -> Optional[Any]:
+        """将配置字符串转换为ConnectionType枚举
+        
+        Returns:
+            ConnectionType枚举值，如果_ConnectionType不可用则返回None
+        """
+        if _ConnectionType is None:
+            logger.warning("ConnectionType not available, using default")
+            return None
+        
+        type_mapping = {
+            "automatic": _ConnectionType.AUTOMATIC,
+            "tunneling": _ConnectionType.TUNNELING,
+            "tunneling_tcp": _ConnectionType.TUNNELING_TCP,
+            "routing": _ConnectionType.ROUTING,
+            "tunneling_tcp_secure": _ConnectionType.TUNNELING_TCP_SECURE,
+            "routing_secure": _ConnectionType.ROUTING_SECURE,
+        }
+        
+        conn_type_str = self._connection_type.lower().strip()
+        connection_type = type_mapping.get(conn_type_str)
+        
+        if connection_type is None:
+            logger.warning(f"Unknown connection_type '{self._connection_type}', using AUTOMATIC")
+            return _ConnectionType.AUTOMATIC
+        
+        self._validate_connection_config(conn_type_str)
+        
+        logger.info(f"Using connection type: {conn_type_str.upper()}")
+        return connection_type
+    
+    def _validate_connection_config(self, conn_type_str: str) -> None:
+        """验证连接配置的合理性
+        
+        Args:
+            conn_type_str: 连接类型字符串
+        """
+        if conn_type_str in ("tunneling", "tunneling_tcp", "tunneling_tcp_secure"):
+            if not self._gateway_ip:
+                logger.warning(
+                    f"Connection type '{conn_type_str}' requires gateway_ip, "
+                    f"but no gateway_ip is configured"
+                )
+        elif conn_type_str in ("routing", "routing_secure"):
+            if self._gateway_ip:
+                logger.info(
+                    f"Connection type '{conn_type_str}' uses multicast, "
+                    f"gateway_ip '{self._gateway_ip}' will be used for discovery only"
+                )
     
     async def _handle_connection_lost(self) -> None:
         """处理连接丢失 - 停止xknx并标记设备离线"""
@@ -297,7 +415,21 @@ class KNXPlugin(SouthPluginBase):
             return None
         
         type_config = DATA_TYPE_MAPPING.get(data_type, DATA_TYPE_MAPPING["switch"])
+        dpt_value = type_config.get("dpt", 1)
+        
         device_class_name = type_config["device_class"]
+        writable_config = {}
+        
+        if writable:
+            if "writable_device_class" in type_config:
+                device_class_name = type_config["writable_device_class"]
+                writable_config = type_config.get("writable_config", {})
+                logger.info(
+                    f"Using {device_class_name} device class for writable {data_type} point {name}: "
+                    f"{writable_config.get('description', '')}"
+                )
+            elif "writable_config" in type_config:
+                writable_config = type_config["writable_config"]
         
         try:
             read_ga = _GroupAddress(read_address) if read_address else None
@@ -306,7 +438,9 @@ class KNXPlugin(SouthPluginBase):
             logger.error(f"Invalid group address: {e}")
             return None
         
-        device = self._construct_device(device_class_name, name, read_ga, write_ga)
+        device = self._construct_device(
+            device_class_name, name, read_ga, write_ga, dpt_value, writable_config
+        )
         
         if device:
             self._xknx.devices.add(device)
@@ -318,9 +452,14 @@ class KNXPlugin(SouthPluginBase):
         device_class_name: str, 
         name: str, 
         read_ga: Any, 
-        write_ga: Any
+        write_ga: Any,
+        dpt_value: Any = 1,
+        writable_config: Dict[str, Any] = None
     ) -> Any:
         """根据设备类名构造xknx设备对象"""
+        if writable_config is None:
+            writable_config = {}
+        
         constructors = {
             "Switch": lambda: _Switch(
                 self._xknx, name=name,
@@ -334,9 +473,8 @@ class KNXPlugin(SouthPluginBase):
                 self._xknx, name=name,
                 group_address_temperature=read_ga
             ),
-            "Light": lambda: _Light(
-                self._xknx, name=name,
-                group_address_switch=write_ga, group_address_switch_state=read_ga
+            "Light": lambda: self._create_light_device(
+                name, read_ga, write_ga, writable_config
             ),
             "Cover": lambda: _Cover(
                 self._xknx, name=name,
@@ -348,7 +486,37 @@ class KNXPlugin(SouthPluginBase):
         if factory:
             return factory()
         
-        return _Sensor(self._xknx, name=name, group_address_state=read_ga)
+        return _Sensor(self._xknx, name=name, group_address_state=read_ga, value_type=dpt_value)
+    
+    def _create_light_device(
+        self, 
+        name: str, 
+        read_ga: Any, 
+        write_ga: Any,
+        writable_config: Dict[str, Any]
+    ) -> Any:
+        """创建Light设备，根据配置选择使用brightness或switch地址"""
+        use_brightness = writable_config.get("use_brightness", False)
+        use_color = writable_config.get("use_color", False)
+        
+        if use_brightness:
+            return _Light(
+                self._xknx, name=name,
+                group_address_brightness=write_ga,
+                group_address_brightness_state=read_ga
+            )
+        elif use_color:
+            return _Light(
+                self._xknx, name=name,
+                group_address_color=write_ga,
+                group_address_color_state=read_ga
+            )
+        else:
+            return _Light(
+                self._xknx, name=name,
+                group_address_switch=write_ga,
+                group_address_switch_state=read_ga
+            )
     
     async def poll(self) -> List[Reading]:
         poll_start = time.time()
@@ -502,10 +670,10 @@ class KNXPlugin(SouthPluginBase):
         """
         从xknx设备对象提取状态值
         
-        使用 DATA_TYPE_MAPPING 中的 value_attr 字段确定读取方式：
-        - "resolve": 调用 device.resolve_state()
-        - "current_color": 读取 device.current_color 并转为字符串
-        - 其他: 使用 getattr(device, value_attr, None)
+        使用 DATA_TYPE_MAPPING 中的 value_type 字段确定读取方式：
+        - "property": 直接访问属性
+        - "method": 调用方法
+        - "special": 特殊处理（resolve_state等）
         
         Args:
             device: xknx设备对象
@@ -519,29 +687,58 @@ class KNXPlugin(SouthPluginBase):
         
         type_info = DATA_TYPE_MAPPING.get(data_type, DATA_TYPE_MAPPING["switch"])
         value_attr = type_info.get("value_attr", "state")
+        value_type = type_info.get("value_type", "property")
         
         try:
-            if value_attr == "resolve":
-                if data_type in ("percent", "brightness"):
-                    brightness = getattr(device, 'current_brightness', None)
-                    if brightness is not None:
-                        return brightness
-                
-                if hasattr(device, 'resolve_state'):
-                    result = device.resolve_state()
-                    if asyncio.iscoroutine(result):
-                        logger.warning(f"resolve_state() returned coroutine for {device.name}")
-                        return None
-                    return result
-                return getattr(device, 'state', None)
-            elif value_attr == "current_color":
-                color = getattr(device, 'current_color', None)
-                return str(color) if color else None
+            if value_type == "special":
+                return self._extract_special_value(device, data_type, value_attr)
+            elif value_type == "method":
+                return self._extract_method_value(device, value_attr)
             else:
-                return getattr(device, value_attr, None)
+                return self._extract_property_value(device, value_attr)
         except Exception as e:
             logger.error(f"Error extracting device value for {data_type}: {e}")
             return None
+    
+    def _extract_special_value(self, device: Any, data_type: str, value_attr: str) -> Any:
+        """处理特殊值提取（resolve_state等）"""
+        if value_attr == "resolve":
+            if data_type in ("percent", "brightness"):
+                brightness = getattr(device, 'current_brightness', None)
+                if brightness is not None:
+                    return brightness
+            
+            if hasattr(device, 'resolve_state'):
+                result = device.resolve_state()
+                if asyncio.iscoroutine(result):
+                    logger.warning(f"resolve_state() returned coroutine for {device.name}")
+                    return None
+                return result
+            return getattr(device, 'state', None)
+        elif value_attr == "current_color":
+            color = getattr(device, 'current_color', None)
+            return str(color) if color else None
+        else:
+            return getattr(device, value_attr, None)
+    
+    def _extract_method_value(self, device: Any, value_attr: str) -> Any:
+        """处理方法调用"""
+        method = getattr(device, value_attr, None)
+        if method and callable(method):
+            try:
+                result = method()
+                if asyncio.iscoroutine(result):
+                    logger.warning(f"{value_attr}() returned coroutine for {device.name}")
+                    return None
+                return result
+            except Exception as e:
+                logger.error(f"Error calling {value_attr}() on device {device.name}: {e}")
+                return None
+        return None
+    
+    def _extract_property_value(self, device: Any, value_attr: str) -> Any:
+        """处理属性访问"""
+        return getattr(device, value_attr, None)
     
     def _get_device_state(self, device: Any, data_type: str) -> Any:
         """直接读取设备状态（不发送KNX请求）"""
@@ -557,9 +754,16 @@ class KNXPlugin(SouthPluginBase):
             device = write_device_info["device"]
             data_type = write_device_info["data_type"]
             address = write_device_info["address"]
+            point_config = write_device_info.get("config")
+            
+            raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+            logger.debug(f"Reverse transform: {value!r} -> {raw_value!r} (data_type={data_type})")
+            if raw_value is None and value is not None:
+                logger.error(f"Failed to reverse transform value {value} for point {point}")
+                return False
             
             try:
-                success = await self._write_device_value(device, data_type, value)
+                success = await self._write_device_value(device, data_type, raw_value)
                 if success:
                     logger.info(f"Successfully wrote value {value} to point {point} at address {address}")
                 else:
@@ -583,9 +787,16 @@ class KNXPlugin(SouthPluginBase):
         device = device_info["device"]
         data_type = device_info["data_type"]
         address = device_info.get("write_address", "unknown")
+        point_config = device_info.get("config")
+        
+        raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+        logger.debug(f"Reverse transform: {value!r} -> {raw_value!r} (data_type={data_type})")
+        if raw_value is None and value is not None:
+            logger.error(f"Failed to reverse transform value {value} for point {point}")
+            return False
         
         try:
-            success = await self._write_device_value(device, data_type, value)
+            success = await self._write_device_value(device, data_type, raw_value)
             if success:
                 logger.info(f"Successfully wrote value {value} to point {point} at address {address}")
             else:
@@ -599,9 +810,12 @@ class KNXPlugin(SouthPluginBase):
         if not device:
             return False
         
+        logger.debug(f"Writing to device: data_type={data_type}, value={value!r}, value_type={type(value).__name__}")
+        
         try:
             if data_type in ("switch", "binary", "bool"):
                 if hasattr(device, 'set_on') and hasattr(device, 'set_off'):
+                    logger.debug(f"Bool write: value={value!r}, bool(value)={bool(value)}")
                     if value:
                         await device.set_on()
                     else:

@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .constants import BACNET_DATA_TYPES, INTERNAL_ERROR_CODES
+from xagent.xcore.transform import ScaleOffsetTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,13 @@ class BACnetConverter:
             standard_type = type_mapping.get("standard_type", "float")
             default_unit = type_mapping.get("unit")
             
+            scale = self._get_point_config(config, "scale")
+            offset = self._get_point_config(config, "offset")
+            
+            inferred_standard_type = ScaleOffsetTransformer(scale, offset).infer_standard_type(
+                standard_type
+            )
+            
             converted_value = None
             quality = "bad"
             error_code = None
@@ -85,15 +93,15 @@ class BACnetConverter:
                     converted_value = self._convert_value(
                         raw_value,
                         standard_type,
-                        self._get_point_config(config, "scale"),
-                        self._get_point_config(config, "offset")
+                        scale,
+                        offset
                     )
             elif raw_value is not None:
                 converted_value = self._convert_value(
                     raw_value,
                     standard_type,
-                    self._get_point_config(config, "scale"),
-                    self._get_point_config(config, "offset")
+                    scale,
+                    offset
                 )
                 quality = self._assess_quality(
                     converted_value,
@@ -120,7 +128,7 @@ class BACnetConverter:
                 "point_name": point_name,
                 "value": converted_value,
                 "data_type": data_type,
-                "standard_data_type": standard_type,
+                "standard_data_type": inferred_standard_type,
                 "unit": self._get_point_config(config, "unit", default_unit),
                 "quality": quality,
                 "metadata": metadata
@@ -154,33 +162,10 @@ class BACnetConverter:
         """
         if raw_value is None:
             return None
-        
+
         try:
-            if standard_type == "float":
-                value = float(raw_value)
-            elif standard_type == "int":
-                value = int(raw_value)
-            elif standard_type == "bool":
-                if isinstance(raw_value, bool):
-                    value = raw_value
-                elif isinstance(raw_value, str):
-                    value = raw_value.lower() in ("true", "1", "yes", "on", "active")
-                elif isinstance(raw_value, (int, float)):
-                    value = raw_value != 0
-                else:
-                    value = bool(raw_value)
-            elif standard_type == "string":
-                value = str(raw_value)
-            else:
-                value = raw_value
-            
-            if scale is not None and isinstance(value, (int, float)):
-                value = value * scale
-            if offset is not None and isinstance(value, (int, float)):
-                value = value + offset
-            
-            return value
-            
+            transformer = ScaleOffsetTransformer(scale=scale, offset=offset)
+            return transformer.forward(raw_value, base_type=standard_type)
         except (ValueError, TypeError) as e:
             logger.warning(f"Value conversion failed for {raw_value}: {e}")
             return None

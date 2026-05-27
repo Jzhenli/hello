@@ -1,7 +1,7 @@
 """Modbus TCP South Plugin - TCP transport implementation"""
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from ..base import ModbusBasePlugin
 
@@ -37,6 +37,33 @@ class ModbusTcpPlugin(ModbusBasePlugin):
     """
 
     __plugin_name__ = "modbus_tcp"
+
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "127.0.0.1", "title": "主机地址"},
+                "port": {"type": "integer", "default": 502, "title": "端口号"},
+                "slave_id": {"type": "integer", "default": 1, "title": "从站ID"},
+                "timeout": {"type": "number", "default": 3, "title": "超时时间(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "heartbeat_address": {"type": ["integer", "null"], "default": None, "title": "心跳地址"},
+                "heartbeat_timeout": {"type": "number", "default": 1.5, "title": "心跳超时(秒)"},
+                "max_gap": {"type": "integer", "default": 5, "title": "最大间隔"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "read_coils",
+            "read_discrete_inputs",
+            "read_holding_registers",
+            "read_input_registers",
+            "write_single_coil",
+            "write_single_register",
+        ]
 
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: Any):
         self._host = config.get("host", "127.0.0.1")

@@ -108,51 +108,9 @@ class DataTransformer(ABC):
             return None
         
         try:
-            if data_type == "int":
-                value = int(raw_value)
-            elif data_type == "float":
-                value = float(raw_value)
-            elif data_type == "bool":
-                if isinstance(raw_value, bool):
-                    value = raw_value
-                elif isinstance(raw_value, (int, float)):
-                    value = bool(raw_value)
-                elif isinstance(raw_value, str):
-                    value = raw_value.lower() in ("true", "1", "yes", "on")
-                else:
-                    value = bool(raw_value)
-            elif data_type == "string":
-                value = str(raw_value)
-            elif data_type == "uint16":
-                value = int(raw_value) & 0xFFFF
-            elif data_type == "int16":
-                v = int(raw_value) & 0xFFFF
-                value = v if v < 0x8000 else v - 0x10000
-            elif data_type == "uint32":
-                value = int(raw_value) & 0xFFFFFFFF
-            elif data_type == "int32":
-                v = int(raw_value) & 0xFFFFFFFF
-                value = v if v < 0x80000000 else v - 0x100000000
-            elif data_type == "uint64":
-                value = int(raw_value) & 0xFFFFFFFFFFFFFFFF
-            elif data_type == "int64":
-                v = int(raw_value) & 0xFFFFFFFFFFFFFFFF
-                value = v if v < 0x8000000000000000 else v - 0x10000000000000000
-            elif data_type == "float32":
-                value = float(raw_value)
-            elif data_type == "float32_swap":
-                import struct
-                packed = struct.pack('>f', float(raw_value))
-                value = struct.unpack('<f', packed)[0]
-            else:
-                value = raw_value
-            
-            if scale is not None and isinstance(value, (int, float)):
-                value = value * scale
-            if offset is not None and isinstance(value, (int, float)):
-                value = value + offset
-            
-            return value
+            from .scale_offset import ScaleOffsetTransformer
+            transformer = ScaleOffsetTransformer(scale=scale, offset=offset)
+            return transformer.forward(raw_value, base_type=data_type)
         except (ValueError, TypeError) as e:
             logger.warning(f"Failed to convert value {raw_value} to type {data_type}: {e}")
             return None

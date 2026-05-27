@@ -1,7 +1,7 @@
 """Modbus RTU South Plugin - Serial/RTU transport implementation"""
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from ..base import ModbusBasePlugin
 
@@ -55,6 +55,36 @@ class ModbusRtuPlugin(ModbusBasePlugin):
     """
 
     __plugin_name__ = "modbus_rtu"
+
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "serial_port": {"type": "string", "default": "/dev/ttyUSB0", "title": "串口设备路径"},
+                "baudrate": {"type": "integer", "default": 9600, "title": "波特率"},
+                "parity": {"type": "string", "default": "N", "enum": ["N", "E", "O"], "title": "校验位"},
+                "stopbits": {"type": "integer", "default": 1, "enum": [1, 2], "title": "停止位"},
+                "bytesize": {"type": "integer", "default": 8, "enum": [7, 8], "title": "数据位"},
+                "slave_id": {"type": "integer", "default": 1, "title": "从站ID"},
+                "timeout": {"type": "number", "default": 3, "title": "超时时间(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "heartbeat_address": {"type": ["integer", "null"], "default": None, "title": "心跳地址"},
+                "heartbeat_timeout": {"type": "number", "default": 1.5, "title": "心跳超时(秒)"},
+                "max_gap": {"type": "integer", "default": 5, "title": "最大间隔"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "read_coils",
+            "read_discrete_inputs",
+            "read_holding_registers",
+            "read_input_registers",
+            "write_single_coil",
+            "write_single_register",
+        ]
 
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: Any):
         self._serial_port = config.get("serial_port", DEFAULT_SERIAL_PORT)

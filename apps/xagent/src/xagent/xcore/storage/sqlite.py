@@ -65,6 +65,8 @@ class SQLiteStorage(StorageInterface):
         
         await self._create_metadata_tables()
         
+        await self._run_migrations()
+        
         await self._db.commit()
         self._initialized = True
         logger.info(f"SQLite storage initialized: {self._database_path}")
@@ -133,6 +135,23 @@ class SQLiteStorage(StorageInterface):
             CREATE INDEX IF NOT EXISTS idx_point_enabled ON point_registry(enabled);
             CREATE INDEX IF NOT EXISTS idx_plugin_name ON plugin_registry(name);
             CREATE INDEX IF NOT EXISTS idx_plugin_type ON plugin_registry(type);
+            
+            CREATE TABLE IF NOT EXISTS config_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config TEXT,
+                config_hash TEXT,
+                change_type TEXT,
+                changed_by TEXT,
+                changed_at REAL,
+                previous_version INTEGER,
+                created_at REAL NOT NULL DEFAULT (strftime('%s','now')),
+                UNIQUE(entity_type, entity_id, version)
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_config_versions_entity ON config_versions(entity_type, entity_id);
         """)
         logger.info("Metadata tables created/verified")
 
@@ -279,10 +298,10 @@ class SQLiteStorage(StorageInterface):
             """
         else:
             query = f"""
-                SELECT asset, timestamp, service_name, data, tags, standard_points, device_status
-                FROM readings
+                SELECT r.asset, r.timestamp, r.service_name, r.data, r.tags, r.standard_points, r.device_status
+                FROM readings r
                 WHERE {where_clause}
-                ORDER BY timestamp DESC
+                ORDER BY r.timestamp DESC
                 LIMIT ?
             """
         
@@ -506,6 +525,14 @@ class SQLiteStorage(StorageInterface):
             stacklevel=2,
         )
         return self._db
+    
+    async def _run_migrations(self) -> None:
+        """运行数据库迁移"""
+        try:
+            from .migrations.v2_config_versioning import run_migration
+            await run_migration(self._db)
+        except Exception as e:
+            logger.warning(f"Migration check failed (this is normal for new databases): {e}")
     
     @property
     def is_initialized(self) -> bool:

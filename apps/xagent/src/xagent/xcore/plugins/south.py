@@ -10,7 +10,7 @@ from ..core.event_bus import EventBus, EventType, Event
 from ..core.plugin_loader import PluginType
 from ..core.exceptions import PluginStartError
 from ..core.interfaces import IPlugin
-from ..transform import StandardDataPoint
+from ..transform import StandardDataPoint, ScaleOffsetTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,46 @@ class SouthPluginBase(IPlugin):
         if key in point:
             return point[key]
         return default
+
+    def _create_transformer(self, point_config: Dict[str, Any]) -> ScaleOffsetTransformer:
+        """从点位配置创建 ScaleOffsetTransformer"""
+        return ScaleOffsetTransformer.from_point_config(
+            point_config, self._get_point_config
+        )
+
+    def _reverse_transform_value(self, value: Any, point_config: Dict[str, Any]) -> Any:
+        """
+        逆向转换值（用于写操作）
+        
+        Args:
+            value: 要转换的值
+            point_config: 点位配置
+        
+        Returns:
+            转换后的值
+        """
+        transformer = self._create_transformer(point_config)
+        data_type = self._get_point_config(point_config, "data_type")
+        
+        base_type = self._get_base_type(data_type, point_config)
+        
+        return transformer.reverse(value, base_type=base_type)
+    
+    def _get_base_type(self, data_type: str, point_config: Dict[str, Any]) -> str:
+        """
+        将业务类型转换为基础类型
+        
+        子类可以重写此方法提供自定义的类型映射逻辑。
+        默认实现假设 data_type 就是 base_type。
+        
+        Args:
+            data_type: 业务类型（如 "switch", "percent"）
+            point_config: 点位配置
+        
+        Returns:
+            基础类型（如 "bool", "int", "float"）
+        """
+        return data_type
     
     def shutdown(self) -> None:
         if self._running:

@@ -89,7 +89,40 @@ class BACnetPlugin(SouthPluginBase):
     """
     
     __plugin_name__ = "bacnet"
-    
+
+    @classmethod
+    def config_schema(cls) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "localhost", "title": "设备IP地址"},
+                "device_id": {"type": "integer", "default": 100, "title": "设备ID"},
+                "port": {"type": "integer", "default": 47808, "title": "端口号"},
+                "timeout": {"type": "number", "default": 3.0, "title": "超时时间(秒)"},
+                "interval": {"type": "number", "default": 5, "title": "轮询间隔(秒)"},
+                "reconnect_interval": {"type": "number", "default": 5, "title": "重连间隔(秒)"},
+                "heartbeat_mode": {"type": "string", "default": "device_object", "enum": ["device_object", "none"], "title": "心跳模式"},
+                "heartbeat_property": {"type": "string", "default": "objectName", "title": "心跳属性"},
+                "heartbeat_timeout": {"type": "number", "default": 5.0, "title": "心跳超时(秒)"},
+                "heartbeat_retries": {"type": "integer", "default": 3, "title": "心跳重试次数"},
+                "point_timeout": {"type": "number", "default": 3.0, "title": "点位超时(秒)"},
+                "point_retries": {"type": "integer", "default": 2, "title": "点位重试次数"},
+                "max_concurrent_reads": {"type": "integer", "default": 20, "title": "最大并发读取数"},
+                "batch_read_enabled": {"type": "boolean", "default": True, "title": "批量读取开关"},
+                "batch_size": {"type": "integer", "default": 50, "title": "批量大小"},
+            },
+        }
+
+    @classmethod
+    def capabilities(cls) -> List[str]:
+        return [
+            "read_property",
+            "write_property",
+            "read_property_multiple",
+            "who_is",
+            "i_am",
+        ]
+
     POINT_TIMEOUT = 3.0
     POINT_RETRIES = 2
     POINT_RETRY_INTERVAL = 0.5
@@ -288,8 +321,14 @@ class BACnetPlugin(SouthPluginBase):
             logger.error(f"Point {point} not found or not writable")
             return False
         
+        point_config = write_info.get("config")
+        raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+        if raw_value is None and value is not None:
+            logger.error(f"Failed to reverse transform value {value} for point {point}")
+            return False
+        
         try:
-            success = await self._write_point_value(write_info, value)
+            success = await self._write_point_value(write_info, raw_value)
             if success:
                 logger.info(f"Successfully wrote {value} to {point}")
             else:

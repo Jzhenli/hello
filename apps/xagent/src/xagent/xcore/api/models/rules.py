@@ -61,6 +61,8 @@ class RuleResponse(BaseModel):
     notification: Optional[Dict[str, Any]] = None
     pipeline_id: Optional[str] = None
     channel_ids: Optional[List[str]] = None
+    execution_count: int = 0
+    last_triggered: Optional[float] = None
 
 
 class FilterConfig(BaseModel):
@@ -120,6 +122,8 @@ class RuleEngineStatusResponse(BaseModel):
     active_pipelines: int
     aggregation_subscriptions: int
     event_bus_connected: bool
+    schedule_rules: int = 0
+    scheduler_available: bool = False
 
 
 class RuleListResponse(BaseModel):
@@ -153,6 +157,28 @@ class ChannelOperationResponse(BaseModel):
     success: bool
     message: str
     channel_id: Optional[str] = None
+
+
+class AlertResponse(BaseModel):
+    id: str
+    rule_id: str = ""
+    rule_name: str = ""
+    title: str = ""
+    message: str = ""
+    level: str = "info"
+    status: str = "new"
+    asset: str = ""
+    point_name: str = ""
+    current_value: str = ""
+    threshold: str = ""
+    triggered_at: Optional[float] = None
+    triggered_at_str: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AlertListResponse(BaseModel):
+    count: int
+    alerts: List[AlertResponse]
 
 
 class BindChannelsRequest(BaseModel):

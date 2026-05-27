@@ -131,6 +131,11 @@ class PluginDiscovery:
         module_name = f"{self.module_prefix}{module_path}"
         
         try:
+            existing_module = sys.modules.get(module_name)
+            if existing_module is not None:
+                self._discover_classes_in_module(existing_module, module_name, discovered, set())
+                return
+
             spec = importlib.util.spec_from_file_location(module_name, py_file)
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)

@@ -9,6 +9,7 @@ from .config import router as config_router
 from .metadata import router as metadata_router
 from .rules import router as rules_router
 from .devices import router as devices_router
+from .users import router as users_router
 
 __all__ = [
     "system_router",
@@ -20,4 +21,5 @@ __all__ = [
     "metadata_router",
     "rules_router",
     "devices_router",
+    "users_router",
 ]

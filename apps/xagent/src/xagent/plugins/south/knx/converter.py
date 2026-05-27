@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .constants import DATA_TYPE_MAPPING, ERROR_CODE_DEVICE_OFFLINE, VALUE_RANGES
+from xagent.xcore.transform import ScaleOffsetTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +55,13 @@ class KNXConverter:
             data_type_config = self._get_point_config(point_config, "data_type", "switch")
             type_info = DATA_TYPE_MAPPING.get(data_type_config, DATA_TYPE_MAPPING["switch"])
 
-            standard_data_type = type_info.get("data_type", "string")
             unit = self._get_point_config(point_config, "unit", type_info.get("unit"))
             scale = self._get_point_config(point_config, "scale")
             offset = self._get_point_config(point_config, "offset")
+
+            standard_data_type = ScaleOffsetTransformer(scale, offset).infer_standard_type(
+                type_info.get("data_type", "string")
+            )
 
             converted_value = None
             quality = "bad"
@@ -124,30 +128,8 @@ class KNXConverter:
             return None
 
         try:
-            if data_type == "int":
-                value = int(raw_value)
-            elif data_type == "float":
-                value = float(raw_value)
-            elif data_type == "bool":
-                if isinstance(raw_value, bool):
-                    value = raw_value
-                elif isinstance(raw_value, (int, float)):
-                    value = bool(raw_value)
-                elif isinstance(raw_value, str):
-                    value = raw_value.lower() in ("true", "1", "yes", "on")
-                else:
-                    value = bool(raw_value)
-            elif data_type == "string":
-                value = str(raw_value)
-            else:
-                value = raw_value
-
-            if scale is not None and isinstance(value, (int, float)):
-                value = value * scale
-            if offset is not None and isinstance(value, (int, float)):
-                value = value + offset
-
-            return value
+            transformer = ScaleOffsetTransformer(scale=scale, offset=offset)
+            return transformer.forward(raw_value, base_type=data_type)
         except (ValueError, TypeError) as e:
             logger.warning(f"Failed to convert value {raw_value} to type {data_type}: {e}")
             return None

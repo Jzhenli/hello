@@ -116,6 +116,9 @@ class Gateway(ILifecycle):
         # 初始化规则引擎
         await self._initialize_rule_engine()
         
+        # 初始化用户权限服务
+        await self._initialize_user_permission_service()
+        
         # 设置API依赖
         from .storage import SQLiteStorage, WriteBehindBuffer
         from .core.metadata import MetadataManager
@@ -127,7 +130,8 @@ class Gateway(ILifecycle):
             metadata_manager=self.container.resolve(MetadataManager),
             command_executor=self.container.resolve(CommandExecutor),
             gateway=self,
-            cleanup_task=self.cleanup_task
+            cleanup_task=self.cleanup_task,
+            user_permission_service=self._user_permission_service
         )
         
         logger.info("XAgent Gateway initialized successfully")
@@ -157,15 +161,13 @@ class Gateway(ILifecycle):
         from .rule_engine.persistence import RulePersistenceManager
         from .api.routers.rules import set_rule_engine
         from .core.event_bus import EventBus
+        from .core.plugin_loader import PluginLoader
         
         event_bus = self.container.try_resolve(EventBus)
         
-        base_path = get_plugins_dir()
-        plugin_dirs = [
-            str(base_path / "rule"),
-            str(base_path / "filter"),
-            str(base_path / "delivery"),
-        ]
+        # 获取 PluginLoader 实例，从中获取共享的 PluginRegistry
+        plugin_loader = self.container.try_resolve(PluginLoader)
+        plugin_registry = plugin_loader.registry if plugin_loader else None
         
         config = self.config_manager.config
         db_path = config.storage.database if hasattr(config.storage, 'database') else "./data/xagent.db"
@@ -173,9 +175,10 @@ class Gateway(ILifecycle):
         persistence_manager = RulePersistenceManager(db_path=db_path)
         await persistence_manager.initialize()
         
+        # 使用新的架构：传入 plugin_registry
         self.rule_engine = RuleEngineOrchestrator(
             event_bus=event_bus,
-            plugin_dirs=plugin_dirs,
+            plugin_registry=plugin_registry,
             persistence_manager=persistence_manager,
         )
         
@@ -183,8 +186,32 @@ class Gateway(ILifecycle):
         self.container.register_instance(RulePersistenceManager, persistence_manager)
         
         set_rule_engine(self.rule_engine)
+
+        from .core.scheduler import Scheduler
+        scheduler = self.container.try_resolve(Scheduler)
+        if scheduler:
+            self.rule_engine.set_scheduler(scheduler)
+
+        from .api.services.command_executor import CommandExecutor
+        command_executor = self.container.try_resolve(CommandExecutor)
+        if command_executor:
+            from xagent.plugins.delivery.action.plugin import set_command_executor
+            set_command_executor(command_executor)
+            self.rule_engine.set_command_executor(command_executor)
+
+        logger.info("Rule Engine initialized with persistence and shared plugin registry")
+    
+    async def _initialize_user_permission_service(self) -> None:
+        """初始化用户权限服务"""
+        from .services.user_permission_service import UserPermissionService
         
-        logger.info("Rule Engine initialized with persistence")
+        config = self.config_manager.config
+        db_path = config.storage.database if hasattr(config.storage, 'database') else "./data/xagent.db"
+        
+        self._user_permission_service = UserPermissionService(db_path=db_path)
+        await self._user_permission_service.initialize()
+        
+        logger.info("User Permission Service initialized")
     
     async def start(self) -> None:
         """启动网关

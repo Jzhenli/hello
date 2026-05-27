@@ -169,22 +169,41 @@ class GatewayInitializer(ILifecycle):
         
         self.config_manager.set_event_bus(self.event_bus)
         
+        # 创建共享的插件发现服务和注册表
+        from ...core.plugin.discovery_service import PluginDiscoveryService
+        from ...core.plugin.registry import PluginRegistry
+        from ...core.paths import get_plugins_dir
+        
+        discovery_service = PluginDiscoveryService()
+        shared_registry = PluginRegistry()
+        
+        # 获取插件目录
+        base_path = get_plugins_dir()
+        plugin_dirs = [str(base_path)]
+        
+        # 创建 PluginLoader 并注入共享服务
         self.plugin_loader = PluginLoader(
             config_manager=self.config_manager,
             event_bus=self.event_bus,
             scheduler=self.scheduler,
             storage=self.buffer,
-            metadata_manager=self.metadata_manager
+            metadata_manager=self.metadata_manager,
+            plugin_dirs=plugin_dirs,
+            discovery_service=discovery_service,
+            registry=shared_registry
         )
         await self.plugin_loader.start()
         
-        plugin_classes = self.plugin_loader.discover_plugins()
+        # 使用异步发现方法（一次性发现，避免重复扫描）
+        plugin_classes = await self.plugin_loader.discover_plugins_async()
         logger.info(f"Discovered {len(plugin_classes)} plugin classes: {list(plugin_classes.keys())}")
-        
+
+        await self.plugin_loader.sync_plugin_registry()
+
         if self.command_executor:
             self.command_executor.set_plugin_loader(self.plugin_loader)
         
-        logger.debug("PluginLoader initialized")
+        logger.debug("PluginLoader initialized with shared discovery service")
     
     def _configure_container(self) -> None:
         """配置依赖注入容器"""

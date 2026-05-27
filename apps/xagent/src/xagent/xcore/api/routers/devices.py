@@ -14,7 +14,7 @@ from ..models.device import (
     DeviceReloadResponse,
     BatchDeviceReloadResponse
 )
-from ..services.device_service import DeviceService
+from ..services.device_service_db import DeviceService
 from ..dependencies import get_app_state
 from .config import verify_api_token
 
@@ -53,7 +53,6 @@ def get_device_service(state = Depends(get_app_state)):
         )
     
     return DeviceService(
-        config_dir=state.gateway.config_manager.paths.config_dir,
         metadata_manager=state.metadata_manager,
         plugin_loader=state.gateway.plugin_loader
     )
@@ -161,6 +160,20 @@ async def get_devices_latest(
     
     readings = await storage.get_latest_readings_by_device(active_only=active_only)
     return {"count": len(readings), "devices": [r.to_dict() for r in readings]}
+
+
+@router.get("/connection-status")
+async def get_devices_connection_status(
+    service: DeviceService = Depends(get_device_service)
+):
+    """获取所有设备的运行时连接状态
+    
+    连接状态反映设备是否真正连接成功，与配置状态（active/inactive）不同。
+    
+    Returns:
+        设备连接状态映射 {"asset": "online"|"offline", ...}
+    """
+    return service.get_devices_connection_status()
 
 
 @router.get("/{asset}", response_model=DeviceConfig)
@@ -351,7 +364,7 @@ async def remove_point_from_device(
         HTTPException: 404 - 设备或点位不存在
     """
     try:
-        await service.remove_point(asset, point_name)
+        await service.delete_point(asset, point_name)
     except ValueError as e:
         raise handle_value_error(e)
     except Exception as e:

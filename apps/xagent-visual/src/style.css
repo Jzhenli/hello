@@ -1,0 +1,387 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #2c3e50;
+  background: #f5f7fa;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.rule-node {
+  padding: 12px 16px;
+  border-radius: 10px;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.rule-node:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.rule-node.selected {
+  box-shadow: 0 0 0 3px #3498db, 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.trigger-node {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  border: 2px solid #2980b9;
+}
+
+.schedule-trigger {
+  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+  border: 2px solid #0097a7;
+}
+
+.condition-node {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  border: 2px solid #8e44ad;
+}
+
+.logic-node {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  border: 2px solid #e67e22;
+}
+
+.action-node {
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  border: 2px solid #229954;
+}
+
+.notification-node {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  border: 2px solid #c0392b;
+}
+
+.notification-node .level-badge {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #fff;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notification-node .recipients-text {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.node-icon {
+  font-size: 18px;
+}
+
+.node-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.node-body {
+  color: #ecf0f1;
+}
+
+.node-info {
+  font-size: 12px;
+}
+
+.node-info.has-data .info-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.node-info:not(.has-data) .info-value {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.info-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.info-value {
+  color: #fff;
+}
+
+.vue-flow__node {
+  cursor: pointer;
+}
+
+.vue-flow__node.selected .rule-node {
+  box-shadow: 0 0 0 3px #3498db, 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.vue-flow__edge-path {
+  stroke: #95a5a6;
+  stroke-width: 2;
+}
+
+.vue-flow__edge.animated .vue-flow__edge-path {
+  stroke: #3498db;
+}
+
+.vue-flow__handle {
+  width: 12px;
+  height: 12px;
+  background: #3498db;
+  border: 2px solid #fff;
+}
+
+.vue-flow__handle:hover {
+  background: #2980b9;
+  transform: scale(1.2);
+}
+
+.vue-flow__controls {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vue-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #fff;
+}
+
+.vue-flow__controls-button:hover {
+  background: #f5f7fa;
+}
+
+.vue-flow__minimap {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.el-message {
+  font-family: inherit;
+}
+
+.el-card {
+  border-radius: 8px;
+}
+
+.el-button {
+  border-radius: 6px;
+}
+
+.el-input__wrapper {
+  border-radius: 6px;
+}
+
+.el-select__wrapper {
+  border-radius: 6px;
+}
+
+.el-dialog {
+  border-radius: 12px;
+}
+
+.el-drawer {
+  border-radius: 12px 0 0 12px;
+}
+
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-menu-item {
+  border-radius: 8px;
+  margin: 4px 8px;
+}
+
+.el-tag {
+  border-radius: 4px;
+}
+
+.el-progress-bar__outer {
+  border-radius: 4px;
+}
+
+.el-progress-bar__inner {
+  border-radius: 4px;
+}
+
+@media (max-width: 1024px) {
+  html, body {
+    font-size: 13px;
+  }
+  
+  .el-button {
+    min-height: 40px;
+    padding: 10px 16px;
+  }
+  
+  .el-button--small {
+    min-height: 32px;
+    padding: 8px 12px;
+  }
+  
+  .el-input__inner {
+    font-size: 16px;
+  }
+  
+  .el-select .el-input__inner {
+    font-size: 16px;
+  }
+  
+  .el-menu-item {
+    height: 48px;
+    line-height: 48px;
+  }
+  
+  .vue-flow__controls-button {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .vue-flow__handle {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  html, body {
+    font-size: 12px;
+  }
+  
+  .el-button {
+    min-height: 44px;
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+  
+  .el-button--small {
+    min-height: 36px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  .el-button.is-circle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .el-input__inner {
+    font-size: 16px;
+  }
+  
+  .el-card {
+    border-radius: 6px;
+  }
+  
+  .el-dialog {
+    border-radius: 8px;
+    margin: 10px;
+  }
+  
+  .el-drawer {
+    border-radius: 8px 0 0 8px;
+  }
+  
+  .el-menu-item {
+    height: 52px;
+    line-height: 52px;
+    font-size: 15px;
+  }
+  
+  .vue-flow__controls-button {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .vue-flow__handle {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .rule-node {
+    min-width: 140px;
+    padding: 10px 14px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .el-button:hover {
+    transform: none;
+  }
+  
+  .el-button:active {
+    transform: scale(0.98);
+  }
+  
+  .el-card:hover {
+    box-shadow: var(--el-box-shadow-light);
+  }
+  
+  .el-menu-item:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .vue-flow__node:active .rule-node {
+    box-shadow: 0 0 0 3px #3498db, 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .el-dialog {
+    max-height: 80vh;
+  }
+  
+  .el-drawer {
+    max-height: 80vh;
+  }
+}

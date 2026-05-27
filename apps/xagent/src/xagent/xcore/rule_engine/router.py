@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from .base import Notification, DeliveryResult, DeliveryStatus
 from .plugins import DeliveryPlugin
-from .manager import PluginManager
+from .plugin_protocol import IRuleEnginePluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class DeliveryRouter:
         _channel_configs: 渠道配置字典
     """
 
-    def __init__(self, plugin_manager: PluginManager):
+    def __init__(self, plugin_manager: IRuleEnginePluginManager):
         """初始化交付路由器
 
         Args:
@@ -89,8 +89,9 @@ class DeliveryRouter:
         """
         if channel_id in self._delivery_plugins:
             plugin = self._delivery_plugins.pop(channel_id)
-            if hasattr(plugin, 'shutdown'):
+            if hasattr(plugin, 'shutdown') and not getattr(plugin, '_shutdown', False):
                 try:
+                    plugin._shutdown = True
                     await plugin.shutdown()
                 except Exception as e:
                     logger.error(
@@ -281,7 +282,10 @@ class DeliveryRouter:
         """关闭路由器"""
         for channel_id, plugin in self._delivery_plugins.items():
             try:
+                if getattr(plugin, '_shutdown', False):
+                    continue
                 if hasattr(plugin, 'shutdown'):
+                    plugin._shutdown = True
                     await plugin.shutdown()
             except Exception as e:
                 logger.error(

@@ -7,6 +7,9 @@
   DATA_RECEIVED -> FilterPipeline -> AggregationEngine -> RuleEvaluator -> DeliveryRouter
                                                                              |
                                                                     RULE_TRIGGERED event
+
+定时规则流:
+  Scheduler -> _on_schedule_tick -> RuleEvaluator -> DeliveryRouter -> RULE_TRIGGERED event
 """
 
 import asyncio
@@ -20,7 +23,7 @@ from .base import (
     RuleContext,
     Notification,
 )
-from .manager import PluginManager
+from .plugin_manager import RuleEnginePluginManager
 from .evaluator import RuleEvaluator
 from .pipeline import PipelineManager, PipelineConfig
 from .router import DeliveryRouter
@@ -29,6 +32,7 @@ from ._core_compat import HAS_CORE, EventType, Event, ILifecycleBase, is_reading
 
 if TYPE_CHECKING:
     from .persistence import RulePersistenceManager
+    from ..core.plugin.interfaces import IPluginRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         6. 发布 RULE_TRIGGERED / RULE_EVALUATED 事件
 
     Attributes:
-        plugin_manager: 插件管理器
+        plugin_manager: 规则引擎插件管理器
         event_bus: 事件总线
         evaluator: 规则评估器
         router: 交付路由器
@@ -63,15 +67,25 @@ class RuleEngineOrchestrator(ILifecycleBase):
         event_bus: Optional[Any] = None,
         plugin_dirs: Optional[List[str]] = None,
         persistence_manager: Optional["RulePersistenceManager"] = None,
+        plugin_registry: Optional["IPluginRegistry"] = None,
     ):
         """初始化规则引擎编排器
 
         Args:
             event_bus: 事件总线实例，为 None 时内部创建
-            plugin_dirs: 插件目录列表
+            plugin_dirs: 插件目录列表（已废弃，保留向后兼容）
             persistence_manager: 持久化管理器实例
+            plugin_registry: 插件注册表接口（必需）
         """
-        self.plugin_manager = PluginManager(plugin_dirs=plugin_dirs)
+        if plugin_registry is None:
+            raise ValueError(
+                "plugin_registry is required. "
+                "Please provide the shared plugin registry from PluginLoader."
+            )
+        
+        # 使用新的 RuleEnginePluginManager
+        self.plugin_manager = RuleEnginePluginManager(registry=plugin_registry)
+        
         self._event_bus = event_bus
         self.aggregation_engine = AggregationEngine()
         self.evaluator = RuleEvaluator(
@@ -87,6 +101,12 @@ class RuleEngineOrchestrator(ILifecycleBase):
         self._rule_channel_map: Dict[str, List[str]] = {}
         self._rule_configs: Dict[str, Dict[str, Any]] = {}
 
+        self._scheduler: Optional[Any] = None
+        self._command_executor: Optional[Any] = None
+        self._schedule_tasks: Dict[str, str] = {}
+        self._schedule_tick_interval: int = 10
+        self._rule_stats: Dict[str, Dict[str, Any]] = {}
+
     @property
     def event_bus(self) -> Optional[Any]:
         return self._event_bus
@@ -99,12 +119,29 @@ class RuleEngineOrchestrator(ILifecycleBase):
     def is_running(self) -> bool:
         return self._running
 
+    def set_scheduler(self, scheduler: Any) -> None:
+        """注入系统调度器，用于定时规则评估"""
+        self._scheduler = scheduler
+        logger.info("Scheduler injected into Rule Engine Orchestrator")
+
+    def set_command_executor(self, executor: Any) -> None:
+        """注入命令执行器，用于规则触发后执行设备控制命令"""
+        self._command_executor = executor
+        logger.info("CommandExecutor injected into Rule Engine Orchestrator")
+
     async def start(self) -> None:
         """启动规则引擎编排器"""
         if self._running:
             return
 
         self._running = True
+
+        # 从共享注册表获取规则引擎插件
+        discovered = self.plugin_manager.discover_rule_plugins()
+        logger.info(
+            f"Plugin discovery completed: {len(discovered)} plugins found "
+            f"({', '.join(discovered.keys()) if discovered else 'none'})"
+        )
 
         if self._event_bus and HAS_CORE:
             self._event_bus.subscribe(
@@ -113,6 +150,8 @@ class RuleEngineOrchestrator(ILifecycleBase):
             logger.info("RuleEngine subscribed to DATA_RECEIVED events")
 
         await self._restore_from_persistence()
+
+        self._start_schedule_tick()
 
         logger.info("Rule Engine Orchestrator started")
 
@@ -164,12 +203,15 @@ class RuleEngineOrchestrator(ILifecycleBase):
                     "data_subscriptions": rule.data_subscriptions,
                     "notification": rule.notification_config,
                 }
-                self.evaluator.load_rule(rule_config)
-                self._rule_configs[rule_id] = rule_config
-                if rule.pipeline_id:
-                    self._rule_pipeline_map[rule_id] = rule.pipeline_id
-                if rule.channel_ids:
-                    self._rule_channel_map[rule_id] = rule.channel_ids
+                success, error = self.evaluator.load_rule(rule_config)
+                if success:
+                    self._rule_configs[rule_id] = rule_config
+                    if rule.pipeline_id:
+                        self._rule_pipeline_map[rule_id] = rule.pipeline_id
+                    if rule.channel_ids:
+                        self._rule_channel_map[rule_id] = rule.channel_ids
+                else:
+                    logger.warning(f"Skipping rule {rule_id} from persistence: {error}")
             logger.info(f"Restored {len(rules)} rules from persistence")
 
         except Exception as e:
@@ -188,6 +230,8 @@ class RuleEngineOrchestrator(ILifecycleBase):
             return
 
         self._running = False
+
+        self._stop_schedule_tick()
 
         if self._event_bus and HAS_CORE:
             self._event_bus.unsubscribe(
@@ -244,7 +288,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
             return ReadingSet(
                 asset=data.get("asset", ""),
                 timestamp=data.get("timestamp", time.time()),
-                points=data.get("points", {}),
+                points=data.get("points", data.get("data", {})),
                 quality=data.get("quality"),
                 metadata=data.get("metadata"),
             )
@@ -416,6 +460,10 @@ class RuleEngineOrchestrator(ILifecycleBase):
             context: 评估上下文
             result: 评估结果
         """
+        stats = self._rule_stats.setdefault(rule_id, {"execution_count": 0, "last_triggered": None})
+        stats["execution_count"] += 1
+        stats["last_triggered"] = time.time()
+
         notification = self._create_notification(
             rule_id, rule_config, context, result
         )
@@ -459,6 +507,124 @@ class RuleEngineOrchestrator(ILifecycleBase):
                 await self._event_bus.publish(event)
             except Exception as e:
                 logger.debug(f"Failed to publish triggered event: {e}")
+
+        await self._execute_rule_actions(rule_id, rule_config, context)
+
+    async def _execute_rule_actions(self, rule_id: str, rule_config: Dict[str, Any], context: RuleContext) -> None:
+        """从规则配置中提取 action 节点并执行设备控制命令
+
+        优先从 _visual_graph 中提取 action 节点配置，
+        其次从 notification.metadata 中提取，
+        最后从 plugin.config 中提取 action 相关字段。
+        """
+        action_items = self._extract_action_configs(rule_config)
+
+        if not action_items:
+            logger.debug(f"No action configs found for rule {rule_id}")
+            return
+
+        executor = self._command_executor
+        if not executor:
+            from xagent.plugins.delivery.action.plugin import _get_command_executor
+            executor = _get_command_executor()
+            if executor:
+                self._command_executor = executor
+
+        if not executor:
+            logger.warning(f"CommandExecutor not available for rule {rule_id} actions")
+            return
+
+        for i, action in enumerate(action_items):
+            target_service = action.get("target_service", "")
+            target_asset = action.get("target_asset", "")
+            operation = action.get("operation", "write_setpoint")
+            parameters = action.get("parameters", {})
+            point = action.get("point", "")
+            value = action.get("value")
+
+            if not target_service or not target_asset:
+                logger.warning(
+                    f"Missing target_service or target_asset in action {i} for rule {rule_id}: "
+                    f"service={target_service}, asset={target_asset}"
+                )
+                continue
+
+            if operation == "write_setpoint" and point:
+                parameters = {"point": point, "value": value}
+
+            try:
+                command_id = f"rule-action-{rule_id}-{i}-{int(time.time())}"
+                success = await executor.submit_command(
+                    command_id=command_id,
+                    target_service=target_service,
+                    target_asset=target_asset,
+                    operation=operation,
+                    parameters=parameters,
+                )
+
+                if success:
+                    logger.info(
+                        f"Rule action executed: {rule_id} -> "
+                        f"{target_service}.{target_asset}.{operation}"
+                    )
+                else:
+                    logger.error(f"Rule action failed: {rule_id} -> {command_id}")
+            except Exception as e:
+                logger.error(f"Error executing rule action for {rule_id}: {e}", exc_info=True)
+
+    def _extract_action_configs(self, rule_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """从规则配置中提取所有 action 配置
+
+        按优先级从多个位置提取:
+        1. plugin.config._visual_graph 中的 action 节点
+        2. notification.metadata 中的 action 配置
+        3. plugin.config 中的 action 相关字段
+        """
+        actions = []
+
+        plugin_config = rule_config.get("plugin", {}).get("config", {})
+        visual_graph = plugin_config.get("_visual_graph", {})
+
+        if visual_graph and isinstance(visual_graph, dict):
+            nodes = visual_graph.get("nodes", [])
+            for node in nodes:
+                if node.get("type") == "action":
+                    action_data = node.get("data", {}).get("action", {})
+                    if action_data:
+                        action_item = {
+                            "target_service": action_data.get("targetService", ""),
+                            "target_asset": action_data.get("target_asset", ""),
+                            "operation": action_data.get("operation", "write_setpoint"),
+                            "parameters": action_data.get("parameters", {}),
+                            "point": action_data.get("parameters", {}).get("point", ""),
+                            "value": action_data.get("parameters", {}).get("value"),
+                            "delay": action_data.get("delay", 0),
+                        }
+                        if not action_item["target_service"] and action_item["target_asset"]:
+                            action_item["target_service"] = action_item["target_asset"]
+                        actions.append(action_item)
+
+        if actions:
+            return actions
+
+        notification = rule_config.get("notification") or {}
+        metadata = notification.get("metadata", {}) if isinstance(notification, dict) else {}
+        action_config = metadata.get("action_config", {})
+        if action_config:
+            actions.append(action_config)
+            return actions
+
+        if plugin_config.get("target_service") or plugin_config.get("target_asset"):
+            actions.append({
+                "target_service": plugin_config.get("target_service", ""),
+                "target_asset": plugin_config.get("target_asset", ""),
+                "operation": plugin_config.get("operation", "write_setpoint"),
+                "parameters": plugin_config.get("parameters", {}),
+                "point": plugin_config.get("point", ""),
+                "value": plugin_config.get("value"),
+            })
+
+        return actions
 
     def _create_notification(
         self,
@@ -515,7 +681,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         rule_config: Dict[str, Any],
         pipeline_id: Optional[str] = None,
         channel_ids: Optional[List[str]] = None,
-    ) -> bool:
+    ) -> tuple:
         """添加规则
 
         Args:
@@ -524,16 +690,19 @@ class RuleEngineOrchestrator(ILifecycleBase):
             channel_ids: 通知交付渠道ID列表
 
         Returns:
-            是否添加成功
+            (是否添加成功, 错误信息)
         """
         rule_id = rule_config.get("id")
         if not rule_id:
             logger.error("Rule config missing 'id'")
-            return False
+            return False, "Rule config missing 'id'"
 
-        success = self.evaluator.load_rule(rule_config)
+        success, load_error = self.evaluator.load_rule(rule_config)
         if not success:
-            return False
+            plugin_name = rule_config.get("plugin", {}).get("name", "unknown")
+            error_msg = load_error or f"Failed to load rule plugin '{plugin_name}'"
+            logger.error(f"Rule {rule_id}: {error_msg}")
+            return False, error_msg
 
         self._rule_configs[rule_id] = rule_config
 
@@ -543,18 +712,20 @@ class RuleEngineOrchestrator(ILifecycleBase):
         if channel_ids:
             self._rule_channel_map[rule_id] = channel_ids
 
+        self._register_schedule_rule(rule_id, rule_config)
+
         logger.info(
             f"Rule added: {rule_id}, "
             f"pipeline={pipeline_id}, channels={channel_ids}"
         )
-        return True
+        return True, None
 
     async def add_rule_async(
         self,
         rule_config: Dict[str, Any],
         pipeline_id: Optional[str] = None,
         channel_ids: Optional[List[str]] = None,
-    ) -> bool:
+    ) -> tuple:
         """异步添加规则（带持久化）
 
         Args:
@@ -563,12 +734,12 @@ class RuleEngineOrchestrator(ILifecycleBase):
             channel_ids: 通知交付渠道ID列表
 
         Returns:
-            是否添加成功
+            (是否添加成功, 错误信息)
         """
         rule_id = rule_config.get("id")
         if not rule_id:
             logger.error("Rule config missing 'id'")
-            return False
+            return False, "Rule config missing 'id'"
 
         if self._persistence_manager:
             from .persistence import RuleRecord
@@ -586,14 +757,14 @@ class RuleEngineOrchestrator(ILifecycleBase):
             success = await self._persistence_manager.save_rule(rule)
             if not success:
                 logger.error(f"Failed to persist rule {rule_id}")
-                return False
+                return False, f"Failed to persist rule '{rule_id}' to database"
 
-        success = self.add_rule(rule_config, pipeline_id, channel_ids)
+        success, error = self.add_rule(rule_config, pipeline_id, channel_ids)
         if not success and self._persistence_manager:
             await self._persistence_manager.delete_rule(rule_id)
-            return False
+            return False, error
 
-        return True
+        return True, None
 
     def remove_rule(self, rule_id: str) -> bool:
         """移除规则
@@ -611,6 +782,8 @@ class RuleEngineOrchestrator(ILifecycleBase):
         self._rule_configs.pop(rule_id, None)
         self._rule_pipeline_map.pop(rule_id, None)
         self._rule_channel_map.pop(rule_id, None)
+
+        self._unregister_schedule_rule(rule_id)
 
         logger.info(f"Rule removed: {rule_id}")
         return True
@@ -809,7 +982,13 @@ class RuleEngineOrchestrator(ILifecycleBase):
                 self.aggregation_engine.get_all_subscriptions()
             ),
             "event_bus_connected": self._event_bus is not None,
+            "schedule_rules": len(self._schedule_tasks),
+            "scheduler_available": self._scheduler is not None,
         }
+
+    def get_rule_stats(self, rule_id: str) -> Dict[str, Any]:
+        """获取单条规则的执行统计"""
+        return self._rule_stats.get(rule_id, {"execution_count": 0, "last_triggered": None})
 
     def get_all_rules(self) -> Dict[str, Dict[str, Any]]:
         """获取所有规则配置
@@ -925,3 +1104,147 @@ class RuleEngineOrchestrator(ILifecycleBase):
             是否存在
         """
         return pipeline_id in self.pipeline_manager.pipeline_ids
+
+    def _is_schedule_rule(self, rule_config: Dict[str, Any]) -> bool:
+        """判断规则是否为定时规则"""
+        plugin = rule_config.get("plugin", {})
+        plugin_name = plugin.get("name", "") if isinstance(plugin, dict) else ""
+        return plugin_name == "schedule_rule"
+
+    def _register_schedule_rule(self, rule_id: str, rule_config: Dict[str, Any]) -> None:
+        """注册定时规则的调度任务"""
+        if not self._is_schedule_rule(rule_config):
+            return
+
+        plugin_config = rule_config.get("plugin", {}).get("config", {})
+        trigger_type = plugin_config.get("trigger_type", "interval")
+
+        if self._scheduler:
+            interval = plugin_config.get("interval", 60)
+            if trigger_type == "cron":
+                interval = self._schedule_tick_interval
+
+            try:
+                from xagent.xcore.core.scheduler import TaskType
+                task_id = self._scheduler.add_task(
+                    name=f"schedule_rule_{rule_id}",
+                    callback=self._create_schedule_callback(rule_id),
+                    task_type=TaskType.CUSTOM,
+                    interval=interval,
+                )
+                self._schedule_tasks[rule_id] = task_id
+                asyncio.create_task(self._scheduler.start_task(task_id))
+                logger.info(
+                    f"Schedule rule registered: {rule_id}, "
+                    f"type={trigger_type}, interval={interval}s"
+                )
+            except Exception as e:
+                logger.error(f"Failed to register schedule rule {rule_id}: {e}")
+        else:
+            logger.warning(
+                f"No scheduler available for schedule rule {rule_id}, "
+                f"rule will only be evaluated on data events"
+            )
+
+    def _unregister_schedule_rule(self, rule_id: str) -> None:
+        """注销定时规则的调度任务"""
+        task_id = self._schedule_tasks.pop(rule_id, None)
+        if task_id and self._scheduler:
+            try:
+                awaitable = self._scheduler.stop_task(task_id)
+                if asyncio.iscoroutine(awaitable):
+                    asyncio.create_task(awaitable)
+                logger.info(f"Schedule rule unregistered: {rule_id}")
+            except Exception as e:
+                logger.warning(f"Failed to unregister schedule rule {rule_id}: {e}")
+
+    def _create_schedule_callback(self, rule_id: str):
+        """创建定时规则的回调函数"""
+        async def _on_schedule_tick():
+            if not self._running:
+                return
+            await self._evaluate_schedule_rule(rule_id)
+        return _on_schedule_tick
+
+    def _start_schedule_tick(self) -> None:
+        """启动定时规则的全局 tick（用于无 Scheduler 时的回退）"""
+        schedule_rules = {
+            rid: cfg for rid, cfg in self._rule_configs.items()
+            if self._is_schedule_rule(cfg) and rid not in self._schedule_tasks
+        }
+
+        if not schedule_rules:
+            return
+
+        if self._scheduler:
+            for rule_id, rule_config in schedule_rules.items():
+                self._register_schedule_rule(rule_id, rule_config)
+        else:
+            logger.info(
+                f"No scheduler, {len(schedule_rules)} schedule rules "
+                f"will use fallback tick"
+            )
+            self._schedule_fallback_task = asyncio.create_task(
+                self._schedule_fallback_loop()
+            )
+
+    def _stop_schedule_tick(self) -> None:
+        """停止定时规则调度"""
+        for rule_id in list(self._schedule_tasks.keys()):
+            self._unregister_schedule_rule(rule_id)
+
+        fallback_task = getattr(self, '_schedule_fallback_task', None)
+        if fallback_task and not fallback_task.done():
+            fallback_task.cancel()
+
+    async def _schedule_fallback_loop(self) -> None:
+        """无 Scheduler 时的回退定时评估循环"""
+        while self._running:
+            try:
+                schedule_rules = {
+                    rid: cfg for rid, cfg in self._rule_configs.items()
+                    if self._is_schedule_rule(cfg)
+                }
+                for rule_id in schedule_rules:
+                    try:
+                        await self._evaluate_schedule_rule(rule_id)
+                    except Exception as e:
+                        logger.error(f"Schedule fallback evaluation error for {rule_id}: {e}")
+
+                await asyncio.sleep(self._schedule_tick_interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Schedule fallback loop error: {e}")
+                await asyncio.sleep(self._schedule_tick_interval)
+
+    async def _evaluate_schedule_rule(self, rule_id: str) -> None:
+        """评估定时规则"""
+        rule_config = self._rule_configs.get(rule_id)
+        if not rule_config:
+            return
+
+        if not rule_config.get("enabled", True):
+            return
+
+        try:
+            from datetime import datetime
+            context = RuleContext(
+                rule_id=rule_id,
+                rule_name=rule_config.get("name", rule_id),
+                asset="scheduler",
+                point_name="tick",
+                current_value=datetime.now().isoformat(),
+                timestamp=time.time(),
+            )
+
+            result = await self.evaluator.evaluate(rule_id, context)
+
+            if result.triggered:
+                await self._handle_triggered_rule(
+                    rule_id, rule_config, context, result
+                )
+                logger.info(f"Schedule rule triggered: {rule_id}")
+
+        except Exception as e:
+            logger.error(f"Error evaluating schedule rule {rule_id}: {e}")

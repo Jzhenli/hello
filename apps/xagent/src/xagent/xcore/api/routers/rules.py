@@ -24,6 +24,8 @@ from ..models.rules import (
     ChannelOperationResponse,
     RuleEngineStatusResponse,
     BindChannelsRequest,
+    AlertResponse,
+    AlertListResponse,
 )
 from ...rule_engine.orchestrator import RuleEngineOrchestrator
 from ...rule_engine.pipeline import PipelineConfig, PipelineLocation
@@ -82,6 +84,7 @@ async def list_rules(
     all_rules = engine.get_all_rules()
     rules = []
     for rule_id, rule_config in all_rules.items():
+        stats = engine.get_rule_stats(rule_id)
         rules.append(RuleResponse(
             id=rule_id,
             name=rule_config.get("name", rule_id),
@@ -92,9 +95,81 @@ async def list_rules(
             notification=rule_config.get("notification"),
             pipeline_id=engine.get_rule_pipeline(rule_id),
             channel_ids=engine.get_rule_channels(rule_id),
+            execution_count=stats.get("execution_count", 0),
+            last_triggered=stats.get("last_triggered"),
         ))
     
     return RuleListResponse(count=len(rules), rules=rules)
+
+
+# ==================== Alerts ====================
+
+@router.get("/alerts", response_model=AlertListResponse)
+async def list_alerts():
+    try:
+        from xagent.plugins.delivery.system.plugin import get_system_alerts
+        alerts = get_system_alerts()
+        alert_responses = [AlertResponse(**a) for a in alerts]
+        return AlertListResponse(
+            count=len(alert_responses),
+            alerts=alert_responses,
+        )
+    except Exception as e:
+        logger.error(f"Failed to list alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=RuleOperationResponse)
+async def acknowledge_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import acknowledge_alert as ack_fn
+        if not ack_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert acknowledged", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to acknowledge alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/resolve", response_model=RuleOperationResponse)
+async def resolve_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import resolve_alert as resolve_fn
+        if not resolve_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert resolved", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resolve alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/alerts/{alert_id}/ignore", response_model=RuleOperationResponse)
+async def ignore_alert(alert_id: str):
+    try:
+        from xagent.plugins.delivery.system.plugin import ignore_alert as ignore_fn
+        if not ignore_fn(alert_id):
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+        return RuleOperationResponse(success=True, message="Alert ignored", rule_id=alert_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to ignore alert: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/alerts/cleared", response_model=RuleOperationResponse)
+async def clear_resolved_alerts():
+    try:
+        from xagent.plugins.delivery.system.plugin import clear_resolved_alerts as clear_fn
+        count = clear_fn()
+        return RuleOperationResponse(success=True, message=f"Cleared {count} resolved alerts", rule_id="")
+    except Exception as e:
+        logger.error(f"Failed to clear alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
@@ -105,7 +180,8 @@ async def get_rule(
     rule_config = engine.get_rule_config(rule_id)
     if not rule_config:
         raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
-    
+
+    stats = engine.get_rule_stats(rule_id)
     return RuleResponse(
         id=rule_id,
         name=rule_config.get("name", rule_id),
@@ -116,6 +192,8 @@ async def get_rule(
         notification=rule_config.get("notification"),
         pipeline_id=engine.get_rule_pipeline(rule_id),
         channel_ids=engine.get_rule_channels(rule_id),
+        execution_count=stats.get("execution_count", 0),
+        last_triggered=stats.get("last_triggered"),
     )
 
 
@@ -137,11 +215,11 @@ async def create_rule(
         "description": request.description,
         "enabled": request.enabled,
         "plugin": request.plugin.model_dump(),
-        "data_subscriptions": [s.model_dump() for s in request.data_subscriptions] if request.data_subscriptions else None,
+        "data_subscriptions": [s.model_dump() for s in request.data_subscriptions] if request.data_subscriptions else [],
         "notification": request.notification.model_dump() if request.notification else None,
     }
     
-    success = await engine.add_rule_async(
+    success, error = await engine.add_rule_async(
         rule_config=rule_config,
         pipeline_id=request.pipeline_id,
         channel_ids=request.channel_ids,
@@ -150,7 +228,7 @@ async def create_rule(
     if not success:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to create rule '{request.id}'"
+            detail=error or f"Failed to create rule '{request.id}'"
         )
     
     return RuleOperationResponse(
@@ -191,7 +269,7 @@ async def update_rule(
     
     await engine.remove_rule_async(rule_id)
     
-    success = await engine.add_rule_async(
+    success, error = await engine.add_rule_async(
         rule_config=updated_config,
         pipeline_id=request.pipeline_id if request.pipeline_id is not None else current_pipeline_id,
         channel_ids=request.channel_ids if request.channel_ids is not None else current_channel_ids,
@@ -200,7 +278,7 @@ async def update_rule(
     if not success:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to update rule '{rule_id}'"
+            detail=error or f"Failed to update rule '{rule_id}'"
         )
     
     return RuleOperationResponse(

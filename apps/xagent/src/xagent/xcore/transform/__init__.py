@@ -16,6 +16,7 @@ from .adapter import (
     validate_readings,
     format_timestamp,
 )
+from .scale_offset import ScaleOffsetTransformer
 
 __all__ = [
     "StandardDataPoint",
@@ -28,4 +29,5 @@ __all__ = [
     "CloudAdapter",
     "validate_readings",
     "format_timestamp",
+    "ScaleOffsetTransformer",
 ]

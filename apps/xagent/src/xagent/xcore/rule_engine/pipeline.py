@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .base import ReadingSet
 from .plugins import RuleFilterPlugin
-from .manager import PluginManager
+from .plugin_protocol import IRuleEnginePluginManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class FilterPipeline:
         _filter_configs: 过滤器配置列表
     """
 
-    def __init__(self, plugin_manager: PluginManager):
+    def __init__(self, plugin_manager: IRuleEnginePluginManager):
         """初始化过滤器管道
 
         Args:
@@ -319,7 +319,7 @@ class FilterPipelineExecutor:
 
     def __init__(
         self,
-        plugin_manager: PluginManager,
+        plugin_manager: IRuleEnginePluginManager,
         config: PipelineConfig
     ):
         """初始化管道执行器
@@ -533,7 +533,8 @@ class FilterPipelineExecutor:
     def shutdown(self) -> None:
         """关闭管道"""
         for plugin in self._filters:
-            if hasattr(plugin, 'shutdown'):
+            if hasattr(plugin, 'shutdown') and not getattr(plugin, '_shutdown', False):
+                plugin._shutdown = True
                 plugin.shutdown()
 
         self._filters.clear()
@@ -547,7 +548,7 @@ class PipelineManager:
     管理多个过滤器管道。
     """
 
-    def __init__(self, plugin_manager: PluginManager):
+    def __init__(self, plugin_manager: IRuleEnginePluginManager):
         """初始化管道管理器
 
         Args:
