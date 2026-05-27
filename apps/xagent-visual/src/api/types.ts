@@ -193,3 +193,132 @@ export interface AlertListResponse {
   count: number
   alerts: AlertResponse[]
 }
+
+export type NorthChannelStatus = 'online' | 'offline' | 'error' | 'unknown'
+export type NorthChannelProtocol = 'mqtt' | 'xnc' | 'http' | 'custom'
+
+export interface MQTTConnectionConfig {
+  client_id: string
+  topic: string
+  qos: 0 | 1 | 2
+  keepalive: number
+  clean_session?: boolean
+  will_topic?: string
+  will_message?: string
+  will_qos?: 0 | 1 | 2
+  will_retain?: boolean
+}
+
+export interface XNCConnectionConfig {
+  local_port: number
+  protocol: 'protobuf' | 'json'
+  remote_host?: string
+  remote_port?: number
+  reconnect_interval?: number
+  mapping_config?: Record<string, unknown>
+}
+
+export interface HTTPConnectionConfig {
+  endpoint: string
+  method: 'GET' | 'POST' | 'PUT'
+  headers?: Record<string, string>
+  timeout?: number
+}
+
+export interface NorthChannelConnection {
+  host: string
+  port: number
+  username?: string
+  password?: string
+  mqtt?: MQTTConnectionConfig
+  xnc?: XNCConnectionConfig
+  http?: HTTPConnectionConfig
+}
+
+export interface NorthChannelAdapter {
+  type: string
+  config: Record<string, unknown>
+}
+
+export interface NorthChannelUploadStrategy {
+  immediate_upload: boolean
+  batch_size: number
+  interval: number
+  retry_times: number
+  retry_interval?: number
+}
+
+export interface NorthChannelStatistics {
+  upload_rate: number
+  success_rate: number
+  backlog_count: number
+  last_upload_time: string
+  total_uploaded: number
+  total_failed: number
+  connection_uptime: number
+}
+
+export interface NorthChannelConfig {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+  protocol: NorthChannelProtocol
+  status: NorthChannelStatus
+  
+  connection: NorthChannelConnection
+  adapter: NorthChannelAdapter
+  upload_strategy: NorthChannelUploadStrategy
+  
+  statistics?: NorthChannelStatistics
+  
+  tags?: string[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface NorthChannelCreateResponse {
+  success: boolean
+  message: string
+  channel_id: string
+  requires_restart: boolean
+}
+
+export interface NorthChannelUpdateResponse {
+  success: boolean
+  message: string
+  channel_id: string
+  updated_fields: string[]
+}
+
+export interface NorthChannelListResponse {
+  count: number
+  channels: NorthChannelConfig[]
+}
+
+export interface ConnectionTestRequest {
+  channel_id?: string
+  connection: NorthChannelConnection
+  protocol: NorthChannelProtocol
+}
+
+export interface ConnectionTestResponse {
+  success: boolean
+  message: string
+  latency?: number
+  details?: Record<string, unknown>
+}
+
+export interface NorthChannelLog {
+  id: string
+  channel_id: string
+  timestamp: string
+  level: 'info' | 'warning' | 'error' | 'debug'
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface NorthChannelLogListResponse {
+  count: number
+  logs: NorthChannelLog[]
+}

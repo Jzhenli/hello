@@ -37,6 +37,7 @@ const shouldCollapseSidebar = computed(() => {
 const allMenuItems = [
   { path: '/dashboard', title: '监控面板', icon: Odometer, resource: 'dashboard' },
   { path: '/devices', title: '设备管理', icon: Monitor, resource: 'devices' },
+  { path: '/channels', title: '通道管理', icon: Connection, resource: 'channels' },
   { path: '/rules', title: '规则引擎', icon: Connection, resource: 'rules' },
   { path: '/alerts', title: '告警配置', icon: Bell, resource: 'alerts' },
   { path: '/scada', title: '组态面板', icon: PictureFilled, resource: 'scada' },

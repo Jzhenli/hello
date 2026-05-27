@@ -4,6 +4,7 @@ import { useUserStore } from '@/stores/users'
 const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/devices': 'devices',
+  '/channels': 'channels',
   '/rules': 'rules',
   '/alerts': 'alerts',
   '/scada': 'scada',
@@ -32,6 +33,12 @@ const routes = [
     name: 'Devices',
     component: () => import('@/views/Devices.vue'),
     meta: { title: '设备管理', icon: 'Monitor' }
+  },
+  {
+    path: '/channels',
+    name: 'NorthChannels',
+    component: () => import('@/views/NorthChannels.vue'),
+    meta: { title: '通道管理', icon: 'Connection' }
   },
   {
     path: '/rules',
@@ -65,7 +72,7 @@ const router = createRouter({
 })
 
 function findFirstAllowedPath(userStore: ReturnType<typeof useUserStore>): string {
-  const paths = ['/dashboard', '/devices', '/rules', '/alerts', '/scada', '/settings']
+  const paths = ['/dashboard', '/devices', '/channels', '/rules', '/alerts', '/scada', '/settings']
   for (const p of paths) {
     const resource = ROUTE_PERMISSION_MAP[p]
     if (!resource || userStore.hasPermission(resource, 'view')) {
