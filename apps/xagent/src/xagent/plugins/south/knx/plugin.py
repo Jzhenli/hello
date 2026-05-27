@@ -670,10 +670,10 @@ class KNXPlugin(SouthPluginBase):
         """
         从xknx设备对象提取状态值
         
-        使用 DATA_TYPE_MAPPING 中的 value_attr 字段确定读取方式：
-        - "resolve": 调用 device.resolve_state()
-        - "current_color": 读取 device.current_color 并转为字符串
-        - 其他: 使用 getattr(device, value_attr, None)
+        使用 DATA_TYPE_MAPPING 中的 value_type 字段确定读取方式：
+        - "property": 直接访问属性
+        - "method": 调用方法
+        - "special": 特殊处理（resolve_state等）
         
         Args:
             device: xknx设备对象
@@ -687,29 +687,58 @@ class KNXPlugin(SouthPluginBase):
         
         type_info = DATA_TYPE_MAPPING.get(data_type, DATA_TYPE_MAPPING["switch"])
         value_attr = type_info.get("value_attr", "state")
+        value_type = type_info.get("value_type", "property")
         
         try:
-            if value_attr == "resolve":
-                if data_type in ("percent", "brightness"):
-                    brightness = getattr(device, 'current_brightness', None)
-                    if brightness is not None:
-                        return brightness
-                
-                if hasattr(device, 'resolve_state'):
-                    result = device.resolve_state()
-                    if asyncio.iscoroutine(result):
-                        logger.warning(f"resolve_state() returned coroutine for {device.name}")
-                        return None
-                    return result
-                return getattr(device, 'state', None)
-            elif value_attr == "current_color":
-                color = getattr(device, 'current_color', None)
-                return str(color) if color else None
+            if value_type == "special":
+                return self._extract_special_value(device, data_type, value_attr)
+            elif value_type == "method":
+                return self._extract_method_value(device, value_attr)
             else:
-                return getattr(device, value_attr, None)
+                return self._extract_property_value(device, value_attr)
         except Exception as e:
             logger.error(f"Error extracting device value for {data_type}: {e}")
             return None
+    
+    def _extract_special_value(self, device: Any, data_type: str, value_attr: str) -> Any:
+        """处理特殊值提取（resolve_state等）"""
+        if value_attr == "resolve":
+            if data_type in ("percent", "brightness"):
+                brightness = getattr(device, 'current_brightness', None)
+                if brightness is not None:
+                    return brightness
+            
+            if hasattr(device, 'resolve_state'):
+                result = device.resolve_state()
+                if asyncio.iscoroutine(result):
+                    logger.warning(f"resolve_state() returned coroutine for {device.name}")
+                    return None
+                return result
+            return getattr(device, 'state', None)
+        elif value_attr == "current_color":
+            color = getattr(device, 'current_color', None)
+            return str(color) if color else None
+        else:
+            return getattr(device, value_attr, None)
+    
+    def _extract_method_value(self, device: Any, value_attr: str) -> Any:
+        """处理方法调用"""
+        method = getattr(device, value_attr, None)
+        if method and callable(method):
+            try:
+                result = method()
+                if asyncio.iscoroutine(result):
+                    logger.warning(f"{value_attr}() returned coroutine for {device.name}")
+                    return None
+                return result
+            except Exception as e:
+                logger.error(f"Error calling {value_attr}() on device {device.name}: {e}")
+                return None
+        return None
+    
+    def _extract_property_value(self, device: Any, value_attr: str) -> Any:
+        """处理属性访问"""
+        return getattr(device, value_attr, None)
     
     def _get_device_state(self, device: Any, data_type: str) -> Any:
         """直接读取设备状态（不发送KNX请求）"""
