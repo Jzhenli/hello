@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = resolve(__dirname, 'dist')
-const targetDir = resolve(__dirname, '..', 'src', 'xagent', 'resources', 'static')
+const targetDir = resolve(__dirname, '..', 'xagent', 'src', 'xagent', 'resources', 'static')
 
 if (!existsSync(distDir)) {
   console.error('dist directory not found. Run "npm run build" first.')
