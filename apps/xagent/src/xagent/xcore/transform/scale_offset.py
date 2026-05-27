@@ -75,19 +75,24 @@ class ScaleOffsetTransformer:
             logger.warning(f"ScaleOffset forward transform failed for {value}: {e}")
             return None
 
-    def reverse(self, value: Any) -> Any:
+    def reverse(self, value: Any, base_type: Optional[str] = None) -> Any:
         """
         逆向转换: physical -> raw
         (value - offset) / scale
 
-        返回 float，由调用方负责编码为协议格式
+        Args:
+            value: 要转换的值
+            base_type: 基础数据类型，用于无转换时的类型转换
+
+        Returns:
+            转换后的值，有 scale/offset 时返回 float，否则按 base_type 转换
         """
         if value is None:
             return None
 
         try:
             if not self.has_transform:
-                return value
+                return self._cast_to_base_type(value, base_type)
 
             result = float(value)
             if self._offset is not None:

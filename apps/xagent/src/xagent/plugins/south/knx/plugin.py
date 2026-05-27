@@ -127,6 +127,20 @@ class KNXPlugin(SouthPluginBase):
     DEFAULT_SYNC_INTERVAL = 60
     DEFAULT_MAX_CONCURRENT_SYNCS = 5
     
+    def _get_base_type(self, data_type: str, point_config: Dict[str, Any]) -> str:
+        """
+        将KNX业务类型转换为基础类型
+        
+        Args:
+            data_type: KNX业务类型（如 "switch", "percent"）
+            point_config: 点位配置
+        
+        Returns:
+            基础类型（如 "bool", "int", "float"）
+        """
+        type_info = DATA_TYPE_MAPPING.get(data_type, {})
+        return type_info.get("data_type", data_type)
+    
     def _create_data_converter(self) -> KNXConverter:
         """创建数据转换器"""
         return KNXConverter()
@@ -666,6 +680,7 @@ class KNXPlugin(SouthPluginBase):
             point_config = write_device_info.get("config")
             
             raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+            logger.debug(f"Reverse transform: {value!r} -> {raw_value!r} (data_type={data_type})")
             if raw_value is None and value is not None:
                 logger.error(f"Failed to reverse transform value {value} for point {point}")
                 return False
@@ -698,6 +713,7 @@ class KNXPlugin(SouthPluginBase):
         point_config = device_info.get("config")
         
         raw_value = self._reverse_transform_value(value, point_config) if point_config else value
+        logger.debug(f"Reverse transform: {value!r} -> {raw_value!r} (data_type={data_type})")
         if raw_value is None and value is not None:
             logger.error(f"Failed to reverse transform value {value} for point {point}")
             return False
@@ -717,9 +733,12 @@ class KNXPlugin(SouthPluginBase):
         if not device:
             return False
         
+        logger.debug(f"Writing to device: data_type={data_type}, value={value!r}, value_type={type(value).__name__}")
+        
         try:
             if data_type in ("switch", "binary", "bool"):
                 if hasattr(device, 'set_on') and hasattr(device, 'set_off'):
+                    logger.debug(f"Bool write: value={value!r}, bool(value)={bool(value)}")
                     if value:
                         await device.set_on()
                     else:
