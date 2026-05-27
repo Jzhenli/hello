@@ -22,7 +22,8 @@ from .routers import (
     rules_router,
     devices_router,
     users_router,
-    north_channels_router
+    north_channels_router,
+    north_mappings_router
 )
 
 if TYPE_CHECKING:
@@ -77,6 +78,7 @@ app.include_router(rules_router)
 app.include_router(devices_router)
 app.include_router(users_router)
 app.include_router(north_channels_router)
+app.include_router(north_mappings_router)
 
 _static_dir = get_resource_dir() / "static"
 if _static_dir.exists():

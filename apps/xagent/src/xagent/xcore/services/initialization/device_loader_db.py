@@ -33,7 +33,7 @@ class DeviceLoader:
     }
     NORTH_PLUGINS = {
         'mqtt_client', 'influxdb', 'timescaledb', 
-        'xnc_client', 'kafka', 'redis'
+        'xnc_client', 'xnc_plus', 'kafka', 'redis'
     }
     
     def __init__(
@@ -165,29 +165,26 @@ class DeviceLoader:
             ))
     
     def _get_plugin_type(self, plugin_name: str) -> PluginType:
-        """判断插件类型
-        
-        根据插件名称判断插件是南向还是北向。
-        
-        Args:
-            plugin_name: 插件名称
-            
-        Returns:
-            插件类型
-        """
+        try:
+            plugin_classes = self.plugin_loader.discover_plugins()
+            for key, cls in plugin_classes.items():
+                if hasattr(cls, '__plugin_name__') and cls.__plugin_name__ == plugin_name:
+                    ptype = getattr(cls, '__plugin_type__', None)
+                    if ptype == PluginType.SOUTH.value or ptype == PluginType.NORTH.value:
+                        return PluginType(ptype)
+            if plugin_name in plugin_classes:
+                cls = plugin_classes[plugin_name]
+                ptype = getattr(cls, '__plugin_type__', None)
+                if ptype:
+                    return PluginType(ptype)
+        except Exception:
+            pass
         if plugin_name in self.SOUTH_PLUGINS:
             return PluginType.SOUTH
         elif plugin_name in self.NORTH_PLUGINS:
             return PluginType.NORTH
-        else:
-            plugin_classes = self.plugin_loader.discover_plugins()
-            if plugin_name in plugin_classes:
-                plugin_class = plugin_classes[plugin_name]
-                if hasattr(plugin_class, 'plugin_type'):
-                    return plugin_class.plugin_type
-            
-            logger.warning(f"Unknown plugin type for '{plugin_name}', assuming SOUTH")
-            return PluginType.SOUTH
+        logger.warning(f"Unknown plugin type for '{plugin_name}', assuming SOUTH")
+        return PluginType.SOUTH
     
     async def reload_device(self, asset: str) -> bool:
         """重新加载单个设备

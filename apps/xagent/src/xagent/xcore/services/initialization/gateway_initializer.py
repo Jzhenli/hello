@@ -96,7 +96,10 @@ class GatewayInitializer(ILifecycle):
             # 7. 初始化插件加载器
             await self._initialize_plugin_loader()
             
-            # 8. 配置依赖注入容器
+            # 8. 初始化北向通道编排器
+            await self._initialize_north_orchestrator()
+            
+            # 9. 配置依赖注入容器
             self._configure_container()
             
             logger.info("All components initialized successfully")
@@ -205,6 +208,17 @@ class GatewayInitializer(ILifecycle):
         
         logger.debug("PluginLoader initialized with shared discovery service")
     
+    async def _initialize_north_orchestrator(self) -> None:
+        from ..orchestration.north_channel_orchestrator import NorthChannelOrchestrator
+        
+        self.north_orchestrator = NorthChannelOrchestrator(
+            metadata_manager=self.metadata_manager,
+            plugin_loader=self.plugin_loader,
+            event_bus=self.event_bus,
+        )
+        await self.north_orchestrator.load_enabled_channels()
+        logger.debug("NorthChannelOrchestrator initialized")
+    
     def _configure_container(self) -> None:
         """配置依赖注入容器"""
         logger.debug("Configuring dependency injection container...")
@@ -219,6 +233,10 @@ class GatewayInitializer(ILifecycle):
         self.container.register_instance(CommandExecutor, self.command_executor)
         self.container.register_instance(MetadataManager, self.metadata_manager)
         
+        if hasattr(self, 'north_orchestrator') and self.north_orchestrator:
+            from ..orchestration.north_channel_orchestrator import NorthChannelOrchestrator
+            self.container.register_instance(NorthChannelOrchestrator, self.north_orchestrator)
+        
         logger.debug("Dependency injection container configured")
     
     async def shutdown_components(self) -> None:
@@ -226,6 +244,12 @@ class GatewayInitializer(ILifecycle):
         logger.info("Shutting down components...")
         
         # 按相反顺序关闭
+        if hasattr(self, 'north_orchestrator') and self.north_orchestrator:
+            try:
+                await self.north_orchestrator.stop_all()
+            except Exception as e:
+                logger.error(f"Error stopping north orchestrator: {e}")
+        
         if self.plugin_loader:
             try:
                 await self.plugin_loader.stop()

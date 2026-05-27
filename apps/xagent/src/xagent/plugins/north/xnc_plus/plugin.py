@@ -17,7 +17,7 @@ from .constants import (
     MAX_RECONNECT_INTERVAL,
 )
 from .handler import ProtobufHandler
-from .mapping import StaticMapper, DynamicMapper
+from .mapping import DBMappingRegistry
 from .models import CommandMessage
 from .transport import UDPTransport
 
@@ -44,7 +44,13 @@ class XNCPlusPlugin(NorthPluginBase):
     def _create_data_adapter(self) -> Any:
         return self._handler
 
-    def __init__(self, config: Dict[str, Any], storage: Any, event_bus: EventBus):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        storage: Any,
+        event_bus: EventBus,
+        metadata_manager: Any = None,
+    ):
         logger.info(
             f"Initializing XNC Plus plugin with config: {_sanitize_config(config)}"
         )
@@ -55,6 +61,7 @@ class XNCPlusPlugin(NorthPluginBase):
         self._reconnect_interval = config.get(
             "reconnect_interval", DEFAULT_RECONNECT_INTERVAL
         )
+        self._channel_id = config.get("channel_id")
 
         self._transport = UDPTransport(
             remote_host=self._remote_host,
@@ -62,13 +69,12 @@ class XNCPlusPlugin(NorthPluginBase):
             local_port=self._local_port,
         )
 
-        static_mapper = StaticMapper(config.get("mapping_config", {}))
-        persist_path = config.get("mapping_persist_path")
-        self._mapper = DynamicMapper(static_mapper, persist_path)
+        self._metadata_manager = metadata_manager
+        self._registry: Optional[DBMappingRegistry] = None
 
         uuid_val = config.get("uuid", 0)
         batch_size = config.get("adapter_batch_size", 50)
-        self._handler = ProtobufHandler(self._mapper, uuid=uuid_val, batch_size=batch_size)
+        self._handler = ProtobufHandler(uuid=uuid_val, batch_size=batch_size)
 
         self._upload_task: Optional[asyncio.Task] = None
         self._reconnect_delay = self._reconnect_interval
@@ -86,11 +92,47 @@ class XNCPlusPlugin(NorthPluginBase):
     async def connect(self) -> bool:
         result = await self._transport.connect()
         self._connected = result
+        if result:
+            await self._init_mapping_registry()
         return result
 
     async def disconnect(self) -> None:
         await self._transport.disconnect()
         self._connected = False
+
+    async def test_connection(self) -> Dict[str, Any]:
+        import time as _time
+        start = _time.time()
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(5)
+            host = self._remote_host or "127.0.0.1"
+            port = self._remote_port or 9000
+            sock.sendto(b"TEST", (host, port))
+            try:
+                sock.recvfrom(1024)
+                sock.close()
+                msg = "XNC endpoint reachable"
+            except socket.timeout:
+                sock.close()
+                msg = "XNC endpoint reachable (no response expected for UDP)"
+            latency = round((_time.time() - start) * 1000, 2)
+            return {"success": True, "message": msg, "latency": latency}
+        except Exception as e:
+            latency = round((_time.time() - start) * 1000, 2)
+            return {"success": False, "message": f"Connection failed: {e}", "latency": latency}
+
+    @classmethod
+    def build_plugin_config(cls, channel_record: Dict[str, Any]) -> Dict[str, Any]:
+        config: Dict[str, Any] = {}
+        if channel_record.get("config"):
+            config.update(channel_record["config"])
+        config["channel_id"] = channel_record.get("id")
+        for key in ("remote_host", "remote_port", "local_port"):
+            if channel_record.get(key) is not None:
+                config[key] = channel_record[key]
+        return config
 
     async def start(self) -> None:
         await super().start()
@@ -100,9 +142,17 @@ class XNCPlusPlugin(NorthPluginBase):
             self._running = False
             logger.error("Failed to create upload task, rolling back start")
             raise
+        if self.event_bus:
+            self.event_bus.subscribe(
+                EventType.NORTH_MAPPING_CHANGED, self._on_mapping_changed
+            )
         logger.info(f"XNC Plus plugin started: {self._service_name}")
 
     async def stop(self) -> None:
+        if self.event_bus:
+            self.event_bus.unsubscribe(
+                EventType.NORTH_MAPPING_CHANGED, self._on_mapping_changed
+            )
         if self._upload_task:
             self._upload_task.cancel()
             try:
@@ -118,7 +168,7 @@ class XNCPlusPlugin(NorthPluginBase):
             return 0
 
         context = {"timestamp": time.time()}
-        packets = self._handler.encode_upload(readings, context)
+        packets = self._handler.encode_upload(readings, context, self._registry)
 
         sent = 0
         for packet in packets:
@@ -179,7 +229,7 @@ class XNCPlusPlugin(NorthPluginBase):
 
     async def _handle_command_data(self, data: bytes, addr: tuple) -> None:
         try:
-            cmd = self._handler.decode_command(data, addr)
+            cmd = self._handler.decode_command(data, addr, self._registry)
             if cmd is None:
                 return
 
@@ -199,12 +249,45 @@ class XNCPlusPlugin(NorthPluginBase):
             )
             await self.event_bus.publish(event)
 
-            response = self._handler.encode_response(cmd)
+            response = self._handler.encode_response(cmd, self._registry)
             if response:
                 self._transport.send(response, addr=cmd.reply_addr)
 
         except Exception as e:
             logger.error(f"Error handling command: {e}", exc_info=True)
+
+    async def _init_mapping_registry(self) -> None:
+        if self._registry is not None:
+            return
+
+        db = None
+        if self._metadata_manager and hasattr(self._metadata_manager, 'db'):
+            db = self._metadata_manager.db
+
+        if db is None:
+            logger.warning("No database connection available, mapping registry disabled")
+            return
+
+        if self._channel_id is None:
+            logger.warning("No channel_id configured, mapping registry disabled")
+            return
+
+        cache_path = self.config.get("mapping_cache_path")
+        self._registry = DBMappingRegistry(db, self._channel_id, cache_path)
+        await self._registry.load()
+        logger.info(
+            f"Mapping registry initialized: {self._registry.mapping_count} mappings "
+            f"(channel_id={self._channel_id})"
+        )
+
+    async def _on_mapping_changed(self, event: Event) -> None:
+        if self._registry is None:
+            return
+        channel_id = event.data.get("channel_id") if event.data else None
+        if channel_id is not None and channel_id != self._channel_id:
+            return
+        logger.info("North mapping changed, reloading registry")
+        await self._registry.reload()
 
     @staticmethod
     def _dedup_readings(readings: List[Reading]) -> List[Reading]:
@@ -229,8 +312,8 @@ class XNCPlusPlugin(NorthPluginBase):
                     "default": DEFAULT_RECONNECT_INTERVAL,
                 },
                 "uuid": {"type": "integer", "default": 0},
-                "mapping_config": {"type": "object"},
-                "mapping_persist_path": {"type": "string"},
+                "channel_id": {"type": "integer"},
+                "mapping_cache_path": {"type": "string"},
             },
         }
 

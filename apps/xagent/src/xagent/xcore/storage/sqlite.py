@@ -152,6 +152,47 @@ class SQLiteStorage(StorageInterface):
             );
             
             CREATE INDEX IF NOT EXISTS idx_config_versions_entity ON config_versions(entity_type, entity_id);
+
+            CREATE TABLE IF NOT EXISTS north_channel_registry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                plugin_name TEXT NOT NULL,
+                remote_host TEXT,
+                remote_port INTEGER,
+                local_port INTEGER,
+                config TEXT,
+                enabled BOOLEAN DEFAULT TRUE,
+                status TEXT DEFAULT 'active',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                deleted_at REAL
+            );
+
+            CREATE TABLE IF NOT EXISTS north_point_mapping (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER NOT NULL,
+                asset TEXT NOT NULL,
+                point_name TEXT NOT NULL,
+                protocol_oid INTEGER,
+                protocol_vdid INTEGER,
+                pid_value INTEGER DEFAULT 85,
+                pid_error INTEGER DEFAULT 103,
+                value_transform TEXT,
+                protocol_config TEXT,
+                enabled BOOLEAN DEFAULT TRUE,
+                status TEXT DEFAULT 'active',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                deleted_at REAL,
+                UNIQUE(channel_id, asset, point_name)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_north_channel_name ON north_channel_registry(name);
+            CREATE INDEX IF NOT EXISTS idx_north_channel_status ON north_channel_registry(status);
+            CREATE INDEX IF NOT EXISTS idx_north_mapping_channel ON north_point_mapping(channel_id);
+            CREATE INDEX IF NOT EXISTS idx_north_mapping_asset ON north_point_mapping(asset);
+            CREATE INDEX IF NOT EXISTS idx_north_mapping_oid ON north_point_mapping(protocol_oid);
+            CREATE INDEX IF NOT EXISTS idx_north_mapping_vdid ON north_point_mapping(protocol_vdid);
         """)
         logger.info("Metadata tables created/verified")
 
@@ -205,6 +246,13 @@ class SQLiteStorage(StorageInterface):
                 if col_name not in point_columns:
                     await self._db.execute(f"ALTER TABLE point_registry ADD COLUMN {col_name} {col_type}")
                     logger.info(f"Added {col_name} column to point_registry table")
+            
+            async with self._db.execute("PRAGMA table_info(north_point_mapping)") as cursor:
+                npm_columns = [row[1] for row in await cursor.fetchall()]
+            
+            if "protocol_config" not in npm_columns:
+                await self._db.execute("ALTER TABLE north_point_mapping ADD COLUMN protocol_config TEXT")
+                logger.info("Added protocol_config column to north_point_mapping table")
                 
         except Exception as e:
             logger.warning(f"Migration check failed (this is normal for new databases): {e}")

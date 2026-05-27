@@ -842,3 +842,397 @@ class ConfigRepository:
         ) as cursor:
             rows = await cursor.fetchall()
             return [row[0] for row in rows]
+
+    # ── North Channel CRUD ──────────────────────────────────────
+
+    async def get_north_channel(self, channel_id: int) -> Optional[Dict[str, Any]]:
+        async with self._db.execute(
+            """
+            SELECT id, name, plugin_name, remote_host, remote_port,
+                   local_port, config, enabled, status, created_at, updated_at
+            FROM north_channel_registry
+            WHERE id = ? AND status != 'deleted'
+            """,
+            (channel_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "name": row[1],
+                "plugin_name": row[2],
+                "remote_host": row[3],
+                "remote_port": row[4],
+                "local_port": row[5],
+                "config": json.loads(row[6]) if row[6] else {},
+                "enabled": bool(row[7]),
+                "status": row[8],
+                "created_at": row[9],
+                "updated_at": row[10],
+            }
+
+    async def list_north_channels(
+        self,
+        status: Optional[str] = None,
+        enabled: Optional[bool] = None,
+        plugin_name: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        conditions = ["status != 'deleted'"]
+        params: list = []
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if enabled is not None:
+            conditions.append("enabled = ?")
+            params.append(enabled)
+        if plugin_name:
+            conditions.append("plugin_name = ?")
+            params.append(plugin_name)
+        query = f"""
+            SELECT id, name, plugin_name, remote_host, remote_port,
+                   local_port, config, enabled, status, created_at, updated_at
+            FROM north_channel_registry
+            WHERE {' AND '.join(conditions)}
+            ORDER BY id
+        """
+        channels = []
+        async with self._db.execute(query, params) as cursor:
+            async for row in cursor:
+                channels.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "plugin_name": row[2],
+                    "remote_host": row[3],
+                    "remote_port": row[4],
+                    "local_port": row[5],
+                    "config": json.loads(row[6]) if row[6] else {},
+                    "enabled": bool(row[7]),
+                    "status": row[8],
+                    "created_at": row[9],
+                    "updated_at": row[10],
+                })
+        return channels
+
+    async def create_north_channel(
+        self, data: Dict[str, Any], user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        now = time.time()
+        try:
+            await self._db.execute(
+                """
+                INSERT INTO north_channel_registry
+                    (name, plugin_name, remote_host, remote_port,
+                     local_port, config, enabled, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                """,
+                (
+                    data["name"],
+                    data.get("plugin_name", "xnc_plus"),
+                    data.get("remote_host"),
+                    data.get("remote_port"),
+                    data.get("local_port"),
+                    json.dumps(data.get("config", {})),
+                    data.get("enabled", True),
+                    now,
+                    now,
+                ),
+            )
+        except aiosqlite.IntegrityError as e:
+            if "UNIQUE constraint" in str(e):
+                raise ValueError(f"Channel '{data['name']}' already exists")
+            raise ValueError(f"Failed to create channel: {e}")
+        await self._db.commit()
+        async with self._db.execute("SELECT last_insert_rowid()") as cur:
+            row = await cur.fetchone()
+            channel_id = row[0] if row else None
+        channel = await self.get_north_channel(channel_id)
+        await self._save_config_version(
+            "north_channel", str(channel_id), channel, "create", user, now
+        )
+        await self._db.commit()
+        return channel
+
+    async def update_north_channel(
+        self, channel_id: int, updates: Dict[str, Any], user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        channel = await self.get_north_channel(channel_id)
+        if not channel:
+            raise ValueError(f"Channel '{channel_id}' not found")
+        old_config = dict(channel)
+        allowed = {
+            "name", "plugin_name", "remote_host", "remote_port",
+            "local_port", "config", "enabled",
+        }
+        set_parts = []
+        params: list = []
+        for key in allowed:
+            if key in updates:
+                set_parts.append(f"{key} = ?")
+                val = updates[key]
+                if key == "config":
+                    val = json.dumps(val)
+                elif key == "enabled":
+                    val = bool(val)
+                params.append(val)
+        if not set_parts:
+            return channel
+        now = time.time()
+        set_parts.append("updated_at = ?")
+        params.append(now)
+        params.append(channel_id)
+        await self._db.execute(
+            f"UPDATE north_channel_registry SET {', '.join(set_parts)} WHERE id = ?",
+            params,
+        )
+        await self._db.commit()
+        updated = await self.get_north_channel(channel_id)
+        await self._save_config_version(
+            "north_channel", str(channel_id), updated, "update", user, now, old_config
+        )
+        await self._db.commit()
+        return updated
+
+    async def delete_north_channel(
+        self, channel_id: int, user: Optional[str] = None
+    ) -> None:
+        channel = await self.get_north_channel(channel_id)
+        if not channel:
+            raise ValueError(f"Channel '{channel_id}' not found")
+        now = time.time()
+        await self._db.execute(
+            "UPDATE north_channel_registry SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE id = ?",
+            (now, now, channel_id),
+        )
+        await self._db.execute(
+            "UPDATE north_point_mapping SET status = 'deleted', deleted_at = ? WHERE channel_id = ? AND status = 'active'",
+            (now, channel_id),
+        )
+        await self._save_config_version(
+            "north_channel", str(channel_id), channel, "delete", user, now
+        )
+        await self._db.commit()
+
+    # ── North Point Mapping CRUD ────────────────────────────────
+
+    async def get_north_mapping(self, mapping_id: int) -> Optional[Dict[str, Any]]:
+        async with self._db.execute(
+            """
+            SELECT id, channel_id, asset, point_name, protocol_oid, protocol_vdid,
+                   pid_value, pid_error, value_transform, protocol_config, enabled,
+                   status, created_at, updated_at
+            FROM north_point_mapping
+            WHERE id = ? AND status != 'deleted'
+            """,
+            (mapping_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "channel_id": row[1],
+                "asset": row[2],
+                "point_name": row[3],
+                "protocol_oid": row[4],
+                "protocol_vdid": row[5],
+                "pid_value": row[6],
+                "pid_error": row[7],
+                "value_transform": json.loads(row[8]) if row[8] else None,
+                "protocol_config": json.loads(row[9]) if row[9] else None,
+                "enabled": bool(row[10]),
+                "status": row[11],
+                "created_at": row[12],
+                "updated_at": row[13],
+            }
+
+    async def list_north_mappings(
+        self,
+        channel_id: Optional[int] = None,
+        asset: Optional[str] = None,
+        enabled: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        conditions = ["m.status != 'deleted'"]
+        params: list = []
+        if channel_id is not None:
+            conditions.append("m.channel_id = ?")
+            params.append(channel_id)
+        if asset is not None:
+            conditions.append("m.asset = ?")
+            params.append(asset)
+        if enabled is not None:
+            conditions.append("m.enabled = ?")
+            params.append(enabled)
+        query = f"""
+            SELECT m.id, m.channel_id, m.asset, m.point_name, m.protocol_oid,
+                   m.protocol_vdid, m.pid_value, m.pid_error, m.value_transform,
+                   m.protocol_config, m.enabled, m.status, m.created_at, m.updated_at
+            FROM north_point_mapping m
+            WHERE {' AND '.join(conditions)}
+            ORDER BY m.channel_id, m.asset, m.point_name
+        """
+        mappings = []
+        async with self._db.execute(query, params) as cursor:
+            async for row in cursor:
+                mappings.append({
+                    "id": row[0],
+                    "channel_id": row[1],
+                    "asset": row[2],
+                    "point_name": row[3],
+                    "protocol_oid": row[4],
+                    "protocol_vdid": row[5],
+                    "pid_value": row[6],
+                    "pid_error": row[7],
+                    "value_transform": json.loads(row[8]) if row[8] else None,
+                    "protocol_config": json.loads(row[9]) if row[9] else None,
+                    "enabled": bool(row[10]),
+                    "status": row[11],
+                    "created_at": row[12],
+                    "updated_at": row[13],
+                })
+        return mappings
+
+    async def create_north_mapping(
+        self, data: Dict[str, Any], user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        now = time.time()
+        vt = data.get("value_transform")
+        vt_json = json.dumps(vt) if vt else None
+        pc = data.get("protocol_config")
+        pc_json = json.dumps(pc) if pc else None
+        try:
+            await self._db.execute(
+                """
+                INSERT INTO north_point_mapping
+                    (channel_id, asset, point_name, protocol_oid, protocol_vdid,
+                     pid_value, pid_error, value_transform, protocol_config, enabled,
+                     status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                """,
+                (
+                    data["channel_id"],
+                    data["asset"],
+                    data["point_name"],
+                    data.get("protocol_oid"),
+                    data.get("protocol_vdid"),
+                    data.get("pid_value", 85),
+                    data.get("pid_error", 103),
+                    vt_json,
+                    pc_json,
+                    data.get("enabled", True),
+                    now,
+                    now,
+                ),
+            )
+        except aiosqlite.IntegrityError as e:
+            if "UNIQUE constraint" in str(e):
+                raise ValueError(
+                    f"Mapping for channel={data['channel_id']}, "
+                    f"asset={data['asset']}, point={data['point_name']} already exists"
+                )
+            raise ValueError(f"Failed to create mapping: {e}")
+        await self._db.commit()
+        async with self._db.execute("SELECT last_insert_rowid()") as cur:
+            row = await cur.fetchone()
+            mapping_id = row[0] if row else None
+        mapping = await self.get_north_mapping(mapping_id)
+        await self._save_config_version(
+            "north_mapping", str(mapping_id), mapping, "create", user, now
+        )
+        await self._db.commit()
+        return mapping
+
+    async def update_north_mapping(
+        self, mapping_id: int, updates: Dict[str, Any], user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        mapping = await self.get_north_mapping(mapping_id)
+        if not mapping:
+            raise ValueError(f"Mapping '{mapping_id}' not found")
+        old_config = dict(mapping)
+        allowed = {
+            "asset", "point_name", "protocol_oid", "protocol_vdid",
+            "pid_value", "pid_error", "value_transform", "protocol_config", "enabled",
+        }
+        set_parts = []
+        params: list = []
+        for key in allowed:
+            if key in updates:
+                set_parts.append(f"{key} = ?")
+                val = updates[key]
+                if key == "value_transform":
+                    val = json.dumps(val) if val else None
+                elif key == "protocol_config":
+                    val = json.dumps(val) if val else None
+                elif key == "enabled":
+                    val = bool(val)
+                params.append(val)
+        if not set_parts:
+            return mapping
+        now = time.time()
+        set_parts.append("updated_at = ?")
+        params.append(now)
+        params.append(mapping_id)
+        await self._db.execute(
+            f"UPDATE north_point_mapping SET {', '.join(set_parts)} WHERE id = ?",
+            params,
+        )
+        await self._db.commit()
+        updated = await self.get_north_mapping(mapping_id)
+        await self._save_config_version(
+            "north_mapping", str(mapping_id), updated, "update", user, now, old_config
+        )
+        await self._db.commit()
+        return updated
+
+    async def delete_north_mapping(
+        self, mapping_id: int, user: Optional[str] = None
+    ) -> None:
+        mapping = await self.get_north_mapping(mapping_id)
+        if not mapping:
+            raise ValueError(f"Mapping '{mapping_id}' not found")
+        now = time.time()
+        await self._db.execute(
+            "UPDATE north_point_mapping SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE id = ?",
+            (now, now, mapping_id),
+        )
+        await self._save_config_version(
+            "north_mapping", str(mapping_id), mapping, "delete", user, now
+        )
+        await self._db.commit()
+
+    async def batch_create_north_mappings(
+        self, mappings: List[Dict[str, Any]], user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        succeeded = 0
+        failed = 0
+        details = []
+        for m in mappings:
+            try:
+                await self.create_north_mapping(m, user)
+                succeeded += 1
+                details.append({
+                    "asset": m.get("asset"),
+                    "point_name": m.get("point_name"),
+                    "success": True,
+                })
+            except Exception as e:
+                failed += 1
+                details.append({
+                    "asset": m.get("asset"),
+                    "point_name": m.get("point_name"),
+                    "success": False,
+                    "message": str(e),
+                })
+        return {"total": len(mappings), "succeeded": succeeded, "failed": failed, "details": details}
+
+    async def delete_north_mappings_by_channel(
+        self, channel_id: int, user: Optional[str] = None
+    ) -> int:
+        now = time.time()
+        cursor = await self._db.execute(
+            "UPDATE north_point_mapping SET status = 'deleted', deleted_at = ?, updated_at = ? WHERE channel_id = ? AND status = 'active'",
+            (now, now, channel_id),
+        )
+        count = cursor.rowcount
+        await self._db.commit()
+        return count
