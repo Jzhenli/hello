@@ -415,8 +415,21 @@ class KNXPlugin(SouthPluginBase):
             return None
         
         type_config = DATA_TYPE_MAPPING.get(data_type, DATA_TYPE_MAPPING["switch"])
-        device_class_name = type_config["device_class"]
         dpt_value = type_config.get("dpt", 1)
+        
+        device_class_name = type_config["device_class"]
+        writable_config = {}
+        
+        if writable:
+            if "writable_device_class" in type_config:
+                device_class_name = type_config["writable_device_class"]
+                writable_config = type_config.get("writable_config", {})
+                logger.info(
+                    f"Using {device_class_name} device class for writable {data_type} point {name}: "
+                    f"{writable_config.get('description', '')}"
+                )
+            elif "writable_config" in type_config:
+                writable_config = type_config["writable_config"]
         
         try:
             read_ga = _GroupAddress(read_address) if read_address else None
@@ -425,7 +438,9 @@ class KNXPlugin(SouthPluginBase):
             logger.error(f"Invalid group address: {e}")
             return None
         
-        device = self._construct_device(device_class_name, name, read_ga, write_ga, dpt_value)
+        device = self._construct_device(
+            device_class_name, name, read_ga, write_ga, dpt_value, writable_config
+        )
         
         if device:
             self._xknx.devices.add(device)
@@ -438,9 +453,13 @@ class KNXPlugin(SouthPluginBase):
         name: str, 
         read_ga: Any, 
         write_ga: Any,
-        dpt_value: Any = 1
+        dpt_value: Any = 1,
+        writable_config: Dict[str, Any] = None
     ) -> Any:
         """根据设备类名构造xknx设备对象"""
+        if writable_config is None:
+            writable_config = {}
+        
         constructors = {
             "Switch": lambda: _Switch(
                 self._xknx, name=name,
@@ -454,9 +473,8 @@ class KNXPlugin(SouthPluginBase):
                 self._xknx, name=name,
                 group_address_temperature=read_ga
             ),
-            "Light": lambda: _Light(
-                self._xknx, name=name,
-                group_address_switch=write_ga, group_address_switch_state=read_ga
+            "Light": lambda: self._create_light_device(
+                name, read_ga, write_ga, writable_config
             ),
             "Cover": lambda: _Cover(
                 self._xknx, name=name,
@@ -469,6 +487,36 @@ class KNXPlugin(SouthPluginBase):
             return factory()
         
         return _Sensor(self._xknx, name=name, group_address_state=read_ga, value_type=dpt_value)
+    
+    def _create_light_device(
+        self, 
+        name: str, 
+        read_ga: Any, 
+        write_ga: Any,
+        writable_config: Dict[str, Any]
+    ) -> Any:
+        """创建Light设备，根据配置选择使用brightness或switch地址"""
+        use_brightness = writable_config.get("use_brightness", False)
+        use_color = writable_config.get("use_color", False)
+        
+        if use_brightness:
+            return _Light(
+                self._xknx, name=name,
+                group_address_brightness=write_ga,
+                group_address_brightness_state=read_ga
+            )
+        elif use_color:
+            return _Light(
+                self._xknx, name=name,
+                group_address_color=write_ga,
+                group_address_color_state=read_ga
+            )
+        else:
+            return _Light(
+                self._xknx, name=name,
+                group_address_switch=write_ga,
+                group_address_switch_state=read_ga
+            )
     
     async def poll(self) -> List[Reading]:
         poll_start = time.time()

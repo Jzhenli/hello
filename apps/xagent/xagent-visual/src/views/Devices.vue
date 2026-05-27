@@ -405,11 +405,21 @@ const modbusDataTypes = [
 const knxDataTypes = [
   { label: 'switch - 开关', value: 'switch' },
   { label: 'bool - 布尔值', value: 'bool' },
+  { label: 'binary - 二进制', value: 'binary' },
   { label: 'percent - 百分比', value: 'percent' },
-  { label: 'temperature - 温度', value: 'temperature' },
   { label: 'brightness - 亮度', value: 'brightness' },
+  { label: 'dimming - 调光', value: 'dimming' },
+  { label: 'blinds - 窗帘/百叶窗', value: 'blinds' },
+  { label: 'temperature - 温度', value: 'temperature' },
   { label: 'humidity - 湿度', value: 'humidity' },
   { label: 'co2 - CO2浓度', value: 'co2' },
+  { label: 'voltage - 电压', value: 'voltage' },
+  { label: 'current - 电流', value: 'current' },
+  { label: 'power - 功率', value: 'power' },
+  { label: 'energy - 能量', value: 'energy' },
+  { label: 'color_rgb - RGB颜色', value: 'color_rgb' },
+  { label: 'scene - 场景', value: 'scene' },
+  { label: 'float - 浮点数', value: 'float' },
   { label: 'string - 字符串', value: 'string' }
 ]
 
