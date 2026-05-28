@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useChannelStore } from '@/stores/channels'
 import { useUserStore } from '@/stores/users'
+import { channelApi } from '@/api/channels'
 import type { NorthChannelConfig, NorthChannelProtocol } from '@/api/types'
 import type { ChannelListItem } from '@/stores/channels'
 import { useResponsive } from '@/utils/useResponsive'
@@ -256,7 +257,7 @@ const handleEditChannel = (channel: ChannelListItem) => {
 }
 
 const buildChannelConfig = (): NorthChannelConfig => {
-  const connection: NorthChannelConfig['connection'] = {
+  const connection: any = {
     host: channelForm.value.protocol === 'xnc' 
       ? channelForm.value.remote_host 
       : channelForm.value.host,
@@ -265,16 +266,13 @@ const buildChannelConfig = (): NorthChannelConfig => {
       : channelForm.value.port
   }
   
-  if (channelForm.value.protocol !== 'xnc') {
+  if (channelForm.value.protocol === 'mqtt') {
     if (channelForm.value.username) {
       connection.username = channelForm.value.username
     }
     if (channelForm.value.password) {
       connection.password = channelForm.value.password
     }
-  }
-  
-  if (channelForm.value.protocol === 'mqtt') {
     connection.mqtt = {
       client_id: channelForm.value.client_id,
       topic: channelForm.value.topic,
@@ -300,6 +298,12 @@ const buildChannelConfig = (): NorthChannelConfig => {
       console.error('Invalid mapping config JSON:', e)
     }
   } else if (channelForm.value.protocol === 'http') {
+    if (channelForm.value.username) {
+      connection.username = channelForm.value.username
+    }
+    if (channelForm.value.password) {
+      connection.password = channelForm.value.password
+    }
     connection.http = {
       endpoint: channelForm.value.endpoint,
       method: channelForm.value.method,
@@ -322,24 +326,11 @@ const buildChannelConfig = (): NorthChannelConfig => {
     console.error('Invalid adapter config JSON:', e)
   }
   
-  if (channelForm.value.protocol === 'xnc' && channelForm.value.adapter === 'xnc_protobuf') {
-    try {
-      const mappingConfig = JSON.parse(channelForm.value.mapping_config)
-      if (Object.keys(mappingConfig).length > 0) {
-        adapterConfig.mapping_config = mappingConfig
-      }
-    } catch (e) {
-      console.error('Invalid mapping config JSON:', e)
-    }
-  }
-  
-  return {
+  const config: any = {
     id: channelForm.value.id,
     name: channelForm.value.name,
-    description: channelForm.value.description || undefined,
     enabled: channelForm.value.enabled,
     protocol: channelForm.value.protocol,
-    status: 'offline',
     connection,
     adapter: {
       type: channelForm.value.adapter,
@@ -351,9 +342,18 @@ const buildChannelConfig = (): NorthChannelConfig => {
       interval: channelForm.value.interval,
       retry_times: channelForm.value.retry_times,
       retry_interval: channelForm.value.retry_interval
-    },
-    tags: channelForm.value.tags ? channelForm.value.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+    }
   }
+  
+  if (channelForm.value.description) {
+    config.description = channelForm.value.description
+  }
+  
+  if (channelForm.value.tags) {
+    config.tags = channelForm.value.tags.split(',').map(t => t.trim()).filter(Boolean)
+  }
+  
+  return config
 }
 
 const handleSaveChannel = async () => {
@@ -433,36 +433,42 @@ const handleViewDetails = (id: string) => {
   selectedChannelId.value = id
 }
 
-const handleExportYaml = () => {
-  const channels = channelStore.channels.map(c => {
-    const clean: Record<string, unknown> = {
-      id: c.id,
-      name: c.name,
-      enabled: c.enabled,
-      protocol: c.protocol,
-      connection: c.connection,
-      adapter: c.adapter,
-      upload_strategy: c.upload_strategy
+const handleExportYaml = async () => {
+  try {
+    console.log('开始导出通道...')
+    const result = await channelApi.exportChannels()
+    console.log('导出结果:', result)
+    
+    const channels = result.channels || []
+    
+    if (channels.length === 0) {
+      ElMessage.warning('没有可导出的通道')
+      return
     }
-    if (c.description) clean.description = c.description
-    if (c.tags && c.tags.length > 0) clean.tags = c.tags
-    return clean
-  })
-
-  const content = yaml.dump({ channels }, { 
-    indent: 2, 
-    lineWidth: 120,
-    noRefs: true,
-    sortKeys: false
-  })
-  const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `xagent-channels-${new Date().toISOString().slice(0, 10)}.yaml`
-  a.click()
-  URL.revokeObjectURL(url)
-  ElMessage.success(`已导出 ${channels.length} 个通道`)
+    
+    const content = yaml.dump({ channels }, { 
+      indent: 2, 
+      lineWidth: 120,
+      noRefs: true,
+      sortKeys: false
+    })
+    const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `xagent-channels-${new Date().toISOString().slice(0, 10)}.yaml`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`已导出 ${channels.length} 个通道`)
+  } catch (e: unknown) {
+    console.error('导出失败:', e)
+    if (e instanceof Error) {
+      console.error('错误详情:', e.message)
+      console.error('错误堆栈:', e.stack)
+    }
+    const errorMsg = e instanceof Error ? e.message : '未知错误'
+    ElMessage.error(`导出失败: ${errorMsg}`)
+  }
 }
 
 const importFileRef = ref<HTMLInputElement | null>(null)
@@ -492,7 +498,7 @@ const handleImportFileChange = async (e: Event) => {
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
     )
 
-    const result = await channelApi.batchCreate(channels)
+    const result = await channelApi.importChannels({ channels: parsed.channels }, false)
     if (result.failed > 0) {
       ElMessage.warning(`导入完成：成功 ${result.succeeded}，失败 ${result.failed}`)
     } else {

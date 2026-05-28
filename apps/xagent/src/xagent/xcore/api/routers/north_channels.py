@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Depends, Query, status, Body
 from typing import List, Optional
 
 from ..models.north_channel import (
@@ -20,26 +20,36 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/channels", tags=["North Channels"])
 
+_north_channel_service: Optional[NorthChannelService] = None
 
-def get_north_channel_service(state: AppState = Depends(get_app_state)) -> NorthChannelService:
+
+async def get_north_channel_service(state: AppState = Depends(get_app_state)) -> NorthChannelService:
     """获取北向通道服务实例
     
     从应用状态获取数据库连接和插件加载器来初始化服务。
+    使用单例模式避免重复创建和初始化。
     """
-    if not state.metadata_manager:
-        raise HTTPException(
-            status_code=500,
-            detail="Metadata manager not initialized"
+    global _north_channel_service
+    
+    if _north_channel_service is None:
+        if not state.metadata_manager:
+            raise HTTPException(
+                status_code=500,
+                detail="Metadata manager not initialized"
+            )
+        
+        plugin_loader = None
+        if state.gateway:
+            plugin_loader = state.gateway.plugin_loader
+        
+        _north_channel_service = NorthChannelService(
+            db=state.metadata_manager.db,
+            plugin_loader=plugin_loader
         )
+        
+        await _north_channel_service.initialize()
     
-    plugin_loader = None
-    if state.gateway:
-        plugin_loader = state.gateway.plugin_loader
-    
-    return NorthChannelService(
-        db=state.metadata_manager.db,
-        plugin_loader=plugin_loader
-    )
+    return _north_channel_service
 
 
 def handle_value_error(e: ValueError) -> HTTPException:
@@ -353,17 +363,21 @@ async def batch_create_channels(
 
 @router.post("/export")
 async def export_channels(
-    channel_ids: Optional[List[str]] = None,
+    request_body: Optional[dict] = Body(None),
     service: NorthChannelService = Depends(get_north_channel_service)
 ):
     """导出通道配置
     
     Args:
-        channel_ids: 要导出的通道ID列表，为空则导出全部
+        request_body: 请求体，包含 channel_ids 字段
         
     Returns:
         导出的配置数据
     """
+    channel_ids = None
+    if request_body and "channel_ids" in request_body:
+        channel_ids = request_body.get("channel_ids")
+    
     all_channels = await service.list_channels()
     
     if channel_ids:
@@ -372,7 +386,7 @@ async def export_channels(
         channels_to_export = all_channels
     
     return {
-        "channels": [c.model_dump() for c in channels_to_export]
+        "channels": [c.model_dump(exclude_none=True) for c in channels_to_export]
     }
 
 

@@ -147,15 +147,8 @@ class NorthChannelService:
         Returns:
             服务配置
         """
-        connection_config = {
-            "host": channel.connection.host,
-            "port": channel.connection.port,
-            "username": channel.connection.username,
-            "password": channel.connection.password,
-            "mqtt": channel.connection.mqtt.model_dump() if channel.connection.mqtt else None,
-            "xnc": channel.connection.xnc.model_dump() if channel.connection.xnc else None,
-            "http": channel.connection.http.model_dump() if channel.connection.http else None
-        }
+        # 前端已经只发送相关字段，直接序列化即可
+        connection_config = channel.connection.model_dump(exclude_none=True)
         
         adapter_config = {
             "type": channel.adapter.type,
@@ -589,12 +582,22 @@ class NorthChannelService:
             return
         
         try:
+            connection_dict = channel.connection.model_dump(exclude_none=True)
+            upload_dict = channel.upload_strategy.model_dump(exclude_none=True)
+            adapter_dict = channel.adapter.model_dump(exclude_none=True)
+            
             plugin_config = {
-                **channel.connection_config,
-                **channel.upload_config,
-                "adapter_config": channel.adapter_config,
-                **channel.command_config
+                **connection_dict,
+                **upload_dict,
+                "adapter_config": adapter_dict
             }
+            
+            if channel.connection.xnc:
+                plugin_config.update(channel.connection.xnc.model_dump(exclude_none=True))
+            elif channel.connection.mqtt:
+                plugin_config.update(channel.connection.mqtt.model_dump(exclude_none=True))
+            elif channel.connection.http:
+                plugin_config.update(channel.connection.http.model_dump(exclude_none=True))
             
             plugin_info = await self._plugin_loader.load_plugin(
                 plugin_type="north",

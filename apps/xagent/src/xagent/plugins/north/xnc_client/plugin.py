@@ -80,7 +80,7 @@ class XNCClientPlugin(NorthPluginBase):
     - protocol.py: UDP packet encoding/decoding
     """
     
-    __plugin_name__ = "xnc_client"
+    __plugin_name__ = "xnc"
     
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: EventBus):
         self._protocol_mode = config.get("protocol", PROTOCOL_MODE_PROTOBUF)

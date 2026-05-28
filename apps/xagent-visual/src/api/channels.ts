@@ -81,7 +81,8 @@ export const channelApi = {
   },
 
   async exportChannels(ids?: string[]): Promise<Record<string, unknown>> {
-    const res = await api.post('/api/channels/export', ids)
+    const data = ids ? { channel_ids: ids } : {}
+    const res = await api.post('/api/channels/export', data)
     return res.data
   },
 

@@ -93,7 +93,7 @@ class MQTTClientPlugin(NorthPluginBase):
     - constants.py: Default configuration values
     """
     
-    __plugin_name__ = "mqtt_client"
+    __plugin_name__ = "mqtt"
     __plugin_type__ = PluginType.NORTH.value
     
     @classmethod
