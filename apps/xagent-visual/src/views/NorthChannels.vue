@@ -19,9 +19,7 @@ import {
   Delete,
   Edit,
   MoreFilled,
-  RefreshRight,
-  VideoPlay,
-  Document
+  RefreshRight
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -1189,7 +1187,7 @@ onMounted(async () => {
         <el-divider content-position="left">其他配置</el-divider>
         
         <el-form-item label="适配器类型">
-          <el-input v-model="channelForm.adapter_type" placeholder="默认为 default" />
+          <el-input v-model="channelForm.adapter" placeholder="默认为 default" />
         </el-form-item>
         <el-form-item label="适配器配置">
           <el-input 

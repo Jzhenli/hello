@@ -80,7 +80,7 @@ export const channelApi = {
     return res.data
   },
 
-  async exportChannels(ids?: string[]): Promise<Record<string, unknown>> {
+  async exportChannels(ids?: string[]): Promise<{ channels: NorthChannelConfig[] }> {
     const data = ids ? { channel_ids: ids } : {}
     const res = await api.post('/api/channels/export', data)
     return res.data
