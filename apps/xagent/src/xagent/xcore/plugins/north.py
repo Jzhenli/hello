@@ -21,11 +21,6 @@ class NorthPluginBase(IPlugin):
     
     所有北向插件必须继承此类，并实现必要的抽象方法。
     实现 IPlugin 接口，与规则引擎插件体系统一生命周期管理。
-    
-    扩展点：
-    - test_connection(): 协议相关的连通性测试，由 Service 层委托调用
-    - get_channel_info(): 返回通道运行时信息，供编排层查询
-    - build_plugin_config(): 从通道数据库记录构建插件配置，供编排层使用
     """
     
     __plugin_type__ = PluginType.NORTH.value
@@ -47,7 +42,6 @@ class NorthPluginBase(IPlugin):
         self._running = False
         self._connected = False
         self._service_name = self.__plugin_name__ or self.__class__.__name__
-        self._channel_id: Optional[int] = config.get("channel_id")
         
         self._data_adapter = self._create_data_adapter()
         
@@ -67,10 +61,6 @@ class NorthPluginBase(IPlugin):
     def plugin_name(self) -> str:
         return self._service_name
     
-    @property
-    def channel_id(self) -> Optional[int]:
-        return self._channel_id
-    
     def initialize(self, config: Dict[str, Any]) -> None:
         pass
     
@@ -80,79 +70,47 @@ class NorthPluginBase(IPlugin):
 
     @abstractmethod
     def _create_data_adapter(self) -> Any:
+        """
+        创建数据适配器
+        
+        返回一个符合 DataAdapter 协议的对象。
+        子类必须实现此方法。
+        
+        Returns:
+            数据适配器实例
+        """
         pass
 
     @abstractmethod
     async def connect(self) -> bool:
+        """
+        连接云端/外部系统
+        
+        Returns:
+            连接是否成功
+        """
         pass
 
     @abstractmethod
     async def disconnect(self) -> None:
+        """断开连接"""
         pass
 
     @abstractmethod
     async def send(self, readings: List[Reading]) -> int:
-        pass
-
-    async def test_connection(self) -> Dict[str, Any]:
         """
-        测试与远端的连通性
-        
-        子类应覆写此方法实现协议相关的连通性测试。
-        默认实现尝试 connect + disconnect。
-        
-        Returns:
-            {"success": bool, "message": str, "latency": float|None, "details": dict|None}
-        """
-        start = time.time()
-        try:
-            ok = await self.connect()
-            latency = round((time.time() - start) * 1000, 2)
-            if ok:
-                await self.disconnect()
-                return {"success": True, "message": "Connection test passed", "latency": latency}
-            return {"success": False, "message": "Connection refused", "latency": latency}
-        except Exception as e:
-            latency = round((time.time() - start) * 1000, 2)
-            return {"success": False, "message": str(e), "latency": latency}
-
-    def get_channel_info(self) -> Dict[str, Any]:
-        """
-        返回通道运行时信息，供编排层查询
-        
-        子类可覆写此方法返回协议特有的运行时信息。
-        """
-        return {
-            "plugin_name": self.__plugin_name__,
-            "channel_id": self._channel_id,
-            "connected": self._connected,
-            "running": self._running,
-        }
-
-    @classmethod
-    def build_plugin_config(cls, channel_record: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        从通道数据库记录构建插件配置
-        
-        编排层调用此方法将数据库中的通道记录转换为插件构造函数所需的 config 字典。
-        子类应覆写此方法以提取协议特有的配置字段。
+        发送数据
         
         Args:
-            channel_record: north_channel_registry 的一行记录（dict）
+            readings: Reading 对象列表
         
         Returns:
-            插件配置字典
+            成功发送的数量
         """
-        config: Dict[str, Any] = {}
-        if channel_record.get("config"):
-            config.update(channel_record["config"])
-        config["channel_id"] = channel_record.get("id")
-        for key in ("remote_host", "remote_port", "local_port"):
-            if channel_record.get(key) is not None:
-                config[key] = channel_record[key]
-        return config
+        pass
 
     async def start(self) -> None:
+        """启动插件"""
         if self._running:
             return
         
@@ -164,6 +122,7 @@ class NorthPluginBase(IPlugin):
             raise PluginStartError(self._service_name, "Failed to connect")
 
     async def stop(self) -> None:
+        """停止插件"""
         if not self._running:
             return
         
@@ -172,10 +131,28 @@ class NorthPluginBase(IPlugin):
         logger.info(f"North plugin stopped: {self._service_name}")
 
     async def handle_command(self, command_data: Dict[str, Any]) -> bool:
+        """
+        处理下行命令
+        
+        Args:
+            command_data: 命令数据
+        
+        Returns:
+            处理是否成功
+        """
         logger.warning(f"handle_command not implemented for {self._service_name}")
         return False
 
     async def fetch_and_send(self, batch_size: int = 100) -> int:
+        """
+        从存储获取数据并发送
+        
+        Args:
+            batch_size: 批量大小
+        
+        Returns:
+            发送数量
+        """
         if not self.storage:
             return 0
         
@@ -190,6 +167,16 @@ class NorthPluginBase(IPlugin):
         readings: List[Reading], 
         context: Optional[Dict[str, Any]] = None
     ) -> Any:
+        """
+        使用适配器转换数据
+        
+        Args:
+            readings: Reading 列表
+            context: 上下文信息
+        
+        Returns:
+            适配后的数据
+        """
         if not self._data_adapter:
             logger.warning(f"No data adapter for {self._service_name}")
             return None
@@ -205,6 +192,16 @@ class NorthPluginBase(IPlugin):
         command_data: Dict[str, Any], 
         context: Optional[Dict[str, Any]] = None
     ) -> Any:
+        """
+        使用适配器转换命令
+        
+        Args:
+            command_data: 命令数据
+            context: 上下文信息
+        
+        Returns:
+            适配后的命令
+        """
         if not self._data_adapter:
             return command_data
         
@@ -216,6 +213,16 @@ class NorthPluginBase(IPlugin):
         response: Any, 
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        """
+        使用适配器解析响应
+        
+        Args:
+            response: 原始响应
+            context: 上下文信息
+        
+        Returns:
+            解析后的数据字典
+        """
         if not self._data_adapter:
             return {"raw": response}
         
@@ -223,6 +230,7 @@ class NorthPluginBase(IPlugin):
         return self._data_adapter.parse_response(response, context)
 
     async def _handle_write_completed(self, event: Event) -> None:
+        """处理写入完成事件 - 触发立即上传"""
         if not self._running or not self._immediate_upload:
             return
         
@@ -237,7 +245,41 @@ class NorthPluginBase(IPlugin):
             logger.error(f"Error handling WRITE_COMPLETED event: {e}")
 
     async def trigger_immediate_upload(self, readings: List[Reading]) -> int:
+        """触发立即上传"""
         if not self._running:
             return 0
         
         return await self.send(readings)
+
+
+class MQTTNorthPlugin(NorthPluginBase):
+    """[DEPRECATED] Use plugins/north/mqtt_client plugin instead."""
+    
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "MQTTNorthPlugin is deprecated. Use the standalone plugins/north/mqtt_client plugin instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+    
+    async def publish(self, topic: str, payload: str, qos: int = 0) -> bool:
+        raise NotImplementedError
+    
+    async def subscribe(self, topic: str, callback) -> None:
+        raise NotImplementedError
+
+
+class HTTPNorthPlugin(NorthPluginBase):
+    """[DEPRECATED] Reserved for future standalone HTTP north plugin."""
+    
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "HTTPNorthPlugin is deprecated and not fully implemented.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+    
+    async def post(self, url: str, data: Any, headers: Optional[Dict] = None) -> Any:
+        raise NotImplementedError

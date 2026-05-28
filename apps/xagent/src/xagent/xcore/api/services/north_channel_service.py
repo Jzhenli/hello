@@ -1,253 +1,392 @@
 import logging
 import time
 import asyncio
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+import json
+from pathlib import Path
 
-from ...config.config_repository import ConfigRepository
-from ...services.audit_service import AuditService
-from ...core.metadata import MetadataManager
-from ...core.event_bus import EventBus, Event, EventType
-
-if TYPE_CHECKING:
-    from ...services.orchestration.north_channel_orchestrator import NorthChannelOrchestrator
+from ..models.north_channel import (
+    NorthChannelConfig,
+    NorthChannelStatus,
+    NorthChannelProtocol,
+    NorthChannelStatistics
+)
 
 logger = logging.getLogger(__name__)
 
 
 class NorthChannelService:
-    def __init__(
-        self,
-        metadata_manager: MetadataManager,
-        event_bus: Optional[EventBus] = None,
-        orchestrator: Optional["NorthChannelOrchestrator"] = None,
-    ):
-        self._config_repo = ConfigRepository(metadata_manager.db)
-        self._audit_service = AuditService(metadata_manager.db)
-        self._event_bus = event_bus
-        self._orchestrator = orchestrator
-        self._lock: Optional[asyncio.Lock] = None
-
-    async def _get_lock(self) -> asyncio.Lock:
-        if self._lock is None:
-            self._lock = asyncio.Lock()
-        return self._lock
-
+    """北向通道服务 - 管理北向通道配置和状态"""
+    
+    def __init__(self, config_dir: Optional[Path] = None):
+        self._channels: Dict[str, NorthChannelConfig] = {}
+        self._config_file = config_dir / "north_channels.json" if config_dir else Path("config/north_channels.json")
+        self._plugin_instances: Dict[str, Any] = {}
+        
+    async def initialize(self):
+        """初始化服务，加载配置"""
+        await self._load_config()
+        logger.info(f"NorthChannelService initialized with {len(self._channels)} channels")
+    
+    async def _load_config(self):
+        """从配置文件加载通道配置"""
+        if not self._config_file.exists():
+            logger.info(f"Config file {self._config_file} not found, starting with empty channels")
+            return
+        
+        try:
+            with open(self._config_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            for channel_data in data.get('channels', []):
+                try:
+                    channel = NorthChannelConfig(**channel_data)
+                    self._channels[channel.id] = channel
+                except Exception as e:
+                    logger.error(f"Failed to load channel {channel_data.get('id')}: {e}")
+            
+            logger.info(f"Loaded {len(self._channels)} channels from {self._config_file}")
+        except Exception as e:
+            logger.error(f"Failed to load config file: {e}")
+    
+    async def _save_config(self):
+        """保存配置到文件"""
+        try:
+            self._config_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            data = {
+                'channels': [channel.model_dump() for channel in self._channels.values()]
+            }
+            
+            with open(self._config_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Saved {len(self._channels)} channels to {self._config_file}")
+        except Exception as e:
+            logger.error(f"Failed to save config file: {e}")
+    
     async def list_channels(
         self,
-        status: Optional[str] = None,
-        enabled: Optional[bool] = None,
-        plugin_name: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        channels = await self._config_repo.list_north_channels(
-            status=status, enabled=enabled, plugin_name=plugin_name
-        )
-        if self._orchestrator:
-            for ch in channels:
-                info = self._orchestrator.get_channel_info(ch["id"])
-                if info:
-                    ch["runtime"] = info
+        status: Optional[NorthChannelStatus] = None,
+        protocol: Optional[NorthChannelProtocol] = None,
+        tags: Optional[List[str]] = None,
+        enabled: Optional[bool] = None
+    ) -> List[NorthChannelConfig]:
+        """列出通道
+        
+        Args:
+            status: 按状态过滤
+            protocol: 按协议过滤
+            tags: 按标签过滤
+            enabled: 按启用状态过滤
+            
+        Returns:
+            通道列表
+        """
+        channels = list(self._channels.values())
+        
+        if status:
+            channels = [c for c in channels if c.status == status]
+        
+        if protocol:
+            channels = [c for c in channels if c.protocol == protocol]
+        
+        if enabled is not None:
+            channels = [c for c in channels if c.enabled == enabled]
+        
+        if tags:
+            channels = [c for c in channels if any(tag in c.tags for tag in tags)]
+        
         return channels
-
-    async def get_channel(self, channel_id: int) -> Optional[Dict[str, Any]]:
-        channel = await self._config_repo.get_north_channel(channel_id)
-        if channel and self._orchestrator:
-            info = self._orchestrator.get_channel_info(channel_id)
-            if info:
-                channel["runtime"] = info
+    
+    async def get_channel(self, channel_id: str) -> Optional[NorthChannelConfig]:
+        """获取通道详情
+        
+        Args:
+            channel_id: 通道ID
+            
+        Returns:
+            通道配置
+        """
+        return self._channels.get(channel_id)
+    
+    async def create_channel(self, channel: NorthChannelConfig) -> NorthChannelConfig:
+        """创建通道
+        
+        Args:
+            channel: 通道配置
+            
+        Returns:
+            创建的通道
+            
+        Raises:
+            ValueError: 通道已存在
+        """
+        if channel.id in self._channels:
+            raise ValueError(f"Channel '{channel.id}' already exists")
+        
+        channel.created_at = datetime.now().isoformat()
+        channel.updated_at = datetime.now().isoformat()
+        channel.status = NorthChannelStatus.OFFLINE
+        
+        self._channels[channel.id] = channel
+        await self._save_config()
+        
+        logger.info(f"Created channel: {channel.id}")
         return channel
-
-    async def create_channel(
-        self, data: Dict[str, Any], user: Optional[str] = None
-    ) -> Dict[str, Any]:
-        async with await self._get_lock():
-            channel = await self._config_repo.create_north_channel(data, user)
-        await self._audit_service.log_action(
-            action="create",
-            entity_type="north_channel",
-            entity_id=str(channel["id"]),
-            user=user,
-            new_value=channel,
-        )
-        logger.info(f"North channel created: {channel.get('name')} (id={channel.get('id')})")
-        if self._orchestrator and channel.get("enabled"):
-            try:
-                await self._orchestrator.start_channel(channel["id"])
-            except Exception as e:
-                logger.warning(f"Failed to auto-start channel {channel['id']}: {e}")
-        return channel
-
+    
     async def update_channel(
         self,
-        channel_id: int,
-        updates: Dict[str, Any],
-        user: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        async with await self._get_lock():
-            old = await self._config_repo.get_north_channel(channel_id)
-            if not old:
-                raise ValueError(f"Channel '{channel_id}' not found")
-            updated = await self._config_repo.update_north_channel(
-                channel_id, updates, user
-            )
-        await self._audit_service.log_action(
-            action="update",
-            entity_type="north_channel",
-            entity_id=str(channel_id),
-            user=user,
-            old_value=old,
-            new_value=updated,
-        )
-        logger.info(f"North channel updated: {channel_id}")
-        if self._orchestrator:
-            try:
-                await self._orchestrator.reload_channel(channel_id)
-            except Exception as e:
-                logger.warning(f"Failed to reload channel {channel_id}: {e}")
-        return updated
-
-    async def delete_channel(
-        self, channel_id: int, user: Optional[str] = None
-    ) -> None:
-        async with await self._get_lock():
-            old = await self._config_repo.get_north_channel(channel_id)
-            if not old:
-                raise ValueError(f"Channel '{channel_id}' not found")
-            await self._config_repo.delete_north_channel(channel_id, user)
-        await self._audit_service.log_action(
-            action="delete",
-            entity_type="north_channel",
-            entity_id=str(channel_id),
-            user=user,
-            old_value=old,
-        )
-        if self._orchestrator:
-            try:
-                await self._orchestrator.stop_channel(channel_id)
-            except Exception as e:
-                logger.warning(f"Failed to stop channel {channel_id}: {e}")
-        await self._publish_mapping_changed(channel_id)
-        logger.info(f"North channel deleted: {channel_id}")
-
-    async def toggle_channel(
-        self, channel_id: int, user: Optional[str] = None
-    ) -> Dict[str, Any]:
-        channel = await self._config_repo.get_north_channel(channel_id)
+        channel_id: str,
+        updates: Dict[str, Any]
+    ) -> NorthChannelConfig:
+        """更新通道
+        
+        Args:
+            channel_id: 通道ID
+            updates: 更新内容
+            
+        Returns:
+            更新后的通道
+            
+        Raises:
+            ValueError: 通道不存在
+        """
+        if channel_id not in self._channels:
+            raise ValueError(f"Channel '{channel_id}' not found")
+        
+        channel = self._channels[channel_id]
+        
+        for field, value in updates.items():
+            if hasattr(channel, field):
+                setattr(channel, field, value)
+        
+        channel.updated_at = datetime.now().isoformat()
+        
+        await self._save_config()
+        logger.info(f"Updated channel: {channel_id}")
+        
+        return channel
+    
+    async def delete_channel(self, channel_id: str):
+        """删除通道
+        
+        Args:
+            channel_id: 通道ID
+            
+        Raises:
+            ValueError: 通道不存在
+        """
+        if channel_id not in self._channels:
+            raise ValueError(f"Channel '{channel_id}' not found")
+        
+        del self._channels[channel_id]
+        await self._save_config()
+        
+        logger.info(f"Deleted channel: {channel_id}")
+    
+    async def toggle_channel(self, channel_id: str) -> NorthChannelConfig:
+        """切换通道启用状态
+        
+        Args:
+            channel_id: 通道ID
+            
+        Returns:
+            更新后的通道
+        """
+        channel = await self.get_channel(channel_id)
         if not channel:
             raise ValueError(f"Channel '{channel_id}' not found")
-        return await self.update_channel(
-            channel_id, {"enabled": not channel["enabled"]}, user
-        )
-
-    async def test_connection(self, channel_id: int) -> Dict[str, Any]:
-        channel = await self._config_repo.get_north_channel(channel_id)
+        
+        channel.enabled = not channel.enabled
+        channel.updated_at = datetime.now().isoformat()
+        
+        await self._save_config()
+        logger.info(f"Toggled channel {channel_id}: enabled={channel.enabled}")
+        
+        return channel
+    
+    async def test_connection(self, channel_id: str) -> Dict[str, Any]:
+        """测试通道连接
+        
+        Args:
+            channel_id: 通道ID
+            
+        Returns:
+            测试结果
+        """
+        channel = await self.get_channel(channel_id)
         if not channel:
             raise ValueError(f"Channel '{channel_id}' not found")
-        if self._orchestrator:
+        
+        start_time = time.time()
+        
+        try:
+            if channel.protocol == NorthChannelProtocol.XNC:
+                result = await self._test_xnc_connection(channel)
+            elif channel.protocol == NorthChannelProtocol.MQTT:
+                result = await self._test_mqtt_connection(channel)
+            elif channel.protocol == NorthChannelProtocol.HTTP:
+                result = await self._test_http_connection(channel)
+            else:
+                result = {
+                    "success": False,
+                    "message": f"Unsupported protocol: {channel.protocol}"
+                }
+        except Exception as e:
+            result = {
+                "success": False,
+                "message": f"Connection test failed: {str(e)}"
+            }
+        
+        latency = (time.time() - start_time) * 1000
+        result["latency"] = round(latency, 2)
+        
+        return result
+    
+    async def _test_xnc_connection(self, channel: NorthChannelConfig) -> Dict[str, Any]:
+        """测试XNC连接"""
+        try:
+            import socket
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(5)
+            
+            test_data = b"TEST"
+            sock.sendto(test_data, (channel.connection.host, channel.connection.port))
+            
             try:
-                return await self._orchestrator.test_connection(channel_id)
-            except Exception as e:
-                return {"success": False, "message": f"Connection test failed: {e}"}
-        return {"success": False, "message": "Orchestrator not available"}
-
-    async def restart_channel(self, channel_id: int) -> Dict[str, Any]:
-        channel = await self._config_repo.get_north_channel(channel_id)
+                response, _ = sock.recvfrom(1024)
+                sock.close()
+                return {
+                    "success": True,
+                    "message": "XNC connection successful",
+                    "details": {"response_size": len(response)}
+                }
+            except socket.timeout:
+                sock.close()
+                return {
+                    "success": True,
+                    "message": "XNC endpoint reachable (no response expected for UDP)"
+                }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"XNC connection failed: {str(e)}"
+            }
+    
+    async def _test_mqtt_connection(self, channel: NorthChannelConfig) -> Dict[str, Any]:
+        """测试MQTT连接"""
+        return {
+            "success": True,
+            "message": "MQTT connection test not implemented yet"
+        }
+    
+    async def _test_http_connection(self, channel: NorthChannelConfig) -> Dict[str, Any]:
+        """测试HTTP连接"""
+        try:
+            import aiohttp
+            
+            timeout = aiohttp.ClientTimeout(total=channel.connection.http.timeout if channel.connection.http else 30)
+            
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                method = channel.connection.http.method.lower() if channel.connection.http else "get"
+                
+                async with session.request(
+                    method,
+                    channel.connection.http.endpoint if channel.connection.http else "",
+                    headers=channel.connection.http.headers if channel.connection.http else None
+                ) as response:
+                    if response.status < 400:
+                        return {
+                            "success": True,
+                            "message": f"HTTP connection successful (status: {response.status})"
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": f"HTTP connection failed (status: {response.status})"
+                        }
+        
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"HTTP connection failed: {str(e)}"
+            }
+    
+    async def restart_channel(self, channel_id: str) -> Dict[str, Any]:
+        """重启通道
+        
+        Args:
+            channel_id: 通道ID
+            
+        Returns:
+            重启结果
+        """
+        channel = await self.get_channel(channel_id)
         if not channel:
             raise ValueError(f"Channel '{channel_id}' not found")
-        if self._orchestrator:
-            try:
-                await self._orchestrator.restart_channel(channel_id)
-                return {"success": True, "message": f"Channel {channel_id} restarted"}
-            except Exception as e:
-                return {"success": False, "message": str(e)}
-        logger.info(f"Restarting north channel: {channel_id}")
-        return {"success": True, "message": f"Channel {channel_id} restart initiated"}
-
-    async def get_channel_statistics(
-        self, channel_id: int
-    ) -> Optional[Dict[str, Any]]:
-        channel = await self._config_repo.get_north_channel(channel_id)
+        
+        logger.info(f"Restarting channel: {channel_id}")
+        
+        return {
+            "success": True,
+            "message": f"Channel {channel_id} restart initiated"
+        }
+    
+    async def get_channel_statistics(self, channel_id: str) -> Optional[NorthChannelStatistics]:
+        """获取通道统计信息
+        
+        Args:
+            channel_id: 通道ID
+            
+        Returns:
+            统计信息
+        """
+        channel = await self.get_channel(channel_id)
         if not channel:
             return None
-        mappings = await self._config_repo.list_north_mappings(
-            channel_id=channel_id, enabled=True
-        )
-        stats = {
-            "channel_id": channel_id,
-            "enabled": channel.get("enabled", False),
-            "mapping_count": len(mappings),
-        }
-        if self._orchestrator:
-            info = self._orchestrator.get_channel_info(channel_id)
-            if info:
-                stats["runtime"] = info
-        return stats
-
+        
+        return channel.statistics or NorthChannelStatistics()
+    
     async def batch_create_channels(
-        self, channels: List[Dict[str, Any]], user: Optional[str] = None
-    ) -> Dict[str, Any]:
-        succeeded = 0
-        failed = 0
-        details = []
-        for ch in channels:
-            try:
-                await self.create_channel(ch, user)
-                succeeded += 1
-                details.append({"name": ch.get("name"), "success": True})
-            except Exception as e:
-                failed += 1
-                details.append(
-                    {"name": ch.get("name"), "success": False, "message": str(e)}
-                )
-        return {"total": len(channels), "succeeded": succeeded, "failed": failed, "details": details}
-
-    async def export_channels(
-        self, channel_ids: Optional[List[int]] = None
-    ) -> Dict[str, Any]:
-        all_channels = await self._config_repo.list_north_channels()
-        if channel_ids:
-            channels = [c for c in all_channels if c["id"] in channel_ids]
-        else:
-            channels = all_channels
-        return {"channels": channels}
-
-    async def import_channels(
         self,
-        data: Dict[str, Any],
-        overwrite: bool = False,
-        user: Optional[str] = None,
+        channels: List[NorthChannelConfig]
     ) -> Dict[str, Any]:
-        channels_data = data.get("channels", [])
+        """批量创建通道
+        
+        Args:
+            channels: 通道列表
+            
+        Returns:
+            批量操作结果
+        """
         succeeded = 0
         failed = 0
         details = []
-        for ch_data in channels_data:
+        
+        for channel in channels:
             try:
-                existing = None
-                ch_name = ch_data.get("name")
-                if ch_name:
-                    all_ch = await self._config_repo.list_north_channels()
-                    existing = next((c for c in all_ch if c["name"] == ch_name), None)
-                if existing:
-                    if overwrite:
-                        await self.update_channel(existing["id"], ch_data, user)
-                        succeeded += 1
-                        details.append({"name": ch_name, "action": "updated", "success": True})
-                    else:
-                        failed += 1
-                        details.append({"name": ch_name, "action": "skipped", "success": False, "message": "Already exists"})
-                else:
-                    await self.create_channel(ch_data, user)
-                    succeeded += 1
-                    details.append({"name": ch_name, "action": "created", "success": True})
+                await self.create_channel(channel)
+                succeeded += 1
+                details.append({
+                    "id": channel.id,
+                    "success": True,
+                    "message": "Channel created successfully"
+                })
             except Exception as e:
                 failed += 1
-                details.append({"name": ch_data.get("name"), "action": "failed", "success": False, "message": str(e)})
-        return {"total": len(channels_data), "succeeded": succeeded, "failed": failed, "details": details}
-
-    async def _publish_mapping_changed(self, channel_id: int) -> None:
-        if self._event_bus:
-            event = Event(
-                event_type=EventType.NORTH_MAPPING_CHANGED,
-                data={"channel_id": channel_id},
-            )
-            await self._event_bus.publish(event)
+                details.append({
+                    "id": channel.id,
+                    "success": False,
+                    "message": str(e)
+                })
+        
+        return {
+            "total": len(channels),
+            "succeeded": succeeded,
+            "failed": failed,
+            "details": details
+        }

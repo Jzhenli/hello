@@ -72,8 +72,7 @@ class PluginLoader(ILifecycle):
             registry=self.registry,
             event_bus=event_bus,
             scheduler=scheduler,
-            storage=storage,
-            metadata_manager=metadata_manager
+            storage=storage
         )
         
         self._running: bool = False

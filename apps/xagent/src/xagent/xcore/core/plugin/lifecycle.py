@@ -28,8 +28,7 @@ class PluginLifecycle:
         registry: PluginRegistry,
         event_bus: EventBus,
         scheduler: Scheduler,
-        storage: Any = None,
-        metadata_manager: Any = None
+        storage: Any = None
     ):
         """初始化生命周期管理器
         
@@ -38,13 +37,11 @@ class PluginLifecycle:
             event_bus: 事件总线
             scheduler: 调度器
             storage: 存储对象
-            metadata_manager: 元数据管理器
         """
         self.registry = registry
         self.event_bus = event_bus
         self.scheduler = scheduler
         self.storage = storage
-        self.metadata_manager = metadata_manager
     
     async def load_plugin(
         self,
@@ -127,14 +124,11 @@ class PluginLifecycle:
         has_core_params = core_params.issubset(set(params))
         
         if has_core_params:
-            kwargs = {
-                'config': config or {},
-                'storage': self.storage,
-                'event_bus': self.event_bus,
-            }
-            if 'metadata_manager' in set(params) and self.metadata_manager:
-                kwargs['metadata_manager'] = self.metadata_manager
-            instance = plugin_class(**kwargs)
+            instance = plugin_class(
+                config=config or {},
+                storage=self.storage,
+                event_bus=self.event_bus
+            )
         else:
             instance = plugin_class()
             if config and hasattr(instance, 'initialize'):

@@ -1,241 +1,299 @@
-import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 
-from .models import Direction, PointMapping, ValueTransform
+import yaml
 
 logger = logging.getLogger(__name__)
 
 
-class DBMappingRegistry:
+class IDMapper(ABC):
 
-    def __init__(self, db: Any, channel_id: int, cache_path: Optional[str] = None):
-        self._db = db
-        self._channel_id = channel_id
-        self._cache_path = cache_path
+    @abstractmethod
+    def get_vd_id(self, device_id: str) -> Optional[int]:
+        ...
 
-        self._forward: Dict[str, PointMapping] = {}
-        self._by_oid: Dict[int, PointMapping] = {}
-        self._by_vdid: Dict[str, int] = {}
-        self._by_vdid_reverse: Dict[int, str] = {}
+    @abstractmethod
+    def get_device_id_by_vdid(self, vdid: int) -> Optional[str]:
+        ...
 
-    async def load(self) -> None:
-        try:
-            await self._load_from_db()
-            if self._forward:
-                if self._cache_path:
-                    self._persist_to_local()
-                logger.info(
-                    f"Loaded {len(self._forward)} point mappings from DB "
-                    f"(channel_id={self._channel_id})"
+    @abstractmethod
+    def get_oid(self, point_name: str, device_id: str) -> Optional[int]:
+        ...
+
+    @abstractmethod
+    def get_point_name_by_oid(self, oid: int) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_device_id_by_oid(self, oid: int) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_pid_by_type(self, pid_type: str) -> int:
+        ...
+
+
+class StaticMapper(IDMapper):
+
+    PID_POINT_VALUE = 85
+    PID_POINT_ERROR = 103
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self.config = config or {}
+
+        pid_config = self.config.get("pid", {})
+        self._pid_point_value = pid_config.get("point_value", self.PID_POINT_VALUE)
+        self._pid_point_error = pid_config.get("point_error", self.PID_POINT_ERROR)
+
+        self._point_to_oid: Dict[str, int] = {}
+        self._device_to_vdid: Dict[str, int] = {}
+        self._reverse_oid: Dict[int, str] = {}
+        self._reverse_vdid: Dict[int, str] = {}
+        self._point_to_device: Dict[str, str] = {}
+
+        self._load()
+
+    def _load(self) -> None:
+        mapping_file = self.config.get("device_mapping_file")
+        if mapping_file and os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+
+                for point_key, point_info in data.get("points", {}).items():
+                    if not isinstance(point_info, dict):
+                        continue
+                    oid = point_info.get("oid")
+                    if oid is not None:
+                        if oid in self._reverse_oid and self._reverse_oid[oid] != point_key:
+                            logger.warning(
+                                f"oid conflict in mapping file: {oid} already mapped to "
+                                f"{self._reverse_oid[oid]}, overwriting with {point_key}"
+                            )
+                        self._point_to_oid[point_key] = oid
+                        self._reverse_oid[oid] = point_key
+                        if "." in point_key:
+                            device_id = point_key.split(".", 1)[0]
+                            self._point_to_device[point_key] = device_id
+
+                logger.info(f"Loaded mapping from {mapping_file}")
+            except Exception as e:
+                logger.error(f"Failed to load mapping file: {e}")
+
+        for device_id, vdid in self.config.get("vdid_mapping", {}).items():
+            if vdid in self._reverse_vdid and self._reverse_vdid[vdid] != device_id:
+                logger.warning(
+                    f"vdid conflict: {vdid} already mapped to "
+                    f"{self._reverse_vdid[vdid]}, overwriting with {device_id}"
                 )
-            elif self._cache_path:
-                logger.warning("DB returned empty, falling back to local cache")
-                await self._load_from_local()
-            else:
-                logger.warning("No mappings found and no cache configured")
-        except Exception as e:
-            logger.warning(f"DB load failed: {e}")
-            if self._cache_path:
-                await self._load_from_local()
-            else:
-                logger.warning("No cache path configured, starting with empty mapping")
+            self._device_to_vdid[device_id] = vdid
+            self._reverse_vdid[vdid] = device_id
 
-    async def reload(self) -> None:
-        new_forward: Dict[str, PointMapping] = {}
-        new_by_oid: Dict[int, PointMapping] = {}
-        new_by_vdid: Dict[str, int] = {}
-        new_by_vdid_reverse: Dict[int, str] = {}
-
-        try:
-            rows = await self._query_mappings()
-            for row in rows:
-                mapping = self._row_to_mapping(row)
-                key = mapping.namespaced_name
-                new_forward[key] = mapping
-                if mapping.protocol_oid is not None:
-                    new_by_oid[mapping.protocol_oid] = mapping
-                new_by_vdid[mapping.device_id] = mapping.protocol_vdid
-                new_by_vdid_reverse[mapping.protocol_vdid] = mapping.device_id
-        except Exception as e:
-            logger.error(f"Reload failed, keeping current mapping: {e}")
-            return
-
-        self._forward = new_forward
-        self._by_oid = new_by_oid
-        self._by_vdid = new_by_vdid
-        self._by_vdid_reverse = new_by_vdid_reverse
-
-        if self._cache_path:
-            self._persist_to_local()
-
-        logger.info(
-            f"Reloaded {len(self._forward)} point mappings "
-            f"(channel_id={self._channel_id})"
-        )
-
-    def lookup_forward(self, point_name: str, device_id: str) -> Optional[PointMapping]:
-        return self._forward.get(f"{device_id}.{point_name}")
-
-    def lookup_reverse(self, oid: int) -> Optional[PointMapping]:
-        return self._by_oid.get(oid)
-
-    def lookup_device_by_vdid(self, vdid: int) -> Optional[str]:
-        return self._by_vdid_reverse.get(vdid)
-
-    def lookup_vdid_by_device(self, device_id: str) -> Optional[int]:
-        return self._by_vdid.get(device_id)
+        for key, oid in self.config.get("oid_mapping", {}).items():
+            if not isinstance(oid, int):
+                continue
+            if key not in self._point_to_oid:
+                if oid in self._reverse_oid and self._reverse_oid[oid] != key:
+                    logger.warning(
+                        f"oid conflict in config mapping: {oid} already mapped to "
+                        f"{self._reverse_oid[oid]}, overwriting with {key}"
+                    )
+                self._point_to_oid[key] = oid
+                self._reverse_oid[oid] = key
+                if "." in key:
+                    device_id = key.split(".", 1)[0]
+                    self._point_to_device[key] = device_id
 
     def get_vd_id(self, device_id: str) -> Optional[int]:
-        return self._by_vdid.get(device_id)
-
-    def get_oid(self, point_name: str, device_id: str) -> Optional[int]:
-        mapping = self.lookup_forward(point_name, device_id)
-        return mapping.protocol_oid if mapping else None
-
-    def get_pid_by_type(self, pid_type: str) -> int:
-        if not self._forward:
-            return 103 if pid_type == "point_error" else 85
-        first = next(iter(self._forward.values()))
-        return first.pid_error if pid_type == "point_error" else first.pid_value
+        return self._device_to_vdid.get(device_id)
 
     def get_device_id_by_vdid(self, vdid: int) -> Optional[str]:
-        return self._by_vdid_reverse.get(vdid)
+        return self._reverse_vdid.get(vdid)
+
+    def get_oid(self, point_name: str, device_id: str) -> Optional[int]:
+        namespaced = f"{device_id}.{point_name}"
+        if namespaced in self._point_to_oid:
+            return self._point_to_oid[namespaced]
+        return self._point_to_oid.get(point_name)
 
     def get_point_name_by_oid(self, oid: int) -> Optional[str]:
-        mapping = self._by_oid.get(oid)
-        return mapping.standard_name if mapping else None
+        full_name = self._reverse_oid.get(oid)
+        if not full_name:
+            return None
+        if "." in full_name:
+            return full_name.split(".", 1)[1]
+        return full_name
 
     def get_device_id_by_oid(self, oid: int) -> Optional[str]:
-        mapping = self._by_oid.get(oid)
-        return mapping.device_id if mapping else None
+        full_name = self._reverse_oid.get(oid)
+        if not full_name:
+            return None
+        if "." in full_name:
+            return full_name.split(".", 1)[0]
+        return self._point_to_device.get(full_name)
 
-    def transform_value(
-        self, point_name: str, device_id: str, value: Any, direction: Direction
-    ) -> Any:
-        mapping = self.lookup_forward(point_name, device_id)
-        if mapping is None or mapping.value_transform is None:
-            return value
-        if direction == Direction.UPLOAD:
-            return mapping.value_transform.forward(value)
-        return mapping.value_transform.reverse(value)
+    def get_pid_by_type(self, pid_type: str) -> int:
+        if pid_type == "point_error":
+            return self._pid_point_error
+        return self._pid_point_value
 
-    @property
-    def mapping_count(self) -> int:
-        return len(self._forward)
 
-    async def _load_from_db(self) -> None:
-        rows = await self._query_mappings()
-        for row in rows:
-            mapping = self._row_to_mapping(row)
-            self._register(mapping)
+class DynamicMapper(IDMapper):
 
-    async def _query_mappings(self) -> List[Dict[str, Any]]:
-        cursor = await self._db.execute(
-            """
-            SELECT m.asset, m.point_name, m.protocol_oid, m.protocol_vdid,
-                   m.pid_value, m.pid_error, m.value_transform, m.protocol_config
-            FROM north_point_mapping m
-            LEFT JOIN point_registry p
-                ON m.asset = p.asset AND m.point_name = p.point_name
-            WHERE m.channel_id = ?
-              AND m.status = 'active'
-              AND m.enabled = 1
-              AND (p.status IS NULL OR p.status != 'deleted')
-            """,
-            (self._channel_id,),
-        )
-        columns = [desc[0] for desc in cursor.description]
-        rows = await cursor.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+    def __init__(
+        self,
+        static_mapper: StaticMapper,
+        persist_path: Optional[str] = None,
+    ):
+        self._static = static_mapper
+        self._persist_path = persist_path
 
-    def _register(self, mapping: PointMapping) -> None:
-        key = mapping.namespaced_name
-        self._forward[key] = mapping
-        if mapping.protocol_oid is not None:
-            self._by_oid[mapping.protocol_oid] = mapping
-        self._by_vdid[mapping.device_id] = mapping.protocol_vdid
-        self._by_vdid_reverse[mapping.protocol_vdid] = mapping.device_id
+        self._dynamic_point_to_oid: Dict[str, int] = {}
+        self._dynamic_device_to_vdid: Dict[str, int] = {}
+        self._dynamic_reverse_oid: Dict[int, str] = {}
+        self._dynamic_reverse_vdid: Dict[int, str] = {}
+        self._dynamic_point_to_device: Dict[str, str] = {}
 
-    def _persist_to_local(self) -> None:
-        if not self._cache_path:
+        self._next_oid = 1
+        self._next_vdid = 1
+
+        if static_mapper._reverse_oid:
+            self._next_oid = max(static_mapper._reverse_oid.keys()) + 1
+        if static_mapper._reverse_vdid:
+            self._next_vdid = max(static_mapper._reverse_vdid.keys()) + 1
+
+        self._load_persisted()
+
+    def _load_persisted(self) -> None:
+        if not self._persist_path or not os.path.exists(self._persist_path):
             return
         try:
-            data: Dict[str, Any] = {"channel_id": self._channel_id, "mappings": []}
-            for mapping in self._forward.values():
-                entry: Dict[str, Any] = {
-                    "asset": mapping.device_id,
-                    "point_name": mapping.standard_name,
-                    "protocol_oid": mapping.protocol_oid,
-                    "protocol_vdid": mapping.protocol_vdid,
-                    "pid_value": mapping.pid_value,
-                    "pid_error": mapping.pid_error,
+            with open(self._persist_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+
+            for device_id, vdid in data.get("vdid_mapping", {}).items():
+                if vdid in self._dynamic_reverse_vdid and self._dynamic_reverse_vdid[vdid] != device_id:
+                    logger.warning(
+                        f"persisted vdid conflict: {vdid} already mapped to "
+                        f"{self._dynamic_reverse_vdid[vdid]}, overwriting with {device_id}"
+                    )
+                self._dynamic_device_to_vdid[device_id] = vdid
+                self._dynamic_reverse_vdid[vdid] = device_id
+                if vdid >= self._next_vdid:
+                    self._next_vdid = vdid + 1
+
+            for point_key, point_info in data.get("points", {}).items():
+                if not isinstance(point_info, dict):
+                    continue
+                oid = point_info.get("oid")
+                if oid is not None:
+                    if oid in self._dynamic_reverse_oid and self._dynamic_reverse_oid[oid] != point_key:
+                        logger.warning(
+                            f"persisted oid conflict: {oid} already mapped to "
+                            f"{self._dynamic_reverse_oid[oid]}, overwriting with {point_key}"
+                        )
+                    self._dynamic_point_to_oid[point_key] = oid
+                    self._dynamic_reverse_oid[oid] = point_key
+                    if oid >= self._next_oid:
+                        self._next_oid = oid + 1
+                    if "." in point_key:
+                        device_id = point_key.split(".", 1)[0]
+                        self._dynamic_point_to_device[point_key] = device_id
+
+            for point_key, device_id in data.get("point_devices", {}).items():
+                if point_key not in self._dynamic_point_to_device:
+                    self._dynamic_point_to_device[point_key] = device_id
+
+            logger.info(f"Loaded persisted mapping from {self._persist_path}")
+        except Exception as e:
+            logger.error(f"Failed to load persisted mapping: {e}")
+
+    def _persist(self) -> None:
+        if not self._persist_path:
+            return
+        try:
+            data: Dict[str, Any] = {
+                "vdid_mapping": dict(self._dynamic_device_to_vdid),
+                "points": {},
+                "point_devices": dict(self._dynamic_point_to_device),
+            }
+            all_keys = set(self._dynamic_point_to_oid.keys())
+            for key in all_keys:
+                data["points"][key] = {
+                    "oid": self._dynamic_point_to_oid[key],
                 }
-                if mapping.value_transform:
-                    entry["value_transform"] = mapping.value_transform.to_json()
-                if mapping.protocol_config:
-                    entry["protocol_config"] = mapping.protocol_config
-                data["mappings"].append(entry)
 
-            os.makedirs(os.path.dirname(self._cache_path), exist_ok=True)
-            with open(self._cache_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Persisted mapping cache to {self._cache_path}")
+            os.makedirs(os.path.dirname(self._persist_path), exist_ok=True)
+            with open(self._persist_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            logger.debug(f"Persisted mapping to {self._persist_path}")
         except Exception as e:
-            logger.error(f"Failed to persist mapping cache: {e}")
+            logger.error(f"Failed to persist mapping: {e}")
 
-    async def _load_from_local(self) -> None:
-        if not self._cache_path or not os.path.exists(self._cache_path):
-            logger.warning("No local cache available, starting with empty mapping")
-            return
-        try:
-            with open(self._cache_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+    def get_vd_id(self, device_id: str) -> Optional[int]:
+        static_vdid = self._static.get_vd_id(device_id)
+        if static_vdid is not None:
+            return static_vdid
 
-            for entry in data.get("mappings", []):
-                vt = ValueTransform.from_json(entry.get("value_transform"))
-                pc = entry.get("protocol_config")
-                if isinstance(pc, str):
-                    try:
-                        pc = json.loads(pc)
-                    except (json.JSONDecodeError, TypeError):
-                        pc = None
-                mapping = PointMapping(
-                    standard_name=entry["point_name"],
-                    protocol_oid=entry["protocol_oid"],
-                    device_id=entry["asset"],
-                    protocol_vdid=entry["protocol_vdid"],
-                    pid_value=entry.get("pid_value", 85),
-                    pid_error=entry.get("pid_error", 103),
-                    value_transform=vt,
-                    protocol_config=pc,
-                )
-                self._register(mapping)
+        if device_id in self._dynamic_device_to_vdid:
+            return self._dynamic_device_to_vdid[device_id]
 
-            logger.info(
-                f"Loaded {len(self._forward)} mappings from local cache "
-                f"({self._cache_path})"
-            )
-        except Exception as e:
-            logger.error(f"Failed to load from local cache: {e}")
+        vdid = self._next_vdid
+        self._dynamic_device_to_vdid[device_id] = vdid
+        self._dynamic_reverse_vdid[vdid] = device_id
+        self._next_vdid += 1
+        logger.debug(f"Auto-assigned vdID {vdid} for device {device_id}")
+        self._persist()
+        return vdid
 
-    @staticmethod
-    def _row_to_mapping(row: Dict[str, Any]) -> PointMapping:
-        vt = ValueTransform.from_json(row.get("value_transform"))
-        pc = row.get("protocol_config")
-        if isinstance(pc, str):
-            try:
-                pc = json.loads(pc)
-            except (json.JSONDecodeError, TypeError):
-                pc = None
-        return PointMapping(
-            standard_name=row["point_name"],
-            protocol_oid=row["protocol_oid"],
-            device_id=row["asset"],
-            protocol_vdid=row["protocol_vdid"],
-            pid_value=row.get("pid_value") or 85,
-            pid_error=row.get("pid_error") or 103,
-            value_transform=vt,
-            protocol_config=pc,
-        )
+    def get_device_id_by_vdid(self, vdid: int) -> Optional[str]:
+        result = self._static.get_device_id_by_vdid(vdid)
+        if result is not None:
+            return result
+        return self._dynamic_reverse_vdid.get(vdid)
+
+    def get_oid(self, point_name: str, device_id: str) -> Optional[int]:
+        static_oid = self._static.get_oid(point_name, device_id)
+        if static_oid is not None:
+            return static_oid
+
+        namespaced = f"{device_id}.{point_name}"
+
+        if namespaced in self._dynamic_point_to_oid:
+            return self._dynamic_point_to_oid[namespaced]
+
+        oid = self._next_oid
+        self._dynamic_point_to_oid[namespaced] = oid
+        self._dynamic_reverse_oid[oid] = namespaced
+        self._dynamic_point_to_device[namespaced] = device_id
+        self._next_oid += 1
+        logger.debug(f"Auto-assigned oid {oid} for point {namespaced}")
+        self._persist()
+        return oid
+
+    def get_point_name_by_oid(self, oid: int) -> Optional[str]:
+        result = self._static.get_point_name_by_oid(oid)
+        if result is not None:
+            return result
+        full_name = self._dynamic_reverse_oid.get(oid)
+        if not full_name:
+            return None
+        if "." in full_name:
+            return full_name.split(".", 1)[1]
+        return full_name
+
+    def get_device_id_by_oid(self, oid: int) -> Optional[str]:
+        result = self._static.get_device_id_by_oid(oid)
+        if result is not None:
+            return result
+        full_name = self._dynamic_reverse_oid.get(oid)
+        if not full_name:
+            return None
+        if "." in full_name:
+            return full_name.split(".", 1)[0]
+        return self._dynamic_point_to_device.get(full_name)
+
+    def get_pid_by_type(self, pid_type: str) -> int:
+        return self._static.get_pid_by_type(pid_type)
