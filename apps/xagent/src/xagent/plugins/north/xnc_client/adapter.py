@@ -1,4 +1,4 @@
-"""XNC Adapters - JSON and Protobuf format adapters"""
+"""XNC Adapters - JSON and Protobuf format adapters using unified mapping"""
 
 import json
 import logging
@@ -6,18 +6,18 @@ from typing import Any, Dict, List, Optional, Union
 
 from xagent.xcore.storage.interface import Reading
 
-from .generated import MessageType, errorCode, apiMsg
+from .generated import MessageType, apiMsg
 from .codec import ProtobufCodec
-from .mapping import DeviceMapper
+from .mapping import DeviceMapper, EncodedReading, DecodedMessage
 
 logger = logging.getLogger(__name__)
 
 
 class XNCJsonAdapter:
     """
-    XNC JSON 数据适配器 - 符合 DataAdapter 协议
+    XNC JSON Data Adapter - Conforms to DataAdapter protocol
     
-    将 Reading 数据适配为 XNC JSON 格式。
+    Adapts Reading data to XNC JSON format.
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -26,21 +26,8 @@ class XNCJsonAdapter:
         self._include_metadata = self.config.get("include_metadata", True)
         self._include_quality = self.config.get("include_quality", True)
     
-    def adapt_upload(
-        self,
-        readings: List[Reading],
-        context: Dict[str, Any]
-    ) -> Any:
-        """
-        适配上传数据
-        
-        Args:
-            readings: Reading 对象列表
-            context: 上下文信息
-        
-        Returns:
-            适配后的数据
-        """
+    def adapt_upload(self, readings: List[Reading], context: Dict[str, Any]) -> Any:
+        """Adapt upload data"""
         if not readings:
             return None
         
@@ -49,42 +36,16 @@ class XNCJsonAdapter:
         else:
             return self._adapt_batch_readings(readings)
     
-    def adapt_command(
-        self,
-        command_data: Dict[str, Any],
-        context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        适配下行命令
-        
-        Args:
-            command_data: 命令数据
-            context: 上下文信息
-        
-        Returns:
-            适配后的命令数据
-        """
+    def adapt_command(self, command_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Adapt command data"""
         return {
             "asset": command_data.get("asset"),
             "data": command_data.get("data", {}),
             "timestamp": context.get("timestamp"),
         }
     
-    def parse_response(
-        self,
-        response: Any,
-        context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        解析响应数据
-        
-        Args:
-            response: 原始响应
-            context: 上下文信息
-        
-        Returns:
-            解析后的数据字典
-        """
+    def parse_response(self, response: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse response data"""
         if isinstance(response, dict):
             return response
         
@@ -103,7 +64,7 @@ class XNCJsonAdapter:
         return {"raw": str(response)}
     
     def _adapt_single_reading(self, reading: Reading) -> Dict[str, Any]:
-        """适配单个 Reading"""
+        """Adapt single Reading"""
         points = self._extract_points(reading)
         
         payload = {
@@ -118,7 +79,7 @@ class XNCJsonAdapter:
         return payload
     
     def _adapt_batch_readings(self, readings: List[Reading]) -> Dict[str, Any]:
-        """适配批量 Reading"""
+        """Adapt batch Readings"""
         grouped = {}
         for reading in readings:
             if reading.asset not in grouped:
@@ -138,7 +99,7 @@ class XNCJsonAdapter:
         }
     
     def _extract_points(self, reading: Reading) -> List[Dict[str, Any]]:
-        """提取点位数据"""
+        """Extract point data"""
         points = []
         
         if reading.standard_points:
@@ -167,7 +128,7 @@ class XNCJsonAdapter:
         return points
     
     def _infer_data_type(self, value: Any) -> str:
-        """推断数据类型"""
+        """Infer data type"""
         if isinstance(value, bool):
             return "bool"
         elif isinstance(value, int):
@@ -184,76 +145,76 @@ class XNCJsonAdapter:
             return "unknown"
     
     def _format_timestamp(self, timestamp: float) -> Any:
-        """格式化时间戳"""
+        """Format timestamp"""
         if self._timestamp_format == "iso":
             from datetime import datetime
             return datetime.fromtimestamp(timestamp).isoformat()
         return timestamp
     
     def to_json(self, payload: Any) -> str:
-        """转换为 JSON 字符串"""
+        """Convert to JSON string"""
         return json.dumps(payload, ensure_ascii=False)
 
 
 class XNCProtobufAdapter:
     """
-    XNC Protobuf 数据适配器 - 符合 DataAdapter 协议
+    XNC Protobuf Data Adapter - Conforms to DataAdapter protocol
     
-    将 Reading 数据适配为 XNC Protobuf 格式。
+    Uses DeviceMapper for bidirectional mapping between:
+    - Internal format: point_name, device_id
+    - External format: oid, vdID
+    
+    Design principle:
+    - DeviceMapper: responsible for mapping + encoding (encode_reading, decode_message)
+    - XNCProtobufAdapter: responsible for data format conversion (adapt_upload, parse_response)
+    
+    Usage:
+        # Upload direction
+        messages = adapter.adapt_upload(readings, context)
+        
+        # Download direction
+        parsed = adapter.parse_response(msg, context)
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        mapper: Optional[DeviceMapper] = None,
+        config: Optional[Dict[str, Any]] = None
+    ):
+        self._mapper = mapper or DeviceMapper(config=config)
         self.config = config or {}
         self._uuid = self.config.get("uuid", 0)
-        self._batch_size = self.config.get("batch_size", 50)
-        self._mapper = DeviceMapper(self.config.get("mapping_config", {}))
     
-    def adapt_upload(
-        self,
-        readings: List[Reading],
-        context: Dict[str, Any]
-    ) -> Union[apiMsg, List[apiMsg], None]:
-        """
-        适配上传数据
+    @property
+    def mapper(self) -> DeviceMapper:
+        """Get the underlying mapper"""
+        return self._mapper
+    
+    def adapt_upload(self, readings: List[Reading], context: Dict[str, Any]) -> Union[apiMsg, List[apiMsg], None]:
+        """Adapt upload data using DeviceMapper.encode_reading()
         
-        Args:
-            readings: Reading 对象列表
-            context: 上下文信息
-        
-        Returns:
-            适配后的 Protobuf 消息
+        This method delegates all mapping logic to DeviceMapper.encode_reading()
+        and only handles the conversion to Protobuf messages.
         """
         if not readings:
             return None
         
         if len(readings) == 1:
-            return self._adapt_single_reading(readings[0])
-        else:
-            return self._adapt_batch_readings(readings)
+            encoded = self._mapper.encode_reading(readings[0])
+            return encoded.to_message(self._uuid)
+        
+        return self._adapt_batch_readings(readings)
     
-    def adapt_command(
-        self,
-        command_data: Dict[str, Any],
-        context: Dict[str, Any]
-    ) -> apiMsg:
-        """
-        适配下行命令
-        
-        Args:
-            command_data: 命令数据
-            context: 上下文信息
-        
-        Returns:
-            适配后的 Protobuf 消息
-        """
+    def adapt_command(self, command_data: Dict[str, Any], context: Dict[str, Any]) -> apiMsg:
+        """Adapt command data"""
         device_id = command_data.get("asset")
         data = command_data.get("data", {})
         
-        vdid = self._mapper.get_vd_id(device_id)
+        vdid = self._mapper.encode_device(device_id)
         
         objects = []
         for point_name, value in data.items():
-            oid = self._mapper.get_oid(point_name, device_id)
+            oid = self._mapper.encode_point(point_name, device_id)
             pid = self._mapper.get_pid_by_type("point_value")
             
             prop = ProtobufCodec.create_property(pid, value)
@@ -267,198 +228,43 @@ class XNCProtobufAdapter:
             objects=objects
         )
     
-    def parse_response(
-        self,
-        response: Any,
-        context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        解析响应数据
+    def parse_response(self, response: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse response using DeviceMapper.decode_message()
         
-        Args:
-            response: 原始响应（apiMsg）
-            context: 上下文信息
-        
-        Returns:
-            解析后的数据字典
+        This method delegates all decoding logic to DeviceMapper.decode_message()
+        and only handles the conversion to dictionary format.
         """
         if not isinstance(response, apiMsg):
             return {"raw": str(response)}
         
-        msg = response
-        device_id = self._mapper.get_device_id_by_vdid(msg.vdID)
+        decoded = self._mapper.decode_message(response)
         
-        result = {
-            "uuid": msg.uuid,
-            "cmdID": msg.cmdID,
-            "vdID": msg.vdID,
-            "status": msg.status,
-            "device_id": device_id,
-            "data": {}
+        return {
+            "uuid": decoded.uuid,
+            "cmdID": decoded.command,
+            "vdID": decoded.raw_msg.vdID if decoded.raw_msg else None,
+            "status": decoded.raw_msg.status if decoded.raw_msg else None,
+            "device_id": decoded.device_id,
+            "data": decoded.data
         }
-        
-        for obj in msg.opv:
-            point_name = self._mapper.get_point_name_by_oid(obj.oid)
-            
-            for prop in obj.pv:
-                value = ProtobufCodec.extract_data_value(prop.v)
-                if point_name:
-                    result["data"][point_name] = value
-                else:
-                    result["data"][f"oid_{obj.oid}"] = value
-        
-        return result
-    
-    def _adapt_single_reading(self, reading: Reading) -> apiMsg:
-        """适配单个 Reading"""
-        logger.debug(f"_adapt_single_reading: asset={reading.asset}, device_status={reading.device_status}")
-        
-        device_offline = reading.device_status and reading.device_status != "online"
-        
-        objects = []
-        
-        if reading.standard_points:
-            for sp in reading.standard_points:
-                point_name = sp.get("point_name", "")
-                value = sp.get("value")
-                quality = sp.get("quality", "good")
-                metadata = sp.get("metadata", {})
-                error_code = metadata.get("error_code", 10)
-                
-                oid = self._mapper.get_oid(point_name, reading.asset)
-                self._mapper.register_point_device(point_name, reading.asset)
-                
-                if device_offline or quality != "good":
-                    pid = self._mapper.get_pid_by_type("point_error")
-                    prop = ProtobufCodec.create_property(pid, error_code)
-                else:
-                    pid = self._mapper.get_pid_by_type("point_value")
-                    prop = ProtobufCodec.create_property(pid, value)
-                
-                obj = ProtobufCodec.create_object(oid, [prop])
-                objects.append(obj)
-        else:
-            for key, value in reading.data.items():
-                oid = self._mapper.get_oid(key, reading.asset)
-                self._mapper.register_point_device(key, reading.asset)
-                
-                if device_offline:
-                    pid = self._mapper.get_pid_by_type("point_error")
-                    prop = ProtobufCodec.create_property(pid, 10)
-                else:
-                    pid = self._mapper.get_pid_by_type("point_value")
-                    prop = ProtobufCodec.create_property(pid, value)
-                
-                obj = ProtobufCodec.create_object(oid, [prop])
-                objects.append(obj)
-        
-        device_status = errorCode.NO_ERROR
-        if reading.device_status:
-            if reading.device_status == "online":
-                device_status = errorCode.NO_ERROR
-            else:
-                device_status = errorCode.COMM_NETWORK_DOWN
-        
-        vdid = self._mapper.get_vd_id(reading.asset)
-        
-        msg = ProtobufCodec.create_message(
-            uuid=self._uuid,
-            cmd_id=MessageType.UPDATE_PROPERTY,
-            vd_id=vdid,
-            objects=objects,
-            status=device_status
-        )
-        
-        return msg
     
     def _adapt_batch_readings(self, readings: List[Reading]) -> List[apiMsg]:
-        """适配批量 Reading"""
-        readings_by_device = {}
-        for reading in readings:
-            if reading.asset not in readings_by_device:
-                readings_by_device[reading.asset] = []
-            readings_by_device[reading.asset].append(reading)
-        
+        """Adapt batch Readings - reuses DeviceMapper.encode_reading()"""
         messages = []
-        for device_id, device_readings in readings_by_device.items():
-            device_messages = self._adapt_device_readings_with_batch(device_id, device_readings)
-            messages.extend(device_messages)
-        
-        return messages
-    
-    def _adapt_device_readings_with_batch(self, device_id: str, readings: List[Reading]) -> List[apiMsg]:
-        """处理单个设备的多个 reading，点位超过 batch_size 时分批"""
-        all_points = []
-        device_status = None
         
         for reading in readings:
-            if reading.device_status:
-                device_status = reading.device_status
-            
-            if reading.standard_points:
-                all_points.extend(reading.standard_points)
-            else:
-                for key, value in reading.data.items():
-                    all_points.append({
-                        "point_name": key,
-                        "value": value,
-                        "quality": "good"
-                    })
-        
-        device_offline = device_status and device_status != "online"
-        
-        messages = []
-        for i in range(0, len(all_points), self._batch_size):
-            batch_points = all_points[i:i + self._batch_size]
-            
-            objects = []
-            for sp in batch_points:
-                point_name = sp.get("point_name", "")
-                value = sp.get("value")
-                quality = sp.get("quality", "good")
-                metadata = sp.get("metadata", {})
-                error_code = metadata.get("error_code", 10)
-                
-                oid = self._mapper.get_oid(point_name, device_id)
-                self._mapper.register_point_device(point_name, device_id)
-                
-                if device_offline or quality != "good":
-                    pid = self._mapper.get_pid_by_type("point_error")
-                    prop = ProtobufCodec.create_property(pid, error_code)
-                else:
-                    pid = self._mapper.get_pid_by_type("point_value")
-                    prop = ProtobufCodec.create_property(pid, value)
-                
-                obj = ProtobufCodec.create_object(oid, [prop])
-                objects.append(obj)
-            
-            status = errorCode.NO_ERROR
-            if i == 0 and device_status:
-                if device_status == "online":
-                    status = errorCode.NO_ERROR
-                else:
-                    status = errorCode.COMM_NETWORK_DOWN
-            
-            vdid = self._mapper.get_vd_id(device_id)
-            
-            msg = ProtobufCodec.create_message(
-                uuid=self._uuid,
-                cmd_id=MessageType.UPDATE_PROPERTY,
-                vd_id=vdid,
-                objects=objects,
-                status=status
-            )
-            messages.append(msg)
+            encoded = self._mapper.encode_reading(reading)
+            messages.append(encoded.to_message(self._uuid))
         
         return messages
     
     def adapt_read_request(self, device_id: str, point_names: List[str]) -> apiMsg:
-        """创建读请求消息"""
-        vdid = self._mapper.get_vd_id(device_id)
+        """Create read request message"""
+        vdid = self._mapper.encode_device(device_id)
         
         objects = []
         for point_name in point_names:
-            oid = self._mapper.get_oid(point_name, device_id)
+            oid = self._mapper.encode_point(point_name, device_id)
             pid = self._mapper.get_pid_by_type("point_value")
             
             prop = ProtobufCodec.create_property(pid, None)
@@ -472,14 +278,10 @@ class XNCProtobufAdapter:
             objects=objects
         )
     
-    def get_mapper(self) -> DeviceMapper:
-        """获取设备映射器"""
-        return self._mapper
-    
     def to_bytes(self, msg: apiMsg) -> bytes:
-        """将 Protobuf 消息转换为字节"""
+        """Convert Protobuf message to bytes"""
         return ProtobufCodec.encode_message(msg)
     
     def from_bytes(self, data: bytes) -> apiMsg:
-        """从字节解析 Protobuf 消息"""
+        """Parse bytes to Protobuf message"""
         return ProtobufCodec.decode_message(data)

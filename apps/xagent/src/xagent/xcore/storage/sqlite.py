@@ -126,6 +126,29 @@ class SQLiteStorage(StorageInterface):
                 updated_at REAL NOT NULL
             );
             
+            CREATE TABLE IF NOT EXISTS service_registry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                display_name TEXT,
+                description TEXT,
+                protocol TEXT NOT NULL,
+                connection_config TEXT NOT NULL,
+                adapter_config TEXT,
+                upload_config TEXT,
+                command_config TEXT,
+                enabled INTEGER DEFAULT 1,
+                status TEXT DEFAULT 'offline',
+                priority INTEGER DEFAULT 0,
+                metadata TEXT,
+                tags TEXT,
+                statistics TEXT,
+                config_hash TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                created_by TEXT,
+                updated_by TEXT
+            );
+            
             CREATE INDEX IF NOT EXISTS idx_device_asset ON device_registry(asset);
             CREATE INDEX IF NOT EXISTS idx_device_status ON device_registry(status);
             CREATE INDEX IF NOT EXISTS idx_device_enabled ON device_registry(enabled);
@@ -135,6 +158,29 @@ class SQLiteStorage(StorageInterface):
             CREATE INDEX IF NOT EXISTS idx_point_enabled ON point_registry(enabled);
             CREATE INDEX IF NOT EXISTS idx_plugin_name ON plugin_registry(name);
             CREATE INDEX IF NOT EXISTS idx_plugin_type ON plugin_registry(type);
+            CREATE INDEX IF NOT EXISTS idx_service_name ON service_registry(name);
+            CREATE INDEX IF NOT EXISTS idx_service_protocol ON service_registry(protocol);
+            CREATE INDEX IF NOT EXISTS idx_service_enabled ON service_registry(enabled);
+            CREATE INDEX IF NOT EXISTS idx_service_status ON service_registry(status);
+            
+            CREATE TABLE IF NOT EXISTS mapping_registry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                service_name TEXT NOT NULL,
+                mapping_type TEXT NOT NULL,
+                internal_name TEXT NOT NULL,
+                external_id TEXT,
+                device_id TEXT,
+                description TEXT,
+                enabled INTEGER DEFAULT 1,
+                created_at REAL,
+                updated_at REAL,
+                UNIQUE(service_name, mapping_type, internal_name)
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_mapping_service ON mapping_registry(service_name);
+            CREATE INDEX IF NOT EXISTS idx_mapping_type ON mapping_registry(mapping_type);
+            CREATE INDEX IF NOT EXISTS idx_mapping_internal ON mapping_registry(internal_name);
+            CREATE INDEX IF NOT EXISTS idx_mapping_external ON mapping_registry(external_id);
             
             CREATE TABLE IF NOT EXISTS config_versions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

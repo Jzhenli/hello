@@ -1,3 +1,5 @@
+"""北向通道服务 - 数据库为中心的配置管理"""
+
 import logging
 import time
 import asyncio
@@ -6,65 +8,192 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+import aiosqlite
+
 from ..models.north_channel import (
     NorthChannelConfig,
     NorthChannelStatus,
     NorthChannelProtocol,
-    NorthChannelStatistics
+    NorthChannelStatistics,
+    NorthChannelConnection,
+    NorthChannelAdapter,
+    NorthChannelUploadStrategy
 )
+from ...config.config_repository import ServiceRepository, ServiceConfig
+from ...core.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)
 
 
 class NorthChannelService:
-    """北向通道服务 - 管理北向通道配置和状态"""
+    """北向通道服务 - 数据库为中心的配置管理
     
-    def __init__(self, config_dir: Optional[Path] = None):
-        self._channels: Dict[str, NorthChannelConfig] = {}
-        self._config_file = config_dir / "north_channels.json" if config_dir else Path("config/north_channels.json")
-        self._plugin_instances: Dict[str, Any] = {}
+    职责：
+    - 北向通道配置的 CRUD 操作
+    - 通道状态管理
+    - 插件实例生命周期管理
+    """
+    
+    def __init__(
+        self,
+        db: aiosqlite.Connection,
+        plugin_loader: Optional[PluginLoader] = None
+    ):
+        """初始化服务
         
-    async def initialize(self):
-        """初始化服务，加载配置"""
-        await self._load_config()
-        logger.info(f"NorthChannelService initialized with {len(self._channels)} channels")
+        Args:
+            db: 数据库连接
+            plugin_loader: 插件加载器（可选）
+        """
+        self._db = db
+        self._plugin_loader = plugin_loader
+        self._service_repo = ServiceRepository(db)
+        self._cache: Dict[str, NorthChannelConfig] = {}
     
-    async def _load_config(self):
-        """从配置文件加载通道配置"""
-        if not self._config_file.exists():
-            logger.info(f"Config file {self._config_file} not found, starting with empty channels")
-            return
+    async def initialize(self) -> None:
+        """初始化服务，从数据库加载配置到缓存"""
+        await self._load_cache()
+        logger.info(f"NorthChannelService initialized with {len(self._cache)} channels")
+    
+    async def _load_cache(self) -> None:
+        """从数据库加载配置到内存缓存"""
+        services = await self._service_repo.list_services()
+        self._cache.clear()
+        for service in services:
+            try:
+                channel = self._service_to_channel(service)
+                self._cache[channel.id] = channel
+            except Exception as e:
+                logger.error(f"Failed to load service {service.name}: {e}")
         
-        try:
-            with open(self._config_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            for channel_data in data.get('channels', []):
-                try:
-                    channel = NorthChannelConfig(**channel_data)
-                    self._channels[channel.id] = channel
-                except Exception as e:
-                    logger.error(f"Failed to load channel {channel_data.get('id')}: {e}")
-            
-            logger.info(f"Loaded {len(self._channels)} channels from {self._config_file}")
-        except Exception as e:
-            logger.error(f"Failed to load config file: {e}")
+        logger.info(f"Loaded {len(self._cache)} channels from database")
     
-    async def _save_config(self):
-        """保存配置到文件"""
-        try:
-            self._config_file.parent.mkdir(parents=True, exist_ok=True)
+    def _service_to_channel(self, service: ServiceConfig) -> NorthChannelConfig:
+        """将 ServiceConfig 转换为 NorthChannelConfig
+        
+        Args:
+            service: 服务配置
             
-            data = {
-                'channels': [channel.model_dump() for channel in self._channels.values()]
-            }
+        Returns:
+            北向通道配置
+        """
+        conn_config = service.connection_config
+        
+        connection = NorthChannelConnection(
+            host=conn_config.get("host", "localhost"),
+            port=conn_config.get("port", 1883),
+            username=conn_config.get("username"),
+            password=conn_config.get("password"),
+            mqtt=conn_config.get("mqtt"),
+            xnc=conn_config.get("xnc"),
+            http=conn_config.get("http")
+        )
+        
+        adapter_data = service.adapter_config or {}
+        adapter = NorthChannelAdapter(
+            type=adapter_data.get("type", "default"),
+            config=adapter_data.get("config", {})
+        )
+        
+        upload_data = service.upload_config or {}
+        upload_strategy = NorthChannelUploadStrategy(
+            immediate_upload=upload_data.get("immediate_upload", True),
+            batch_size=upload_data.get("batch_size", 100),
+            interval=upload_data.get("interval", 5),
+            retry_times=upload_data.get("retry_times", 3),
+            retry_interval=upload_data.get("retry_interval")
+        )
+        
+        statistics = None
+        if service.statistics:
+            statistics = NorthChannelStatistics(**service.statistics)
+        
+        protocol_map = {
+            "mqtt": NorthChannelProtocol.MQTT,
+            "xnc": NorthChannelProtocol.XNC,
+            "http": NorthChannelProtocol.HTTP,
+            "custom": NorthChannelProtocol.CUSTOM
+        }
+        
+        status_map = {
+            "online": NorthChannelStatus.ONLINE,
+            "offline": NorthChannelStatus.OFFLINE,
+            "error": NorthChannelStatus.ERROR
+        }
+        
+        return NorthChannelConfig(
+            id=service.name,
+            name=service.display_name or service.name,
+            description=service.description,
+            enabled=service.enabled,
+            protocol=protocol_map.get(service.protocol, NorthChannelProtocol.CUSTOM),
+            status=status_map.get(service.status, NorthChannelStatus.OFFLINE),
+            connection=connection,
+            adapter=adapter,
+            upload_strategy=upload_strategy,
+            statistics=statistics,
+            tags=service.tags,
+            created_at=datetime.fromtimestamp(service.created_at).isoformat() if service.created_at else None,
+            updated_at=datetime.fromtimestamp(service.updated_at).isoformat() if service.updated_at else None
+        )
+    
+    def _channel_to_service(self, channel: NorthChannelConfig, user: Optional[str] = None) -> ServiceConfig:
+        """将 NorthChannelConfig 转换为 ServiceConfig
+        
+        Args:
+            channel: 北向通道配置
+            user: 操作用户
             
-            with open(self._config_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            
-            logger.info(f"Saved {len(self._channels)} channels to {self._config_file}")
-        except Exception as e:
-            logger.error(f"Failed to save config file: {e}")
+        Returns:
+            服务配置
+        """
+        connection_config = {
+            "host": channel.connection.host,
+            "port": channel.connection.port,
+            "username": channel.connection.username,
+            "password": channel.connection.password,
+            "mqtt": channel.connection.mqtt.model_dump() if channel.connection.mqtt else None,
+            "xnc": channel.connection.xnc.model_dump() if channel.connection.xnc else None,
+            "http": channel.connection.http.model_dump() if channel.connection.http else None
+        }
+        
+        adapter_config = {
+            "type": channel.adapter.type,
+            "config": channel.adapter.config
+        }
+        
+        upload_config = {
+            "immediate_upload": channel.upload_strategy.immediate_upload,
+            "batch_size": channel.upload_strategy.batch_size,
+            "interval": channel.upload_strategy.interval,
+            "retry_times": channel.upload_strategy.retry_times,
+            "retry_interval": channel.upload_strategy.retry_interval
+        }
+        
+        command_config = {}
+        
+        statistics_dict = None
+        if channel.statistics:
+            statistics_dict = channel.statistics.model_dump()
+        
+        return ServiceConfig(
+            name=channel.id,
+            protocol=channel.protocol.value,
+            display_name=channel.name,
+            description=channel.description,
+            connection_config=connection_config,
+            adapter_config=adapter_config,
+            upload_config=upload_config,
+            command_config=command_config,
+            enabled=channel.enabled,
+            status=channel.status.value if channel.status else "offline",
+            priority=0,
+            metadata={},
+            tags=channel.tags,
+            statistics=statistics_dict,
+            created_by=user,
+            updated_by=user
+        )
     
     async def list_channels(
         self,
@@ -84,7 +213,7 @@ class NorthChannelService:
         Returns:
             通道列表
         """
-        channels = list(self._channels.values())
+        channels = list(self._cache.values())
         
         if status:
             channels = [c for c in channels if c.status == status]
@@ -109,13 +238,18 @@ class NorthChannelService:
         Returns:
             通道配置
         """
-        return self._channels.get(channel_id)
+        return self._cache.get(channel_id)
     
-    async def create_channel(self, channel: NorthChannelConfig) -> NorthChannelConfig:
+    async def create_channel(
+        self,
+        channel: NorthChannelConfig,
+        user: Optional[str] = None
+    ) -> NorthChannelConfig:
         """创建通道
         
         Args:
             channel: 通道配置
+            user: 操作用户
             
         Returns:
             创建的通道
@@ -123,29 +257,38 @@ class NorthChannelService:
         Raises:
             ValueError: 通道已存在
         """
-        if channel.id in self._channels:
+        if channel.id in self._cache:
             raise ValueError(f"Channel '{channel.id}' already exists")
         
-        channel.created_at = datetime.now().isoformat()
-        channel.updated_at = datetime.now().isoformat()
+        now = datetime.now()
+        channel.created_at = now.isoformat()
+        channel.updated_at = now.isoformat()
         channel.status = NorthChannelStatus.OFFLINE
         
-        self._channels[channel.id] = channel
-        await self._save_config()
+        service = self._channel_to_service(channel, user)
+        created_service = await self._service_repo.create_service(service, user)
+        
+        created_channel = self._service_to_channel(created_service)
+        self._cache[created_channel.id] = created_channel
+        
+        if channel.enabled and self._plugin_loader:
+            await self._load_channel_plugin(created_channel)
         
         logger.info(f"Created channel: {channel.id}")
-        return channel
+        return created_channel
     
     async def update_channel(
         self,
         channel_id: str,
-        updates: Dict[str, Any]
+        updates: Dict[str, Any],
+        user: Optional[str] = None
     ) -> NorthChannelConfig:
         """更新通道
         
         Args:
             channel_id: 通道ID
             updates: 更新内容
+            user: 操作用户
             
         Returns:
             更新后的通道
@@ -153,44 +296,63 @@ class NorthChannelService:
         Raises:
             ValueError: 通道不存在
         """
-        if channel_id not in self._channels:
+        if channel_id not in self._cache:
             raise ValueError(f"Channel '{channel_id}' not found")
         
-        channel = self._channels[channel_id]
+        updated_service = await self._service_repo.update_service(channel_id, updates, user)
         
-        for field, value in updates.items():
-            if hasattr(channel, field):
-                setattr(channel, field, value)
+        updated_channel = self._service_to_channel(updated_service)
+        self._cache[channel_id] = updated_channel
         
-        channel.updated_at = datetime.now().isoformat()
+        if self._plugin_loader:
+            old_enabled = self._cache.get(channel_id, NorthChannelConfig(id="", name="", protocol=NorthChannelProtocol.MQTT, connection=NorthChannelConnection(host="", port=0))).enabled
+            new_enabled = updated_channel.enabled
+            
+            if old_enabled and not new_enabled:
+                await self._unload_channel_plugin(channel_id)
+            elif not old_enabled and new_enabled:
+                await self._load_channel_plugin(updated_channel)
+            elif new_enabled:
+                await self._reload_channel_plugin(updated_channel)
         
-        await self._save_config()
         logger.info(f"Updated channel: {channel_id}")
-        
-        return channel
+        return updated_channel
     
-    async def delete_channel(self, channel_id: str):
+    async def delete_channel(
+        self,
+        channel_id: str,
+        user: Optional[str] = None
+    ) -> None:
         """删除通道
         
         Args:
             channel_id: 通道ID
+            user: 操作用户
             
         Raises:
             ValueError: 通道不存在
         """
-        if channel_id not in self._channels:
+        if channel_id not in self._cache:
             raise ValueError(f"Channel '{channel_id}' not found")
         
-        del self._channels[channel_id]
-        await self._save_config()
+        if self._plugin_loader:
+            await self._unload_channel_plugin(channel_id)
+        
+        await self._service_repo.delete_service(channel_id, user)
+        del self._cache[channel_id]
         
         logger.info(f"Deleted channel: {channel_id}")
     
-    async def toggle_channel(self, channel_id: str) -> NorthChannelConfig:
+    async def toggle_channel(
+        self,
+        channel_id: str,
+        user: Optional[str] = None
+    ) -> NorthChannelConfig:
         """切换通道启用状态
         
         Args:
             channel_id: 通道ID
+            user: 操作用户
             
         Returns:
             更新后的通道
@@ -199,13 +361,34 @@ class NorthChannelService:
         if not channel:
             raise ValueError(f"Channel '{channel_id}' not found")
         
-        channel.enabled = not channel.enabled
-        channel.updated_at = datetime.now().isoformat()
+        return await self.update_channel(
+            channel_id,
+            {"enabled": not channel.enabled},
+            user
+        )
+    
+    async def update_status(
+        self,
+        channel_id: str,
+        status: NorthChannelStatus,
+        statistics: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """更新通道状态
         
-        await self._save_config()
-        logger.info(f"Toggled channel {channel_id}: enabled={channel.enabled}")
+        Args:
+            channel_id: 通道ID
+            status: 新状态
+            statistics: 统计信息
+        """
+        if channel_id not in self._cache:
+            return
         
-        return channel
+        await self._service_repo.update_status(channel_id, status.value, statistics)
+        
+        channel = self._cache[channel_id]
+        channel.status = status
+        if statistics:
+            channel.statistics = NorthChannelStatistics(**statistics)
     
     async def test_connection(self, channel_id: str) -> Dict[str, Any]:
         """测试通道连接
@@ -329,6 +512,9 @@ class NorthChannelService:
         if not channel:
             raise ValueError(f"Channel '{channel_id}' not found")
         
+        if self._plugin_loader:
+            await self._reload_channel_plugin(channel)
+        
         logger.info(f"Restarting channel: {channel_id}")
         
         return {
@@ -353,12 +539,14 @@ class NorthChannelService:
     
     async def batch_create_channels(
         self,
-        channels: List[NorthChannelConfig]
+        channels: List[NorthChannelConfig],
+        user: Optional[str] = None
     ) -> Dict[str, Any]:
         """批量创建通道
         
         Args:
             channels: 通道列表
+            user: 操作用户
             
         Returns:
             批量操作结果
@@ -369,7 +557,7 @@ class NorthChannelService:
         
         for channel in channels:
             try:
-                await self.create_channel(channel)
+                await self.create_channel(channel, user)
                 succeeded += 1
                 details.append({
                     "id": channel.id,
@@ -390,3 +578,78 @@ class NorthChannelService:
             "failed": failed,
             "details": details
         }
+    
+    async def _load_channel_plugin(self, channel: NorthChannelConfig) -> None:
+        """加载通道插件实例
+        
+        Args:
+            channel: 通道配置
+        """
+        if not self._plugin_loader:
+            return
+        
+        try:
+            plugin_config = {
+                **channel.connection_config,
+                **channel.upload_config,
+                "adapter_config": channel.adapter_config,
+                **channel.command_config
+            }
+            
+            plugin_info = await self._plugin_loader.load_plugin(
+                plugin_type="north",
+                name=channel.protocol.value,
+                config=plugin_config
+            )
+            
+            if plugin_info:
+                await self._plugin_loader.start_plugin(plugin_info.plugin_id)
+                await self.update_status(channel.id, NorthChannelStatus.ONLINE)
+                logger.info(f"Plugin loaded for channel {channel.id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load plugin for channel {channel.id}: {e}")
+            await self.update_status(channel.id, NorthChannelStatus.ERROR)
+    
+    async def _unload_channel_plugin(self, channel_id: str) -> None:
+        """卸载通道插件实例
+        
+        Args:
+            channel_id: 通道ID
+        """
+        if not self._plugin_loader:
+            return
+        
+        try:
+            plugins = self._plugin_loader.get_all_plugins()
+            
+            for plugin in plugins:
+                if plugin.config.get("channel_id") == channel_id:
+                    await self._plugin_loader.stop_plugin(plugin.plugin_id)
+                    await self._plugin_loader.unload_plugin(plugin.plugin_id)
+                    await self.update_status(channel_id, NorthChannelStatus.OFFLINE)
+                    logger.info(f"Plugin unloaded for channel {channel_id}")
+                    break
+            
+        except Exception as e:
+            logger.error(f"Failed to unload plugin for channel {channel_id}: {e}")
+    
+    async def _reload_channel_plugin(self, channel: NorthChannelConfig) -> None:
+        """重新加载通道插件实例
+        
+        Args:
+            channel: 通道配置
+        """
+        await self._unload_channel_plugin(channel.id)
+        await self._load_channel_plugin(channel)
+    
+    async def load_all_plugins(self) -> None:
+        """加载所有启用的通道插件"""
+        for channel in self._cache.values():
+            if channel.enabled:
+                await self._load_channel_plugin(channel)
+    
+    async def unload_all_plugins(self) -> None:
+        """卸载所有通道插件"""
+        for channel_id in list(self._cache.keys()):
+            await self._unload_channel_plugin(channel_id)

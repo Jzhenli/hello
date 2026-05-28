@@ -13,24 +13,33 @@ from ..models.north_channel import (
     NorthChannelProtocol
 )
 from ..services.north_channel_service import NorthChannelService
-from ..dependencies import get_app_state
+from ..dependencies import get_app_state, AppState
 from .config import verify_api_token
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/channels", tags=["North Channels"])
 
-_north_channel_service: Optional[NorthChannelService] = None
 
-
-def get_north_channel_service() -> NorthChannelService:
-    """获取北向通道服务实例"""
-    global _north_channel_service
+def get_north_channel_service(state: AppState = Depends(get_app_state)) -> NorthChannelService:
+    """获取北向通道服务实例
     
-    if _north_channel_service is None:
-        _north_channel_service = NorthChannelService()
+    从应用状态获取数据库连接和插件加载器来初始化服务。
+    """
+    if not state.metadata_manager:
+        raise HTTPException(
+            status_code=500,
+            detail="Metadata manager not initialized"
+        )
     
-    return _north_channel_service
+    plugin_loader = None
+    if state.gateway:
+        plugin_loader = state.gateway.plugin_loader
+    
+    return NorthChannelService(
+        db=state.metadata_manager.db,
+        plugin_loader=plugin_loader
+    )
 
 
 def handle_value_error(e: ValueError) -> HTTPException:

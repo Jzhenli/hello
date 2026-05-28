@@ -1,13 +1,13 @@
-"""设备加载服务（数据库为中心）
+"""设备和服务加载服务（数据库为中心）
 
-负责在启动时从数据库加载设备并启动插件实例。
+负责在启动时从数据库加载设备和服务并启动插件实例。
 数据库是唯一数据源。
 """
 
 import logging
 from typing import List, Optional, TYPE_CHECKING
 
-from ...config.config_repository import ConfigRepository
+from ...config.config_repository import ConfigRepository, ServiceRepository, ServiceConfig
 from ...core.plugin_loader import PluginType
 from ...domain.models import PluginStartupResult
 
@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceLoader:
-    """设备加载服务（数据库为中心）
+    """设备和服务加载服务（数据库为中心）
     
-    在系统启动时从数据库加载设备并启动插件实例。
+    在系统启动时从数据库加载设备和服务并启动插件实例。
     数据库是唯一数据源。
     """
     
@@ -56,16 +56,24 @@ class DeviceLoader:
         self.plugin_loader = plugin_loader
         self.orchestrator = orchestrator
         self.config_repo: Optional[ConfigRepository] = None
+        self.service_repo: Optional[ServiceRepository] = None
     
     async def load_all_devices(self) -> None:
-        """加载所有设备
+        """加载所有设备和服务
         
-        从数据库加载所有启用的设备并启动插件实例。
+        从数据库加载所有启用的设备和服务并启动插件实例。
         """
-        logger.info("Loading devices from database...")
+        logger.info("Loading devices and services from database...")
         
         self.config_repo = ConfigRepository(self.metadata_manager.db)
+        self.service_repo = ServiceRepository(self.metadata_manager.db)
         
+        await self._load_south_devices()
+        
+        await self._load_north_services()
+    
+    async def _load_south_devices(self) -> None:
+        """加载南向设备"""
         devices = await self.config_repo.list_devices(enabled=True)
         
         if not devices:
@@ -73,24 +81,28 @@ class DeviceLoader:
             self._check_legacy_yaml_devices()
             return
         
-        logger.info(f"Found {len(devices)} enabled devices in database")
-        
         south_devices = [
             d for d in devices 
             if self._get_plugin_type(d.plugin_name) == PluginType.SOUTH
         ]
-        north_devices = [
-            d for d in devices 
-            if self._get_plugin_type(d.plugin_name) == PluginType.NORTH
-        ]
         
-        logger.info(f"Loading {len(south_devices)} south devices and {len(north_devices)} north devices")
+        logger.info(f"Found {len(south_devices)} enabled south devices in database")
         
         for device in south_devices:
             await self._load_device(device, PluginType.SOUTH)
+    
+    async def _load_north_services(self) -> None:
+        """加载北向服务"""
+        services = await self.service_repo.list_services(enabled=True)
         
-        for device in north_devices:
-            await self._load_device(device, PluginType.NORTH)
+        if not services:
+            logger.info("No enabled north services found in database")
+            return
+        
+        logger.info(f"Found {len(services)} enabled north services in database")
+        
+        for service in services:
+            await self._load_service(service)
     
     def _check_legacy_yaml_devices(self) -> None:
         """检测用户配置目录下是否残留 YAML 设备文件
@@ -164,6 +176,58 @@ class DeviceLoader:
                 stage="load"
             ))
     
+    async def _load_service(self, service: ServiceConfig) -> None:
+        """加载单个北向服务
+        
+        加载服务配置并创建插件实例。
+        
+        Args:
+            service: 服务配置
+        """
+        try:
+            plugin_config = {
+                **service.connection_config,
+                **service.upload_config,
+                'adapter_config': service.adapter_config,
+                **service.command_config,
+                'channel_id': service.name
+            }
+            
+            plugin_info = await self.plugin_loader.load_plugin(
+                PluginType.NORTH,
+                service.protocol,
+                plugin_config
+            )
+            
+            if plugin_info:
+                self.orchestrator._startup_results.append(PluginStartupResult(
+                    name=service.name,
+                    plugin_type=PluginType.NORTH.value,
+                    success=True,
+                    stage="load",
+                    plugin_id=plugin_info.plugin_id
+                ))
+                
+                await self.service_repo.update_status(service.name, "online")
+                
+                logger.info(f"Service '{service.name}' loaded (protocol: {service.protocol}, id: {plugin_info.plugin_id})")
+            else:
+                raise RuntimeError(f"Plugin load returned None for service {service.name}")
+                
+        except Exception as e:
+            logger.error(f"Failed to load service '{service.name}': {e}")
+            
+            if self.service_repo:
+                await self.service_repo.update_status(service.name, "error")
+            
+            self.orchestrator._startup_results.append(PluginStartupResult(
+                name=service.name,
+                plugin_type=PluginType.NORTH.value,
+                success=False,
+                error_message=str(e),
+                stage="load"
+            ))
+    
     def _get_plugin_type(self, plugin_name: str) -> PluginType:
         """判断插件类型
         
@@ -222,6 +286,38 @@ class DeviceLoader:
             logger.error(f"Failed to reload device '{asset}': {e}")
             return False
     
+    async def reload_service(self, name: str) -> bool:
+        """重新加载单个北向服务
+        
+        用于服务配置变更后重新加载。
+        
+        Args:
+            name: 服务名称
+            
+        Returns:
+            是否成功
+        """
+        if not self.service_repo:
+            self.service_repo = ServiceRepository(self.metadata_manager.db)
+        
+        try:
+            service = await self.service_repo.get_service(name)
+            
+            if not service:
+                logger.warning(f"Service '{name}' not found, cannot reload")
+                return False
+            
+            await self._unload_service_plugin(name)
+            
+            await self._load_service(service)
+            
+            logger.info(f"Service '{name}' reloaded successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to reload service '{name}': {e}")
+            return False
+    
     async def unload_device(self, asset: str) -> bool:
         """卸载设备
         
@@ -243,6 +339,27 @@ class DeviceLoader:
             logger.error(f"Failed to unload device '{asset}': {e}")
             return False
     
+    async def unload_service(self, name: str) -> bool:
+        """卸载北向服务
+        
+        用于服务删除后卸载插件实例。
+        
+        Args:
+            name: 服务名称
+            
+        Returns:
+            是否成功
+        """
+        try:
+            await self._unload_service_plugin(name)
+            
+            logger.info(f"Service '{name}' unloaded successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to unload service '{name}': {e}")
+            return False
+    
     async def _unload_device_plugin(self, asset: str) -> None:
         """卸载设备插件实例"""
         plugins = self.plugin_loader.get_all_plugins()
@@ -252,4 +369,19 @@ class DeviceLoader:
                 await self.plugin_loader.stop_plugin(plugin.plugin_id)
                 await self.plugin_loader.unload_plugin(plugin.plugin_id)
                 logger.info(f"Plugin unloaded for device {asset}")
+                break
+    
+    async def _unload_service_plugin(self, name: str) -> None:
+        """卸载服务插件实例"""
+        plugins = self.plugin_loader.get_all_plugins()
+        
+        for plugin in plugins:
+            if plugin.config.get('channel_id') == name:
+                await self.plugin_loader.stop_plugin(plugin.plugin_id)
+                await self.plugin_loader.unload_plugin(plugin.plugin_id)
+                
+                if self.service_repo:
+                    await self.service_repo.update_status(name, "offline")
+                
+                logger.info(f"Plugin unloaded for service {name}")
                 break

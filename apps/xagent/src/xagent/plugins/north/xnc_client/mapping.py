@@ -1,73 +1,370 @@
-"""Device and Point Mapping - Maps device IDs and points to Protobuf IDs"""
+"""Device and Point Mapping - Bidirectional mapping with symmetric API"""
 
+import asyncio
 import logging
 import os
-from typing import Any, Dict, Optional
+import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+from .generated import MessageType, errorCode, apiMsg
+from .codec import ProtobufCodec
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class EncodedReading:
+    """Encoded reading for Protobuf transmission"""
+    vdid: int
+    points: List[Dict[str, Any]]
+    device_status: str = "online"
+    
+    def to_message(self, uuid: int = 0) -> apiMsg:
+        """Convert to Protobuf message"""
+        objects = []
+        for pt in self.points:
+            prop = ProtobufCodec.create_property(pt["pid"], pt["value"])
+            obj = ProtobufCodec.create_object(pt["oid"], [prop])
+            objects.append(obj)
+        
+        status = errorCode.NO_ERROR if self.device_status == "online" else errorCode.COMM_NETWORK_DOWN
+        
+        return ProtobufCodec.create_message(
+            uuid=uuid,
+            cmd_id=MessageType.UPDATE_PROPERTY,
+            vd_id=self.vdid,
+            objects=objects,
+            status=status
+        )
+
+
+@dataclass
+class DecodedMessage:
+    """Decoded Protobuf message"""
+    device_id: Optional[str]
+    command: int
+    data: Dict[str, Any]
+    uuid: int = 0
+    raw_msg: Optional[apiMsg] = None
+
+
 class DeviceMapper:
-    """Device and point mapping manager
+    """
+    Device and point mapper - Bidirectional mapping with symmetric API
     
-    Maps:
-    - point_name (点位名称) -> oid (Protobuf object ID)
-    - point_name (点位名称) -> pid (Protobuf property ID)
-    - device_id (设备ID) -> vdID (Protobuf virtual device ID)
+    Design principles:
+    - Symmetric naming: encode_xxx / decode_xxx
+    - Stateless mapping: method parameters contain all necessary info
+    - Auto persistence: new mappings auto-save to database
     
-    Supports namespace for point mapping:
-    - Format 1: "device_id.point_name" (recommended, supports duplicate point names across devices)
-    - Format 2: "point_name" (backward compatible, for unique point names)
-    
-    Config format:
-        pid:
-            point_value: 85       # 点位正常值上报的 pid
-            point_error: 103      # 点位采集失败时的 pid
+    Usage:
+        mapper = DeviceMapper(db, service_name="xnc_channel")
         
-        vdid_mapping:
-            "knx_device": 1       # 设备ID到vdID的映射
+        # Point mapping
+        oid = mapper.encode_point("temperature", "device_1")
+        point_info = mapper.decode_point(oid)  # {"point_name": "temperature", "device_id": "device_1"}
         
-        oid_mapping:
-            # Simple format (backward compatible)
-            "living_room_light": 2001
-            # Namespace format (recommended)
-            "modbus_device_1.temperature": 1001
-            "modbus_device_2.temperature": 1002
+        # Device mapping
+        vdid = mapper.encode_device("device_1")
+        device_id = mapper.decode_device(vdid)
+        
+        # Batch mapping (efficient)
+        encoded = mapper.encode_reading(reading)
+        decoded = mapper.decode_message(msg)
     """
     
     PID_POINT_VALUE = 85
     PID_POINT_ERROR = 103
     
-    DEVICE_STATUS_ONLINE = 2
-    DEVICE_STATUS_OFFLINE = 3
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        db: Optional["aiosqlite.Connection"] = None,
+        service_name: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None
+    ):
+        self._db = db
+        self._service_name = service_name
         self.config = config or {}
         
-        pid_config = self.config.get("pid", {})
-        self._pid_point_value = pid_config.get("point_value", self.PID_POINT_VALUE)
-        self._pid_point_error = pid_config.get("point_error", self.PID_POINT_ERROR)
+        self._pid_point_value = self.config.get("pid", {}).get("point_value", self.PID_POINT_VALUE)
+        self._pid_point_error = self.config.get("pid", {}).get("point_error", self.PID_POINT_ERROR)
         
         self._point_to_oid: Dict[str, int] = {}
-        self._point_to_pid: Dict[str, int] = {}
+        self._oid_to_point: Dict[int, str] = {}
         self._point_to_device: Dict[str, str] = {}
         
         self._device_to_vdid: Dict[str, int] = {}
-        
-        self._reverse_oid_mapping: Dict[int, str] = {}
-        self._reverse_pid_mapping: Dict[int, str] = {}
-        self._reverse_vdid_mapping: Dict[int, str] = {}
-        self._oid_to_device: Dict[int, str] = {}
+        self._vdid_to_device: Dict[int, str] = {}
         
         self._next_oid = 1
-        self._next_pid = 1
         self._next_vdid = 1
         
         self._load_mapping_config()
+        
+        if db and service_name:
+            asyncio.create_task(self._load_from_db())
+    
+    # ===== Point Mapping (Symmetric API) =====
+    
+    def encode_point(self, point_name: str, device_id: Optional[str] = None) -> int:
+        """Encode point name to OID (upload direction)
+        
+        Args:
+            point_name: Internal point name
+            device_id: Device ID for namespaced mapping
+            
+        Returns:
+            OID (Object ID)
+        """
+        key = f"{device_id}.{point_name}" if device_id else point_name
+        
+        if key not in self._point_to_oid:
+            oid = self._next_oid
+            self._point_to_oid[key] = oid
+            self._oid_to_point[oid] = key
+            self._next_oid += 1
+            
+            if device_id:
+                self._point_to_device[key] = device_id
+            
+            self._persist_mapping("point", key, oid, device_id)
+            logger.debug(f"Assigned new OID {oid} for point {key}")
+        
+        return self._point_to_oid[key]
+    
+    def decode_point(self, oid: int) -> Dict[str, Optional[str]]:
+        """Decode OID to point info (download direction)
+        
+        Args:
+            oid: Object ID
+            
+        Returns:
+            {"point_name": str, "device_id": str or None}
+        """
+        full_name = self._oid_to_point.get(oid)
+        if not full_name:
+            return {"point_name": None, "device_id": None}
+        
+        if "." in full_name:
+            device_id, point_name = full_name.split(".", 1)
+            return {"point_name": point_name, "device_id": device_id}
+        
+        return {"point_name": full_name, "device_id": None}
+    
+    # ===== Device Mapping (Symmetric API) =====
+    
+    def encode_device(self, device_id: str) -> int:
+        """Encode device ID to vdID (upload direction)
+        
+        Args:
+            device_id: Internal device ID
+            
+        Returns:
+            vdID (Virtual Device ID)
+        """
+        if device_id not in self._device_to_vdid:
+            vdid = self._next_vdid
+            self._device_to_vdid[device_id] = vdid
+            self._vdid_to_device[vdid] = device_id
+            self._next_vdid += 1
+            
+            self._persist_mapping("device", device_id, vdid)
+            logger.debug(f"Assigned new vdID {vdid} for device {device_id}")
+        
+        return self._device_to_vdid[device_id]
+    
+    def decode_device(self, vdid: int) -> Optional[str]:
+        """Decode vdID to device ID (download direction)
+        
+        Args:
+            vdid: Virtual Device ID
+            
+        Returns:
+            Device ID or None
+        """
+        return self._vdid_to_device.get(vdid)
+    
+    # ===== Batch Mapping (Efficient) =====
+    
+    def encode_reading(self, reading) -> EncodedReading:
+        """Encode entire Reading object (single call for all mappings)
+        
+        Args:
+            reading: Reading object with standard_points
+            
+        Returns:
+            EncodedReading ready for Protobuf serialization
+        """
+        device_id = reading.asset
+        vdid = self.encode_device(device_id)
+        device_offline = reading.device_status and reading.device_status != "online"
+        
+        points = []
+        
+        if hasattr(reading, 'standard_points') and reading.standard_points:
+            for sp in reading.standard_points:
+                point_name = sp.get("point_name", "")
+                value = sp.get("value")
+                quality = sp.get("quality", "good")
+                metadata = sp.get("metadata", {})
+                error_code = metadata.get("error_code", 10)
+                
+                oid = self.encode_point(point_name, device_id)
+                
+                if device_offline or quality != "good":
+                    pid = self._pid_point_error
+                    pid_value = error_code
+                else:
+                    pid = self._pid_point_value
+                    pid_value = value
+                
+                points.append({
+                    "oid": oid,
+                    "pid": pid,
+                    "value": pid_value
+                })
+        else:
+            for key, value in reading.data.items():
+                oid = self.encode_point(key, device_id)
+                pid = self._pid_point_error if device_offline else self._pid_point_value
+                points.append({
+                    "oid": oid,
+                    "pid": pid,
+                    "value": 10 if device_offline else value
+                })
+        
+        return EncodedReading(
+            vdid=vdid,
+            points=points,
+            device_status=reading.device_status or "online"
+        )
+    
+    def decode_message(self, msg: apiMsg) -> DecodedMessage:
+        """Decode entire Protobuf message
+        
+        Args:
+            msg: apiMsg Protobuf message
+            
+        Returns:
+            DecodedMessage with device_id and data
+        """
+        device_id = self.decode_device(msg.vdID)
+        data = {}
+        
+        for obj in msg.opv:
+            point_info = self.decode_point(obj.oid)
+            point_name = point_info.get("point_name")
+            
+            for prop in obj.pv:
+                value = ProtobufCodec.extract_data_value(prop.v)
+                if point_name:
+                    data[point_name] = value
+                else:
+                    data[f"oid_{obj.oid}"] = value
+        
+        return DecodedMessage(
+            device_id=device_id,
+            command=msg.cmdID,
+            data=data,
+            uuid=msg.uuid,
+            raw_msg=msg
+        )
+    
+    # ===== PID Mapping =====
+    
+    def get_pid_by_type(self, pid_type: str) -> int:
+        """Get PID by type
+        
+        Args:
+            pid_type: "point_value" or "point_error"
+            
+        Returns:
+            PID value
+        """
+        if pid_type == "point_error":
+            return self._pid_point_error
+        return self._pid_point_value
+    
+    # ===== Persistence =====
+    
+    def _persist_mapping(
+        self,
+        mapping_type: str,
+        internal_name: str,
+        external_id: int,
+        device_id: Optional[str] = None
+    ) -> None:
+        """Persist mapping to database"""
+        if not self._db or not self._service_name:
+            return
+        
+        async def _save():
+            try:
+                await self._db.execute(
+                    """
+                    INSERT OR REPLACE INTO mapping_registry
+                    (service_name, mapping_type, internal_name, external_id, device_id, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (self._service_name, mapping_type, internal_name, str(external_id), device_id, time.time())
+                )
+                await self._db.commit()
+            except Exception as e:
+                logger.debug(f"Failed to persist mapping: {e}")
+        
+        if asyncio.get_event_loop().is_running():
+            asyncio.create_task(_save())
+    
+    async def _load_from_db(self) -> None:
+        """Load mappings from database"""
+        if not self._db or not self._service_name:
+            return
+        
+        try:
+            async with self._db.execute(
+                """
+                SELECT mapping_type, internal_name, external_id, device_id
+                FROM mapping_registry
+                WHERE service_name = ?
+                """,
+                (self._service_name,)
+            ) as cursor:
+                async for row in cursor:
+                    mapping_type = row[0]
+                    internal_name = row[1]
+                    external_id = int(row[2]) if row[2] else None
+                    device_id = row[3]
+                    
+                    if mapping_type == "point" and external_id:
+                        self._point_to_oid[internal_name] = external_id
+                        self._oid_to_point[external_id] = internal_name
+                        if external_id >= self._next_oid:
+                            self._next_oid = external_id + 1
+                        if device_id:
+                            self._point_to_device[internal_name] = device_id
+                    
+                    elif mapping_type == "device" and external_id:
+                        self._device_to_vdid[internal_name] = external_id
+                        self._vdid_to_device[external_id] = internal_name
+                        if external_id >= self._next_vdid:
+                            self._next_vdid = external_id + 1
+            
+            logger.info(
+                f"Loaded {len(self._point_to_oid)} point mappings, "
+                f"{len(self._device_to_vdid)} device mappings from database"
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to load mappings from database: {e}")
     
     def _load_mapping_config(self) -> None:
+        """Load mapping config from YAML file (backward compatible)"""
         mapping_file = self.config.get("device_mapping_file")
         if mapping_file and os.path.exists(mapping_file):
             try:
@@ -78,17 +375,11 @@ class DeviceMapper:
                     for point_name, point_info in mapping_data["points"].items():
                         if isinstance(point_info, dict):
                             oid = point_info.get("oid")
-                            pid = point_info.get("pid")
                             if oid is not None:
                                 self._point_to_oid[point_name] = oid
-                                self._reverse_oid_mapping[oid] = point_name
+                                self._oid_to_point[oid] = point_name
                                 if oid >= self._next_oid:
                                     self._next_oid = oid + 1
-                            if pid is not None:
-                                self._point_to_pid[point_name] = pid
-                                self._reverse_pid_mapping[pid] = point_name
-                                if pid >= self._next_pid:
-                                    self._next_pid = pid + 1
                 
                 logger.info(f"Loaded mapping config from {mapping_file}")
                 
@@ -98,264 +389,73 @@ class DeviceMapper:
         vdid_mapping = self.config.get("vdid_mapping", {})
         for device_id, vdid in vdid_mapping.items():
             self._device_to_vdid[device_id] = vdid
-            self._reverse_vdid_mapping[vdid] = device_id
+            self._vdid_to_device[vdid] = device_id
             if vdid >= self._next_vdid:
                 self._next_vdid = vdid + 1
         
         oid_mapping = self.config.get("oid_mapping", {})
-        
-        if oid_mapping:
-            if "point" in oid_mapping and isinstance(oid_mapping["point"], dict):
-                point_oid_config = oid_mapping["point"]
-                for point_name, oid in point_oid_config.items():
-                    if point_name not in self._point_to_oid:
-                        self._point_to_oid[point_name] = oid
-                        self._reverse_oid_mapping[oid] = point_name
-                        if oid >= self._next_oid:
-                            self._next_oid = oid + 1
-                logger.info(f"Loaded {len(point_oid_config)} point OID mappings (legacy format)")
-            else:
-                for key, oid in oid_mapping.items():
-                    if not isinstance(oid, int):
-                        continue
-                    
-                    if key not in self._point_to_oid:
-                        self._point_to_oid[key] = oid
-                        self._reverse_oid_mapping[oid] = key
-                        if oid >= self._next_oid:
-                            self._next_oid = oid + 1
-                        
-                        if "." in key:
-                            parts = key.split(".", 1)
-                            if len(parts) == 2:
-                                device_id, point_name = parts
-                                self._point_to_device[key] = device_id
+        for key, oid in oid_mapping.items():
+            if not isinstance(oid, int):
+                continue
+            
+            if key not in self._point_to_oid:
+                self._point_to_oid[key] = oid
+                self._oid_to_point[oid] = key
+                if oid >= self._next_oid:
+                    self._next_oid = oid + 1
                 
-                logger.info(f"Loaded {len(oid_mapping)} point OID mappings (namespace format)")
+                if "." in key:
+                    parts = key.split(".", 1)
+                    if len(parts) == 2:
+                        self._point_to_device[key] = parts[0]
+    
+    # ===== Backward Compatibility (Legacy API) =====
     
     def get_vd_id(self, device_id: str) -> int:
-        """获取设备ID对应的vdID，如果不存在则自动分配"""
-        if device_id not in self._device_to_vdid:
-            vdid = self._next_vdid
-            self._device_to_vdid[device_id] = vdid
-            self._reverse_vdid_mapping[vdid] = device_id
-            self._next_vdid += 1
-            logger.debug(f"Assigned new vdID {vdid} for device {device_id}")
-        return self._device_to_vdid[device_id]
+        """[Legacy] Use encode_device() instead"""
+        return self.encode_device(device_id)
     
     def get_device_id_by_vdid(self, vdid: int) -> Optional[str]:
-        """根据vdID获取设备ID"""
-        return self._reverse_vdid_mapping.get(vdid)
+        """[Legacy] Use decode_device() instead"""
+        return self.decode_device(vdid)
     
     def get_oid(self, point_name: str, device_id: Optional[str] = None) -> int:
-        """获取点位对应的oid，支持命名空间
-        
-        Args:
-            point_name: 点位名称
-            device_id: 设备ID（可选），用于支持命名空间
-        
-        Returns:
-            对应的oid值
-            
-        查找优先级：
-        1. 如果提供了device_id，优先查找 "device_id.point_name"
-        2. 查找 "point_name" (向后兼容)
-        3. 自动分配新的oid（使用命名空间格式）
-        """
-        namespaced_key = f"{device_id}.{point_name}" if device_id else None
-        
-        if namespaced_key and namespaced_key in self._point_to_oid:
-            return self._point_to_oid[namespaced_key]
-        
-        if point_name in self._point_to_oid:
-            return self._point_to_oid[point_name]
-        
-        oid = self._next_oid
-        final_key = namespaced_key if device_id else point_name
-        
-        self._point_to_oid[final_key] = oid
-        self._reverse_oid_mapping[oid] = final_key
-        self._next_oid += 1
-        
-        if device_id:
-            self._point_to_device[final_key] = device_id
-        
-        logger.debug(f"Assigned new oid {oid} for point {final_key}")
-        return oid
+        """[Legacy] Use encode_point() instead"""
+        return self.encode_point(point_name, device_id)
     
     def get_point_name_by_oid(self, oid: int) -> Optional[str]:
-        """根据oid获取点位名称（纯点位名称，不带命名空间）
-        
-        Args:
-            oid: 对象ID
-            
-        Returns:
-            纯点位名称（不带设备前缀），如果找不到返回None
-        """
-        full_name = self._reverse_oid_mapping.get(oid)
-        if not full_name:
-            return None
-        
-        if "." in full_name:
-            parts = full_name.split(".", 1)
-            if len(parts) == 2:
-                return parts[1]
-        
-        return full_name
-    
-    def get_point_full_name_by_oid(self, oid: int) -> Optional[str]:
-        """根据oid获取完整点位名称（带命名空间）
-        
-        Args:
-            oid: 对象ID
-            
-        Returns:
-            完整点位名称（可能是 "device_id.point_name" 或 "point_name"）
-        """
-        return self._reverse_oid_mapping.get(oid)
+        """[Legacy] Use decode_point() instead"""
+        result = self.decode_point(oid)
+        return result.get("point_name")
     
     def get_point_info_by_oid(self, oid: int) -> Dict[str, Optional[str]]:
-        """根据oid获取点位完整信息
-        
-        Args:
-            oid: 对象ID
-            
-        Returns:
-            包含 point_name 和 device_id 的字典
-        """
-        full_name = self._reverse_oid_mapping.get(oid)
-        if not full_name:
-            return {"point_name": None, "device_id": None}
-        
-        if "." in full_name:
-            parts = full_name.split(".", 1)
-            if len(parts) == 2:
-                return {
-                    "point_name": parts[1],
-                    "device_id": parts[0]
-                }
-        
-        device_id = self._point_to_device.get(full_name)
-        return {
-            "point_name": full_name,
-            "device_id": device_id
-        }
-    
-    def get_pid(self, point_name: str) -> int:
-        if point_name not in self._point_to_pid:
-            self._point_to_pid[point_name] = self._pid_point_value
-            if self._pid_point_value not in self._reverse_pid_mapping:
-                self._reverse_pid_mapping[self._pid_point_value] = point_name
-            logger.debug(f"Using default pid {self._pid_point_value} for point {point_name}")
-        
-        return self._point_to_pid[point_name]
-    
-    def get_pid_by_type(self, pid_type: str) -> int:
-        """根据类型获取PID
-        
-        Args:
-            pid_type: "point_value" 或 "point_error"
-        
-        Returns:
-            对应的PID值
-        """
-        if pid_type == "point_error":
-            return self._pid_point_error
-        return self._pid_point_value
-    
-    def get_point_name_by_pid(self, pid: int) -> Optional[str]:
-        return self._reverse_pid_mapping.get(pid)
-    
-    def get_point_mapping(self, point_name: str) -> Dict[str, int]:
-        return {
-            "oid": self.get_oid(point_name),
-            "pid": self.get_pid(point_name)
-        }
-    
-    def register_device(self, device_id: str) -> int:
-        """注册设备并返回vdID"""
-        return self.get_vd_id(device_id)
+        """[Legacy] Use decode_point() instead"""
+        return self.decode_point(oid)
     
     def register_point_device(self, point_name: str, device_id: str) -> None:
+        """[Legacy] No longer needed with new API"""
         self._point_to_device[point_name] = device_id
     
-    def get_device_by_oid(self, oid: int) -> Optional[str]:
-        point_name = self._reverse_oid_mapping.get(oid)
-        if point_name:
-            return self._point_to_device.get(point_name)
-        return self._oid_to_device.get(oid)
-    
-    def register_point(
-        self,
-        point_name: str,
-        oid: Optional[int] = None,
-        pid: Optional[int] = None
-    ) -> Dict[str, int]:
-        result = {}
-        
-        if oid is not None:
-            if oid in self._reverse_oid_mapping:
-                existing_point = self._reverse_oid_mapping[oid]
-                if existing_point != point_name:
-                    logger.warning(
-                        f"oid {oid} already mapped to point {existing_point}, "
-                        f"remapping to {point_name}"
-                    )
-            self._point_to_oid[point_name] = oid
-            self._reverse_oid_mapping[oid] = point_name
-            if oid >= self._next_oid:
-                self._next_oid = oid + 1
-            result["oid"] = oid
-        else:
-            result["oid"] = self.get_oid(point_name)
-        
-        if pid is not None:
-            if pid in self._reverse_pid_mapping:
-                existing_point = self._reverse_pid_mapping[pid]
-                if existing_point != point_name:
-                    logger.warning(
-                        f"pid {pid} already mapped to point {existing_point}, "
-                        f"remapping to {point_name}"
-                    )
-            self._point_to_pid[point_name] = pid
-            self._reverse_pid_mapping[pid] = point_name
-            if pid >= self._next_pid:
-                self._next_pid = pid + 1
-            result["pid"] = pid
-        else:
-            result["pid"] = self.get_pid(point_name)
-        
-        return result
+    # ===== Utility Methods =====
     
     def export_mapping(self) -> Dict[str, Any]:
+        """Export all mappings"""
         return {
             "vdid_mapping": dict(self._device_to_vdid),
+            "oid_mapping": dict(self._point_to_oid),
             "points": {
-                point_name: {
-                    "oid": self._point_to_oid.get(point_name),
-                    "pid": self._point_to_pid.get(point_name)
-                }
-                for point_name in set(self._point_to_oid.keys()) | set(self._point_to_pid.keys())
+                point_name: {"oid": oid}
+                for point_name, oid in self._point_to_oid.items()
             }
         }
     
-    def save_mapping(self, file_path: str) -> None:
-        mapping_data = self.export_mapping()
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            yaml.dump(mapping_data, f, default_flow_style=False, allow_unicode=True)
-        logger.info(f"Saved mapping config to {file_path}")
-    
     def clear_mapping(self) -> None:
+        """Clear all mappings"""
         self._point_to_oid.clear()
-        self._point_to_pid.clear()
+        self._oid_to_point.clear()
         self._device_to_vdid.clear()
+        self._vdid_to_device.clear()
         self._point_to_device.clear()
-        self._reverse_oid_mapping.clear()
-        self._reverse_pid_mapping.clear()
-        self._reverse_vdid_mapping.clear()
-        self._oid_to_device.clear()
         self._next_oid = 1
-        self._next_pid = 1
         self._next_vdid = 1
         logger.info("Cleared all mappings")
