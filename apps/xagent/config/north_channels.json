@@ -1,0 +1,71 @@
+{
+  "channels": [
+    {
+      "id": "xnc_test_channel",
+      "name": "XNC测试通道",
+      "description": "用于测试的XNC北向通道",
+      "enabled": true,
+      "protocol": "xnc",
+      "status": "offline",
+      "connection": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "xnc": {
+          "local_port": 8888,
+          "protocol": "protobuf",
+          "remote_host": "127.0.0.1",
+          "remote_port": 9000,
+          "reconnect_interval": 5
+        }
+      },
+      "adapter": {
+        "type": "xnc_protobuf",
+        "config": {}
+      },
+      "upload_strategy": {
+        "immediate_upload": true,
+        "batch_size": 100,
+        "interval": 5,
+        "retry_times": 3,
+        "retry_interval": 5
+      },
+      "tags": ["测试", "XNC"],
+      "created_at": "2025-01-27T10:00:00",
+      "updated_at": "2025-01-27T10:00:00"
+    },
+    {
+      "id": "mqtt_test_channel",
+      "name": "MQTT测试通道",
+      "description": "用于测试的MQTT北向通道",
+      "enabled": false,
+      "protocol": "mqtt",
+      "status": "offline",
+      "connection": {
+        "host": "mqtt.example.com",
+        "port": 1883,
+        "username": "test_user",
+        "mqtt": {
+          "client_id": "xagent_test_001",
+          "topic": "data/upload",
+          "qos": 1,
+          "keepalive": 60,
+          "clean_session": true
+        }
+      },
+      "adapter": {
+        "type": "default",
+        "config": {}
+      },
+      "upload_strategy": {
+        "immediate_upload": false,
+        "batch_size": 50,
+        "interval": 10,
+        "retry_times": 5,
+        "retry_interval": 10
+      },
+      "tags": ["测试", "MQTT"],
+      "created_at": "2025-01-27T10:00:00",
+      "updated_at": "2025-01-27T10:00:00"
+    }
+  ]
+}
