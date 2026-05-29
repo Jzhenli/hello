@@ -84,16 +84,22 @@ class DeviceMapper:
     
     def __init__(
         self,
+        mapping_config: Optional[Dict[str, Any]] = None,
         db: Optional["aiosqlite.Connection"] = None,
         service_name: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None
     ):
+        """
+        Initialize device mapper
+        
+        Args:
+            mapping_config: Mapping configuration (recommended, dependency injection)
+            db: Database connection for persistence
+            service_name: Service name for database queries
+            config: Legacy config dict (backward compatibility, will be deprecated)
+        """
         self._db = db
         self._service_name = service_name
-        self.config = config or {}
-        
-        self._pid_point_value = self.config.get("pid", {}).get("point_value", self.PID_POINT_VALUE)
-        self._pid_point_error = self.config.get("pid", {}).get("point_error", self.PID_POINT_ERROR)
         
         self._point_to_oid: Dict[str, int] = {}
         self._oid_to_point: Dict[int, str] = {}
@@ -105,7 +111,17 @@ class DeviceMapper:
         self._next_oid = 1
         self._next_vdid = 1
         
-        self._load_mapping_config()
+        self._pid_point_value = self.PID_POINT_VALUE
+        self._pid_point_error = self.PID_POINT_ERROR
+        
+        if mapping_config:
+            self._apply_mapping_config(mapping_config)
+        elif config:
+            logger.warning(
+                "Using legacy config parameter is deprecated, "
+                "please pass mapping_config directly"
+            )
+            self._load_from_legacy_config(config)
         
         if db and service_name:
             asyncio.create_task(self._load_from_db())
@@ -363,9 +379,75 @@ class DeviceMapper:
         except Exception as e:
             logger.warning(f"Failed to load mappings from database: {e}")
     
-    def _load_mapping_config(self) -> None:
-        """Load mapping config from YAML file (backward compatible)"""
-        mapping_file = self.config.get("device_mapping_file")
+    def _apply_mapping_config(self, mapping_config: Dict[str, Any]) -> None:
+        """
+        Apply mapping configuration
+        
+        Args:
+            mapping_config: Mapping configuration dict with vdid_mapping, oid_mapping, etc.
+        """
+        if not mapping_config:
+            logger.info("Empty mapping config provided, auto-mapping will be used")
+            return
+        
+        pid_config = mapping_config.get("pid", {})
+        if pid_config:
+            self._pid_point_value = pid_config.get("point_value", self.PID_POINT_VALUE)
+            self._pid_point_error = pid_config.get("point_error", self.PID_POINT_ERROR)
+        
+        # Support both vdid_mapping and device_mapping (backward compatibility)
+        vdid_mapping = mapping_config.get("vdid_mapping") or mapping_config.get("device_mapping", {})
+        for device_id, vdid in vdid_mapping.items():
+            if not isinstance(vdid, int):
+                logger.warning(f"Invalid VDID type for {device_id}: {type(vdid)}, expected int")
+                continue
+            
+            self._device_to_vdid[device_id] = vdid
+            self._vdid_to_device[vdid] = device_id
+            if vdid >= self._next_vdid:
+                self._next_vdid = vdid + 1
+        
+        oid_mapping = mapping_config.get("oid_mapping", {})
+        for key, oid in oid_mapping.items():
+            if not isinstance(oid, int):
+                logger.warning(f"Invalid OID type for {key}: {type(oid)}, expected int")
+                continue
+            
+            if key not in self._point_to_oid:
+                self._point_to_oid[key] = oid
+                self._oid_to_point[oid] = key
+                if oid >= self._next_oid:
+                    self._next_oid = oid + 1
+                
+                if "." in key:
+                    parts = key.split(".", 1)
+                    if len(parts) == 2:
+                        self._point_to_device[key] = parts[0]
+        
+        logger.info(
+            f"Applied mapping config: {len(self._device_to_vdid)} devices, "
+            f"{len(self._point_to_oid)} points"
+        )
+    
+    def _load_from_legacy_config(self, config: Dict[str, Any]) -> None:
+        """
+        Load mapping config from legacy config structure
+        
+        This method provides backward compatibility for old config format.
+        It extracts mapping_config from multiple possible locations.
+        
+        Args:
+            config: Legacy config dict
+        """
+        mapping_config = config.get("mapping_config", {}) or {}
+        
+        if not mapping_config and isinstance(config.get("xnc"), dict):
+            mapping_config = config["xnc"].get("mapping_config", {}) or {}
+        
+        if not mapping_config and isinstance(config.get("adapter_config"), dict):
+            mapping_config = config["adapter_config"].get("mapping_config", {}) or {}
+        
+        mapping_file = config.get("device_mapping_file") or mapping_config.get("device_mapping_file")
         if mapping_file and os.path.exists(mapping_file):
             try:
                 with open(mapping_file, 'r', encoding='utf-8') as f:
@@ -384,16 +466,33 @@ class DeviceMapper:
                 logger.info(f"Loaded mapping config from {mapping_file}")
                 
             except Exception as e:
-                logger.error(f"Failed to load mapping config: {e}")
+                logger.error(f"Failed to load mapping config from file: {e}")
         
-        vdid_mapping = self.config.get("vdid_mapping", {})
+        vdid_mapping = config.get("vdid_mapping", {})
+        if not vdid_mapping and isinstance(config.get("xnc"), dict):
+            vdid_mapping = config["xnc"].get("vdid_mapping", {})
+        if not vdid_mapping and isinstance(config.get("adapter_config"), dict):
+            vdid_mapping = config["adapter_config"].get("mapping_config", {}).get("vdid_mapping", {})
+        if not vdid_mapping:
+            vdid_mapping = mapping_config.get("vdid_mapping", {}) or mapping_config.get("device_mapping", {})
+        
         for device_id, vdid in vdid_mapping.items():
+            if not isinstance(vdid, int):
+                continue
+            
             self._device_to_vdid[device_id] = vdid
             self._vdid_to_device[vdid] = device_id
             if vdid >= self._next_vdid:
                 self._next_vdid = vdid + 1
         
-        oid_mapping = self.config.get("oid_mapping", {})
+        oid_mapping = config.get("oid_mapping", {})
+        if not oid_mapping and isinstance(config.get("xnc"), dict):
+            oid_mapping = config["xnc"].get("oid_mapping", {})
+        if not oid_mapping and isinstance(config.get("adapter_config"), dict):
+            oid_mapping = config["adapter_config"].get("mapping_config", {}).get("oid_mapping", {})
+        if not oid_mapping:
+            oid_mapping = mapping_config.get("oid_mapping", {})
+        
         for key, oid in oid_mapping.items():
             if not isinstance(oid, int):
                 continue
@@ -408,6 +507,11 @@ class DeviceMapper:
                     parts = key.split(".", 1)
                     if len(parts) == 2:
                         self._point_to_device[key] = parts[0]
+        
+        logger.info(
+            f"Loaded from legacy config: {len(self._device_to_vdid)} devices, "
+            f"{len(self._point_to_oid)} points"
+        )
     
     # ===== Backward Compatibility (Legacy API) =====
     

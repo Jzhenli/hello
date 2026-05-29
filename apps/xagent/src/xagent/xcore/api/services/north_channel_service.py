@@ -292,13 +292,14 @@ class NorthChannelService:
         if channel_id not in self._cache:
             raise ValueError(f"Channel '{channel_id}' not found")
         
+        old_channel = self._cache.get(channel_id)
         updated_service = await self._service_repo.update_service(channel_id, updates, user)
-        
+
         updated_channel = self._service_to_channel(updated_service)
         self._cache[channel_id] = updated_channel
         
         if self._plugin_loader:
-            old_enabled = self._cache.get(channel_id, NorthChannelConfig(id="", name="", protocol=NorthChannelProtocol.MQTT, connection=NorthChannelConnection(host="", port=0))).enabled
+            old_enabled = old_channel.enabled if old_channel else False
             new_enabled = updated_channel.enabled
             
             if old_enabled and not new_enabled:
@@ -587,18 +588,22 @@ class NorthChannelService:
             adapter_dict = channel.adapter.model_dump(exclude_none=True)
             
             plugin_config = {
+                "channel_id": channel.id,
                 **connection_dict,
                 **upload_dict,
                 "adapter_config": adapter_dict
             }
             
             if channel.connection.xnc:
-                plugin_config.update(channel.connection.xnc.model_dump(exclude_none=True))
+                xnc_config = channel.connection.xnc.model_dump(exclude_none=True)
+                plugin_config.update(xnc_config)
             elif channel.connection.mqtt:
-                plugin_config.update(channel.connection.mqtt.model_dump(exclude_none=True))
+                mqtt_config = channel.connection.mqtt.model_dump(exclude_none=True)
+                plugin_config.update(mqtt_config)
             elif channel.connection.http:
-                plugin_config.update(channel.connection.http.model_dump(exclude_none=True))
-            
+                http_config = channel.connection.http.model_dump(exclude_none=True)
+                plugin_config.update(http_config)
+
             plugin_info = await self._plugin_loader.load_plugin(
                 plugin_type="north",
                 name=channel.protocol.value,

@@ -186,12 +186,23 @@ class DeviceLoader:
         """
         try:
             plugin_config = {
+                'channel_id': service.name,
                 **service.connection_config,
                 **service.upload_config,
                 'adapter_config': service.adapter_config,
-                **service.command_config,
-                'channel_id': service.name
+                **service.command_config
             }
+            
+            # Flatten protocol-specific config (e.g., xnc, mqtt, http)
+            # Only process the current protocol to avoid conflicts
+            if isinstance(service.connection_config, dict):
+                protocol = service.protocol
+                proto_cfg = service.connection_config.get(protocol)
+                if isinstance(proto_cfg, dict):
+                    # Merge safely, avoid overwriting existing keys
+                    for key, value in proto_cfg.items():
+                        if key not in plugin_config:
+                            plugin_config[key] = value
             
             plugin_info = await self.plugin_loader.load_plugin(
                 PluginType.NORTH,

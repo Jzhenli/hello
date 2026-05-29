@@ -109,23 +109,35 @@ class XNCClientPlugin(NorthPluginBase):
     
     # ===== Override properties to use XNC-specific mapper =====
     
+    def _resolve_mapping_config(self) -> Dict[str, Any]:
+        """Resolve mapping_config from supported config locations."""
+        mapping_config = self.config.get("mapping_config")
+        if isinstance(mapping_config, dict) and mapping_config:
+            return mapping_config
+
+        for parent_key in ("xnc", "adapter_config"):
+            parent = self.config.get(parent_key)
+            if isinstance(parent, dict):
+                parent_mapping = parent.get("mapping_config")
+                if isinstance(parent_mapping, dict) and parent_mapping:
+                    return parent_mapping
+
+        return {}
+
     @property
     def _mapper(self) -> DeviceMapper:
         """Get or create DeviceMapper"""
         if not hasattr(self, '_xnc_mapper'):
-            adapter_config = self.config.get("adapter_config", {})
-            if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-                adapter_config["mapping_config"] = self.config.get("mapping_config", {})
-            self._xnc_mapper = DeviceMapper(config=adapter_config)
+            mapping_config = self._resolve_mapping_config()
+            self._xnc_mapper = DeviceMapper(mapping_config=mapping_config)
         return self._xnc_mapper
-    
+
     # ===== Implement hook methods =====
     
     def _create_data_adapter(self) -> Any:
         adapter_config = self.config.get("adapter_config", {})
         
         if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-            adapter_config["mapping_config"] = self.config.get("mapping_config", {})
             return XNCProtobufAdapter(mapper=self._mapper, config=adapter_config)
         else:
             return XNCJsonAdapter(adapter_config)
