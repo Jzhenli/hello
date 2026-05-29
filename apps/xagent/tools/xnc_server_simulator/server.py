@@ -158,14 +158,14 @@ class XNCUDPServer:
             device_id = self._mapping.vdid_to_device.get(vdid)
             
             if device_id is None:
-                device_id = f"device_{vdid}"
+                device_id = str(vdid)
                 self._mapping.vdid_to_device[vdid] = device_id
                 self._mapping.device_to_vdid[device_id] = vdid
             
             for obj in msg.opv:
                 oid = obj.oid
                 if oid not in self._mapping.oid_to_point:
-                    point_name = f"point_{oid}"
+                    point_name = str(oid)
                     self._mapping.oid_to_point[oid] = (device_id, point_name)
                     self._mapping.point_to_oid[(device_id, point_name)] = oid
             
@@ -177,13 +177,13 @@ class XNCUDPServer:
         
         for obj in msg.opv:
             oid = obj.oid
-            point_info = self._mapping.oid_to_point.get(oid, (None, f"oid_{oid}"))
-            point_name = point_info[1] if point_info else f"oid_{oid}"
+            point_info = self._mapping.oid_to_point.get(oid, (None, str(oid)))
+            point_name = point_info[1] if point_info else str(oid)
             
             for prop in obj.pv:
                 value = ProtobufCodec.extract_data_value(prop.v)
                 pid = prop.pid
-                points[f"{point_name}(pid={pid})"] = value
+                points[f"oid={oid}(pid={pid})"] = value
         
         return points
     
@@ -195,21 +195,17 @@ class XNCUDPServer:
         pid: int = 85,
         uuid: int = 0
     ) -> bool:
-        """Send READ_PROPERTY command to XAgent"""
-        with self._lock:
-            vdid = self._mapping.device_to_vdid.get(device_id)
-            if vdid is None:
-                vdid = self._mapping.next_vdid
-                self._mapping.device_to_vdid[device_id] = vdid
-                self._mapping.vdid_to_device[vdid] = device_id
-                self._mapping.next_vdid += 1
-            
-            oid = self._mapping.point_to_oid.get((device_id, point_name))
-            if oid is None:
-                oid = self._mapping.next_oid
-                self._mapping.point_to_oid[(device_id, point_name)] = oid
-                self._mapping.oid_to_point[oid] = (device_id, point_name)
-                self._mapping.next_oid += 1
+        """Send READ_PROPERTY command to XAgent
+        
+        Args:
+            device_id: vdID value (as string, will be converted to int)
+            point_name: oid value (as string, will be converted to int)
+        """
+        try:
+            vdid = int(device_id)
+            oid = int(point_name)
+        except ValueError:
+            return False
         
         msg = ProtobufCodec.create_read_property_message(
             uuid=uuid,
@@ -229,21 +225,17 @@ class XNCUDPServer:
         pid: int = 85,
         uuid: int = 0
     ) -> bool:
-        """Send WRITE_PROPERTY command to XAgent"""
-        with self._lock:
-            vdid = self._mapping.device_to_vdid.get(device_id)
-            if vdid is None:
-                vdid = self._mapping.next_vdid
-                self._mapping.device_to_vdid[device_id] = vdid
-                self._mapping.vdid_to_device[vdid] = device_id
-                self._mapping.next_vdid += 1
-            
-            oid = self._mapping.point_to_oid.get((device_id, point_name))
-            if oid is None:
-                oid = self._mapping.next_oid
-                self._mapping.point_to_oid[(device_id, point_name)] = oid
-                self._mapping.oid_to_point[oid] = (device_id, point_name)
-                self._mapping.next_oid += 1
+        """Send WRITE_PROPERTY command to XAgent
+        
+        Args:
+            device_id: vdID value (as string, will be converted to int)
+            point_name: oid value (as string, will be converted to int)
+        """
+        try:
+            vdid = int(device_id)
+            oid = int(point_name)
+        except ValueError:
+            return False
         
         msg = ProtobufCodec.create_write_property_message(
             uuid=uuid,
