@@ -91,6 +91,8 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   const userStore = useUserStore()
+  
+  // Restore session from localStorage if not already authenticated
   if (!userStore.isLoggedIn) {
     userStore.restoreSession()
   }
@@ -100,8 +102,14 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  // Fetch roles if not already loaded
   if (userStore.roles.length === 0) {
-    await userStore.fetchRoles()
+    try {
+      await userStore.fetchRoles()
+    } catch (error) {
+      console.error('Failed to fetch roles:', error)
+      // Continue even if roles fetch fails - user can still navigate
+    }
   }
 
   const resource = ROUTE_PERMISSION_MAP[to.path]

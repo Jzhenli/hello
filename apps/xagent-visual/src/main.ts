@@ -25,4 +25,17 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 
-app.mount('#app')
+/**
+ * Wait for router to be ready before mounting the app.
+ * 
+ * This is critical for desktop app webview environment where initialization
+ * may be slower than in regular browsers. It ensures:
+ * 1. Router is fully initialized before any navigation
+ * 2. Route guards are ready to handle authentication
+ * 3. Menu components have correct active state
+ * 
+ * Without this, navigation may not work on first load in webview.
+ */
+router.isReady().then(() => {
+  app.mount('#app')
+})

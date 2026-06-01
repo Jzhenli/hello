@@ -3,6 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    Disable caching for desktop app webview.
+    This prevents 404 errors when the frontend is updated, because old cached HTML
+    may reference old JS/CSS filenames that no longer exist on the server.
+    JS/CSS files with hash filenames are inherently cache-busted by their content.
+  -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>场景联动规则编辑器</title>
 </head>
 <body>
