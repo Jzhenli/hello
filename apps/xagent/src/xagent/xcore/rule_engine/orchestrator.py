@@ -242,7 +242,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         await self.router.shutdown()
         self.pipeline_manager.shutdown()
         self.aggregation_engine.clear()
-        self.plugin_manager.shutdown()
+        await self.plugin_manager.shutdown()
 
         logger.info("Rule Engine Orchestrator stopped")
 

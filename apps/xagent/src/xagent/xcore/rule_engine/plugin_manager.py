@@ -4,6 +4,7 @@
 不再负责插件发现，专注于规则引擎插件的实例化和生命周期管理。
 """
 
+import inspect
 import logging
 from typing import Any, Dict, Optional, Type
 
@@ -241,18 +242,14 @@ class RuleEnginePluginManager:
         """
         return self._registrations.copy()
     
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """关闭插件管理器
         
         清理所有插件实例和注册信息。
         """
-        # 清理所有插件实例
         for instance_id, instance in self._instances.items():
             try:
-                if hasattr(instance, 'shutdown'):
-                    instance.shutdown()
-                elif hasattr(instance, 'stop'):
-                    instance.stop()
+                await self._shutdown_instance(instance)
             except Exception as e:
                 logger.warning(f"Error shutting down plugin instance {instance_id}: {e}")
         
@@ -260,3 +257,18 @@ class RuleEnginePluginManager:
         self._registrations.clear()
         
         logger.info("Rule engine plugin manager shutdown complete")
+    
+    async def _shutdown_instance(self, instance: Any) -> None:
+        """关闭单个插件实例
+        
+        Args:
+            instance: 插件实例
+        """
+        for method_name in ('shutdown', 'stop'):
+            if hasattr(instance, method_name):
+                method = getattr(instance, method_name)
+                if inspect.iscoroutinefunction(method):
+                    await method()
+                else:
+                    method()
+                break
