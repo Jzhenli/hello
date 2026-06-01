@@ -91,7 +91,6 @@ const channelForm = ref({
   keepalive: 60,
   clean_session: true,
   local_port: 8888,
-  xnc_protocol: 'protobuf' as 'protobuf' | 'json',
   remote_host: '127.0.0.1',
   remote_port: 9000,
   reconnect_interval: 5,
@@ -100,8 +99,6 @@ const channelForm = ref({
   method: 'POST' as 'GET' | 'POST' | 'PUT',
   headers: '{}',
   timeout: 30,
-  adapter: 'xnc_protobuf',
-  adapter_config: '{}',
   immediate_upload: true,
   batch_size: 100,
   interval: 5,
@@ -133,11 +130,9 @@ const protocolOptions = [
     defaultPort: 9000,
     defaultConfig: { 
       local_port: 8888,
-      xnc_protocol: 'protobuf',
       remote_host: '127.0.0.1',
       remote_port: 9000,
-      reconnect_interval: 5,
-      adapter: 'xnc_protobuf'
+      reconnect_interval: 5
     }
   },
   { 
@@ -186,7 +181,6 @@ const handleAddChannel = () => {
     keepalive: 60,
     clean_session: true,
     local_port: 8888,
-    xnc_protocol: 'protobuf',
     remote_host: '127.0.0.1',
     remote_port: 9000,
     reconnect_interval: 5,
@@ -195,8 +189,6 @@ const handleAddChannel = () => {
     method: 'POST',
     headers: '{}',
     timeout: 30,
-    adapter: 'xnc_protobuf',
-    adapter_config: '{}',
     immediate_upload: true,
     batch_size: 100,
     interval: 5,
@@ -219,31 +211,24 @@ const handleEditChannel = (channel: ChannelListItem) => {
     description: fullChannel.description || '',
     enabled: channel.enabled,
     protocol: channel.protocol,
-    host: channel.protocol === 'xnc' 
-      ? (fullChannel.connection.xnc?.remote_host || '127.0.0.1')
-      : channel.host,
-    port: channel.protocol === 'xnc' 
-      ? (fullChannel.connection.xnc?.remote_port || 9000)
-      : channel.port,
-    username: channel.protocol === 'xnc' ? '' : (fullChannel.connection.username || ''),
+    host: fullChannel.connection.broker || fullChannel.connection.remote_host || '',
+    port: fullChannel.connection.port || fullChannel.connection.remote_port || 1883,
+    username: fullChannel.connection.username || '',
     password: '',
-    client_id: fullChannel.connection.mqtt?.client_id || '',
-    topic: fullChannel.connection.mqtt?.topic || '',
-    qos: fullChannel.connection.mqtt?.qos || 0,
-    keepalive: fullChannel.connection.mqtt?.keepalive || 60,
-    clean_session: fullChannel.connection.mqtt?.clean_session ?? true,
-    local_port: fullChannel.connection.xnc?.local_port || 8888,
-    xnc_protocol: fullChannel.connection.xnc?.protocol || 'protobuf',
-    remote_host: fullChannel.connection.xnc?.remote_host || '127.0.0.1',
-    remote_port: fullChannel.connection.xnc?.remote_port || 9000,
-    reconnect_interval: fullChannel.connection.xnc?.reconnect_interval || 5,
-    mapping_config: JSON.stringify(fullChannel.connection.xnc?.mapping_config || {}, null, 2),
-    endpoint: fullChannel.connection.http?.endpoint || '',
-    method: fullChannel.connection.http?.method || 'POST',
-    headers: JSON.stringify(fullChannel.connection.http?.headers || {}, null, 2),
-    timeout: fullChannel.connection.http?.timeout || 30,
-    adapter: fullChannel.adapter.type,
-    adapter_config: JSON.stringify(fullChannel.adapter.config, null, 2),
+    client_id: fullChannel.connection.client_id || '',
+    topic: fullChannel.connection.topic || '',
+    qos: fullChannel.connection.qos || 0,
+    keepalive: fullChannel.connection.keepalive || 60,
+    clean_session: fullChannel.connection.clean_session ?? true,
+    local_port: fullChannel.connection.local_port || 8888,
+    remote_host: fullChannel.connection.remote_host || '127.0.0.1',
+    remote_port: fullChannel.connection.remote_port || 9000,
+    reconnect_interval: fullChannel.connection.reconnect_interval || 5,
+    mapping_config: JSON.stringify(fullChannel.adapter.mapping_config || {}, null, 2),
+    endpoint: fullChannel.connection.endpoint || '',
+    method: fullChannel.connection.method || 'POST',
+    headers: JSON.stringify(fullChannel.adapter.headers || {}, null, 2),
+    timeout: fullChannel.connection.timeout || 30,
     immediate_upload: fullChannel.upload_strategy.immediate_upload,
     batch_size: fullChannel.upload_strategy.batch_size,
     interval: fullChannel.upload_strategy.interval,
@@ -255,73 +240,59 @@ const handleEditChannel = (channel: ChannelListItem) => {
 }
 
 const buildChannelConfig = (): NorthChannelConfig => {
-  const connection: any = {
-    host: channelForm.value.protocol === 'xnc' 
-      ? channelForm.value.remote_host 
-      : channelForm.value.host,
-    port: channelForm.value.protocol === 'xnc' 
-      ? channelForm.value.remote_port 
-      : channelForm.value.port
-  }
+  const connection: any = {}
+  let adapterConfig: any = {}
+  let adapterType = 'default'
   
+  // 根据协议类型构建扁平的连接配置
   if (channelForm.value.protocol === 'mqtt') {
-    if (channelForm.value.username) {
-      connection.username = channelForm.value.username
-    }
-    if (channelForm.value.password) {
-      connection.password = channelForm.value.password
-    }
-    connection.mqtt = {
-      client_id: channelForm.value.client_id,
-      topic: channelForm.value.topic,
-      qos: channelForm.value.qos,
-      keepalive: channelForm.value.keepalive,
-      clean_session: channelForm.value.clean_session
-    }
+    // MQTT协议配置
+    connection.broker = channelForm.value.host
+    connection.port = channelForm.value.port
+    if (channelForm.value.username) connection.username = channelForm.value.username
+    if (channelForm.value.password) connection.password = channelForm.value.password
+    connection.client_id = channelForm.value.client_id
+    connection.topic = channelForm.value.topic
+    connection.qos = channelForm.value.qos
+    connection.keepalive = channelForm.value.keepalive
+    connection.clean_session = channelForm.value.clean_session
+    
+    adapterType = 'mqtt'
   } else if (channelForm.value.protocol === 'xnc') {
-    connection.xnc = {
-      local_port: channelForm.value.local_port,
-      protocol: channelForm.value.xnc_protocol,
-      remote_host: channelForm.value.remote_host,
-      remote_port: channelForm.value.remote_port,
-      reconnect_interval: channelForm.value.reconnect_interval
-    }
+    connection.local_port = channelForm.value.local_port
+    connection.remote_host = channelForm.value.remote_host
+    connection.remote_port = channelForm.value.remote_port
+    connection.reconnect_interval = channelForm.value.reconnect_interval
+    
+    adapterType = 'xnc_protobuf'
     
     try {
       const mappingConfig = JSON.parse(channelForm.value.mapping_config)
       if (Object.keys(mappingConfig).length > 0) {
-        connection.xnc.mapping_config = mappingConfig
+        adapterConfig.mapping_config = mappingConfig
       }
     } catch (e) {
       console.error('Invalid mapping config JSON:', e)
     }
   } else if (channelForm.value.protocol === 'http') {
-    if (channelForm.value.username) {
-      connection.username = channelForm.value.username
-    }
-    if (channelForm.value.password) {
-      connection.password = channelForm.value.password
-    }
-    connection.http = {
-      endpoint: channelForm.value.endpoint,
-      method: channelForm.value.method,
-      timeout: channelForm.value.timeout
-    }
+    // HTTP协议配置
+    connection.endpoint = channelForm.value.endpoint
+    connection.method = channelForm.value.method
+    connection.timeout = channelForm.value.timeout
+    if (channelForm.value.username) connection.username = channelForm.value.username
+    if (channelForm.value.password) connection.password = channelForm.value.password
+    
+    adapterType = 'http'
+    
+    // 添加 headers 到 adapter.config
     try {
       const headers = JSON.parse(channelForm.value.headers)
       if (Object.keys(headers).length > 0) {
-        connection.http.headers = headers
+        adapterConfig.headers = headers
       }
     } catch (e) {
       console.error('Invalid headers JSON:', e)
     }
-  }
-  
-  let adapterConfig = {}
-  try {
-    adapterConfig = JSON.parse(channelForm.value.adapter_config)
-  } catch (e) {
-    console.error('Invalid adapter config JSON:', e)
   }
   
   const config: any = {
@@ -331,8 +302,8 @@ const buildChannelConfig = (): NorthChannelConfig => {
     protocol: channelForm.value.protocol,
     connection,
     adapter: {
-      type: channelForm.value.adapter,
-      config: adapterConfig
+      type: adapterType,
+      ...adapterConfig
     },
     upload_strategy: {
       immediate_upload: channelForm.value.immediate_upload,
@@ -736,30 +707,28 @@ onMounted(async () => {
                 </div>
               </template>
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="主机">{{ selectedChannel.connection.host }}</el-descriptions-item>
-                <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
-                <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
-                <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
-                
-                <template v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.connection.mqtt">
-                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.mqtt.client_id }}</el-descriptions-item>
-                  <el-descriptions-item label="主题">{{ selectedChannel.connection.mqtt.topic }}</el-descriptions-item>
-                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.mqtt.qos }}</el-descriptions-item>
-                  <el-descriptions-item label="保活">{{ selectedChannel.connection.mqtt.keepalive }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'mqtt'">
+                  <el-descriptions-item label="Broker">{{ selectedChannel.connection.broker }}</el-descriptions-item>
+                  <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
+                  <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.client_id }}</el-descriptions-item>
+                  <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
+                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
+                  <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
                 </template>
                 
-                <template v-if="selectedChannel.protocol === 'xnc' && selectedChannel.connection.xnc">
-                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.xnc.local_port }}</el-descriptions-item>
-                  <el-descriptions-item label="协议模式">{{ selectedChannel.connection.xnc.protocol || 'protobuf' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.xnc.remote_host || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.xnc.remote_port || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.xnc.reconnect_interval || 5 }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'xnc'">
+                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.local_port }}</el-descriptions-item>
+                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.remote_host || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.remote_port || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</el-descriptions-item>
                 </template>
                 
-                <template v-if="selectedChannel.protocol === 'http' && selectedChannel.connection.http">
-                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.http.endpoint }}</el-descriptions-item>
-                  <el-descriptions-item label="方法">{{ selectedChannel.connection.http.method }}</el-descriptions-item>
-                  <el-descriptions-item label="超时">{{ selectedChannel.connection.http.timeout }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'http'">
+                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.endpoint }}</el-descriptions-item>
+                  <el-descriptions-item label="方法">{{ selectedChannel.connection.method }}</el-descriptions-item>
+                  <el-descriptions-item label="超时">{{ selectedChannel.connection.timeout }}秒</el-descriptions-item>
                 </template>
               </el-descriptions>
             </el-card>
@@ -938,30 +907,28 @@ onMounted(async () => {
                 </div>
               </template>
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="主机">{{ selectedChannel.connection.host }}</el-descriptions-item>
-                <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
-                <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
-                <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
-                
-                <template v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.connection.mqtt">
-                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.mqtt.client_id }}</el-descriptions-item>
-                  <el-descriptions-item label="主题">{{ selectedChannel.connection.mqtt.topic }}</el-descriptions-item>
-                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.mqtt.qos }}</el-descriptions-item>
-                  <el-descriptions-item label="保活">{{ selectedChannel.connection.mqtt.keepalive }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'mqtt'">
+                  <el-descriptions-item label="Broker">{{ selectedChannel.connection.broker }}</el-descriptions-item>
+                  <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
+                  <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.client_id }}</el-descriptions-item>
+                  <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
+                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
+                  <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
                 </template>
                 
-                <template v-if="selectedChannel.protocol === 'xnc' && selectedChannel.connection.xnc">
-                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.xnc.local_port }}</el-descriptions-item>
-                  <el-descriptions-item label="协议模式">{{ selectedChannel.connection.xnc.protocol || 'protobuf' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.xnc.remote_host || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.xnc.remote_port || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.xnc.reconnect_interval || 5 }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'xnc'">
+                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.local_port }}</el-descriptions-item>
+                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.remote_host || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.remote_port || '--' }}</el-descriptions-item>
+                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</el-descriptions-item>
                 </template>
                 
-                <template v-if="selectedChannel.protocol === 'http' && selectedChannel.connection.http">
-                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.http.endpoint }}</el-descriptions-item>
-                  <el-descriptions-item label="方法">{{ selectedChannel.connection.http.method }}</el-descriptions-item>
-                  <el-descriptions-item label="超时">{{ selectedChannel.connection.http.timeout }}秒</el-descriptions-item>
+                <template v-if="selectedChannel.protocol === 'http'">
+                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.endpoint }}</el-descriptions-item>
+                  <el-descriptions-item label="方法">{{ selectedChannel.connection.method }}</el-descriptions-item>
+                  <el-descriptions-item label="超时">{{ selectedChannel.connection.timeout }}秒</el-descriptions-item>
                 </template>
               </el-descriptions>
             </el-card>
@@ -1096,15 +1063,6 @@ onMounted(async () => {
               UDP监听端口，用于接收下行命令
             </div>
           </el-form-item>
-          <el-form-item label="协议模式">
-            <el-radio-group v-model="channelForm.xnc_protocol">
-              <el-radio value="protobuf">Protobuf</el-radio>
-              <el-radio value="json">JSON</el-radio>
-            </el-radio-group>
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-              Protobuf格式更高效，JSON格式更易调试
-            </div>
-          </el-form-item>
           <el-form-item label="远程主机">
             <el-input v-model="channelForm.remote_host" placeholder="XNC服务器地址" />
           </el-form-item>
@@ -1115,13 +1073,7 @@ onMounted(async () => {
             <el-input-number v-model="channelForm.reconnect_interval" :min="1" :max="300" />
             <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
           </el-form-item>
-          <el-form-item label="适配器">
-            <el-select v-model="channelForm.adapter" placeholder="请选择适配器">
-              <el-option label="Protobuf适配器" value="xnc_protobuf" />
-              <el-option label="JSON适配器" value="xnc_json" />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="channelForm.adapter === 'xnc_protobuf'" label="映射配置">
+          <el-form-item label="映射配置">
             <el-input 
               v-model="channelForm.mapping_config" 
               type="textarea" 
@@ -1186,17 +1138,6 @@ onMounted(async () => {
         
         <el-divider content-position="left">其他配置</el-divider>
         
-        <el-form-item label="适配器类型">
-          <el-input v-model="channelForm.adapter" placeholder="默认为 default" />
-        </el-form-item>
-        <el-form-item label="适配器配置">
-          <el-input 
-            v-model="channelForm.adapter_config" 
-            type="textarea" 
-            :rows="3" 
-            placeholder='JSON格式的适配器配置'
-          />
-        </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="channelForm.enabled" />
         </el-form-item>

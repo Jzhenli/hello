@@ -198,6 +198,10 @@ export type NorthChannelStatus = 'online' | 'offline' | 'error' | 'unknown'
 export type NorthChannelProtocol = 'mqtt' | 'xnc' | 'http' | 'custom'
 
 export interface MQTTConnectionConfig {
+  broker: string
+  port: number
+  username?: string
+  password?: string
   client_id: string
   topic: string
   qos: 0 | 1 | 2
@@ -212,8 +216,8 @@ export interface MQTTConnectionConfig {
 export interface XNCConnectionConfig {
   local_port: number
   protocol: 'protobuf' | 'json'
-  remote_host?: string
-  remote_port?: number
+  remote_host: string
+  remote_port: number
   reconnect_interval?: number
   mapping_config?: Record<string, unknown>
 }
@@ -223,21 +227,47 @@ export interface HTTPConnectionConfig {
   method: 'GET' | 'POST' | 'PUT'
   headers?: Record<string, string>
   timeout?: number
+  username?: string
+  password?: string
 }
 
 export interface NorthChannelConnection {
-  host: string
-  port: number
+  // MQTT字段
+  broker?: string
+  client_id?: string
+  topic?: string
+  qos?: 0 | 1 | 2
+  keepalive?: number
+  clean_session?: boolean
+  will_topic?: string
+  will_message?: string
+  will_qos?: 0 | 1 | 2
+  will_retain?: boolean
+  
+  // XNC字段
+  local_port?: number
+  protocol?: 'protobuf' | 'json'
+  remote_host?: string
+  remote_port?: number
+  reconnect_interval?: number
+  
+  // HTTP字段
+  endpoint?: string
+  method?: 'GET' | 'POST' | 'PUT'
+  headers?: Record<string, string>
+  timeout?: number
+  
+  // 通用字段
+  port?: number
   username?: string
   password?: string
-  mqtt?: MQTTConnectionConfig
-  xnc?: XNCConnectionConfig
-  http?: HTTPConnectionConfig
 }
 
 export interface NorthChannelAdapter {
   type: string
-  config: Record<string, unknown>
+  mapping_config?: Record<string, unknown>
+  headers?: Record<string, string>
+  config?: Record<string, unknown>
 }
 
 export interface NorthChannelUploadStrategy {

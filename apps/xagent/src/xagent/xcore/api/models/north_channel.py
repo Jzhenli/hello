@@ -1,6 +1,5 @@
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from datetime import datetime
 from enum import Enum
 import re
 
@@ -19,47 +18,51 @@ class NorthChannelProtocol(str, Enum):
     CUSTOM = "custom"
 
 
-class MQTTConnectionConfig(BaseModel):
-    client_id: str = Field(..., description="MQTT客户端ID")
-    topic: str = Field(..., description="发布主题")
-    qos: int = Field(default=1, ge=0, le=2, description="QoS级别")
-    keepalive: int = Field(default=60, description="保活时间(秒)")
-    clean_session: bool = Field(default=True, description="清除会话")
+class NorthChannelConnection(BaseModel):
+    """连接配置 - 扁平结构，根据protocol字段确定具体字段"""
+    
+    # MQTT字段
+    broker: Optional[str] = Field(None, description="MQTT Broker地址")
+    client_id: Optional[str] = Field(None, description="MQTT客户端ID")
+    topic: Optional[str] = Field(None, description="发布主题")
+    qos: Optional[int] = Field(None, ge=0, le=2, description="QoS级别")
+    keepalive: Optional[int] = Field(None, description="保活时间(秒)")
+    clean_session: Optional[bool] = Field(None, description="清除会话")
     will_topic: Optional[str] = Field(None, description="遗嘱主题")
     will_message: Optional[str] = Field(None, description="遗嘱消息")
     will_qos: Optional[int] = Field(None, ge=0, le=2, description="遗嘱QoS")
     will_retain: Optional[bool] = Field(None, description="遗嘱保留")
-
-
-class XNCConnectionConfig(BaseModel):
-    local_port: int = Field(default=8888, description="本地监听端口")
-    protocol: str = Field(default="protobuf", description="协议模式: protobuf/json")
-    remote_host: Optional[str] = Field(default="127.0.0.1", description="远程主机地址")
-    remote_port: Optional[int] = Field(default=9000, description="远程端口")
-    reconnect_interval: int = Field(default=5, description="重连间隔(秒)")
-    mapping_config: Optional[Dict[str, Any]] = Field(None, description="设备映射配置")
-
-
-class HTTPConnectionConfig(BaseModel):
-    endpoint: str = Field(..., description="HTTP端点URL")
-    method: str = Field(default="POST", description="HTTP方法")
+    
+    # XNC字段
+    local_port: Optional[int] = Field(None, description="本地监听端口")
+    remote_host: Optional[str] = Field(None, description="远程主机地址")
+    remote_port: Optional[int] = Field(None, description="远程端口")
+    reconnect_interval: Optional[int] = Field(None, description="重连间隔(秒)")
+    
+    # HTTP字段
+    endpoint: Optional[str] = Field(None, description="HTTP端点URL")
+    method: Optional[str] = Field(None, description="HTTP方法")
     headers: Optional[Dict[str, str]] = Field(None, description="请求头")
-    timeout: int = Field(default=30, description="超时时间(秒)")
-
-
-class NorthChannelConnection(BaseModel):
-    host: str = Field(..., description="主机地址")
-    port: int = Field(..., description="端口号")
+    timeout: Optional[int] = Field(None, description="超时时间(秒)")
+    
+    # 通用字段
+    port: Optional[int] = Field(None, description="端口号")
     username: Optional[str] = Field(None, description="用户名")
     password: Optional[str] = Field(None, description="密码")
-    mqtt: Optional[MQTTConnectionConfig] = Field(None, description="MQTT配置")
-    xnc: Optional[XNCConnectionConfig] = Field(None, description="XNC配置")
-    http: Optional[HTTPConnectionConfig] = Field(None, description="HTTP配置")
 
 
 class NorthChannelAdapter(BaseModel):
+    """适配器配置"""
     type: str = Field(default="default", description="适配器类型")
-    config: Dict[str, Any] = Field(default_factory=dict, description="适配器配置")
+    
+    # XNC适配器配置
+    mapping_config: Optional[Dict[str, Any]] = Field(None, description="设备映射配置")
+    
+    # HTTP适配器配置
+    headers: Optional[Dict[str, str]] = Field(None, description="HTTP请求头")
+    
+    # 其他适配器配置（向后兼容）
+    config: Optional[Dict[str, Any]] = Field(None, description="其他适配器配置")
 
 
 class NorthChannelUploadStrategy(BaseModel):

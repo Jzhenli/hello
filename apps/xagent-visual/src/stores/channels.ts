@@ -21,6 +21,27 @@ export interface ChannelListItem {
 }
 
 function mapChannelToListItem(channel: NorthChannelConfig): ChannelListItem {
+  // 从扁平的连接配置中获取 host 和 port
+  let host = ''
+  let port = 0
+  
+  if (channel.protocol === 'mqtt') {
+    host = channel.connection.broker || ''
+    port = channel.connection.port || 1883
+  } else if (channel.protocol === 'xnc') {
+    host = channel.connection.remote_host || ''
+    port = channel.connection.remote_port || 9000
+  } else if (channel.protocol === 'http') {
+    try {
+      const url = new URL(channel.connection.endpoint || '')
+      host = url.hostname
+      port = parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80)
+    } catch {
+      host = channel.connection.endpoint || ''
+      port = 80
+    }
+  }
+  
   return {
     id: channel.id,
     name: channel.name,
@@ -28,8 +49,8 @@ function mapChannelToListItem(channel: NorthChannelConfig): ChannelListItem {
     status: channel.status,
     protocol: channel.protocol,
     connectionStatus: channel.status,
-    host: channel.connection.host,
-    port: channel.connection.port,
+    host,
+    port,
     uploadRate: channel.statistics?.upload_rate || 0,
     successRate: channel.statistics?.success_rate || 0,
     backlogCount: channel.statistics?.backlog_count || 0,

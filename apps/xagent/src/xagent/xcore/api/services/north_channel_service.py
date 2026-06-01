@@ -79,20 +79,17 @@ class NorthChannelService:
         """
         conn_config = service.connection_config
         
-        connection = NorthChannelConnection(
-            host=conn_config.get("host", "localhost"),
-            port=conn_config.get("port", 1883),
-            username=conn_config.get("username"),
-            password=conn_config.get("password"),
-            mqtt=conn_config.get("mqtt"),
-            xnc=conn_config.get("xnc"),
-            http=conn_config.get("http")
-        )
+        # 直接构建扁平的连接配置
+        connection = NorthChannelConnection(**conn_config)
         
-        adapter_data = service.adapter_config or {}
+        # 构建适配器配置
+        adapter_config = service.adapter_config or {}
+        
         adapter = NorthChannelAdapter(
-            type=adapter_data.get("type", "default"),
-            config=adapter_data.get("config", {})
+            type=adapter_config.get("type", "default"),
+            mapping_config=adapter_config.get("mapping_config"),
+            headers=adapter_config.get("headers"),
+            config=adapter_config.get("config")
         )
         
         upload_data = service.upload_config or {}
@@ -147,13 +144,25 @@ class NorthChannelService:
         Returns:
             服务配置
         """
-        # 前端已经只发送相关字段，直接序列化即可
+        # 直接使用扁平的连接配置
         connection_config = channel.connection.model_dump(exclude_none=True)
         
+        # 构建适配器配置（扁平结构，不嵌套 config）
         adapter_config = {
-            "type": channel.adapter.type,
-            "config": channel.adapter.config
+            "type": channel.adapter.type
         }
+        
+        # 添加 mapping_config（如果存在）
+        if channel.adapter.mapping_config:
+            adapter_config["mapping_config"] = channel.adapter.mapping_config
+        
+        # 添加 headers（如果存在）
+        if channel.adapter.headers:
+            adapter_config["headers"] = channel.adapter.headers
+        
+        # 添加其他配置（如果存在）
+        if channel.adapter.config:
+            adapter_config["config"] = channel.adapter.config
         
         upload_config = {
             "immediate_upload": channel.upload_strategy.immediate_upload,
@@ -466,15 +475,15 @@ class NorthChannelService:
         try:
             import aiohttp
             
-            timeout = aiohttp.ClientTimeout(total=channel.connection.http.timeout if channel.connection.http else 30)
+            timeout = aiohttp.ClientTimeout(total=channel.connection.timeout or 30)
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                method = channel.connection.http.method.lower() if channel.connection.http else "get"
+                method = channel.connection.method.lower() if channel.connection.method else "get"
                 
                 async with session.request(
                     method,
-                    channel.connection.http.endpoint if channel.connection.http else "",
-                    headers=channel.connection.http.headers if channel.connection.http else None
+                    channel.connection.endpoint or "",
+                    headers=channel.adapter.headers
                 ) as response:
                     if response.status < 400:
                         return {
@@ -583,26 +592,19 @@ class NorthChannelService:
             return
         
         try:
-            connection_dict = channel.connection.model_dump(exclude_none=True)
             upload_dict = channel.upload_strategy.model_dump(exclude_none=True)
             adapter_dict = channel.adapter.model_dump(exclude_none=True)
             
+            # 直接使用扁平的连接配置
+            connection_dict = channel.connection.model_dump(exclude_none=True)
+            
+            # 构建插件配置（已经是扁平结构，不需要展平）
             plugin_config = {
                 "channel_id": channel.id,
                 **connection_dict,
                 **upload_dict,
                 "adapter_config": adapter_dict
             }
-            
-            if channel.connection.xnc:
-                xnc_config = channel.connection.xnc.model_dump(exclude_none=True)
-                plugin_config.update(xnc_config)
-            elif channel.connection.mqtt:
-                mqtt_config = channel.connection.mqtt.model_dump(exclude_none=True)
-                plugin_config.update(mqtt_config)
-            elif channel.connection.http:
-                http_config = channel.connection.http.model_dump(exclude_none=True)
-                plugin_config.update(http_config)
 
             plugin_info = await self._plugin_loader.load_plugin(
                 plugin_type="north",

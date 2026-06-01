@@ -18,7 +18,7 @@ class DataAdapter(Protocol):
     不需要继承，只需要方法签名匹配即可。
     
     这是北向插件数据适配的统一接口，所有北向适配器
-    （如 MQTTClientAdapter、XNCJsonAdapter、XNCProtobufAdapter）
+    （如 MQTTClientAdapter、XNCProtobufAdapter）
     都遵循此协议。
     """
     

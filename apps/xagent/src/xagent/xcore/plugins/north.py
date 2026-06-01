@@ -43,6 +43,14 @@ class NorthPluginBase(IPlugin):
     __plugin_type__ = PluginType.NORTH.value
     __plugin_name__: Optional[str] = None
     
+    DEFAULT_IMMEDIATE_UPLOAD = True
+    DEFAULT_BATCH_SIZE = 100
+    DEFAULT_INTERVAL = 5
+    DEFAULT_RETRY_COUNT = 3
+    DEFAULT_RETRY_DELAY = 1
+    DEFAULT_RECONNECT_INTERVAL = 5
+    DEFAULT_RECONNECT_MAX_DELAY = 60
+    
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: EventBus):
         """
         初始化插件
@@ -62,13 +70,13 @@ class NorthPluginBase(IPlugin):
         
         self._data_adapter = self._create_data_adapter()
         
-        self._immediate_upload = config.get("immediate_upload", True)
-        self._batch_size = config.get("batch_size", 100)
-        self._interval = config.get("interval", 5)
-        self._retry_count = config.get("retry_count", 3)
-        self._retry_delay = config.get("retry_delay", 1)
-        self._reconnect_interval = config.get("reconnect_interval", 5)
-        self._reconnect_max_delay = config.get("reconnect_max_delay", 60)
+        self._immediate_upload = config.get("immediate_upload", self.DEFAULT_IMMEDIATE_UPLOAD)
+        self._batch_size = config.get("batch_size", self.DEFAULT_BATCH_SIZE)
+        self._interval = config.get("interval", self.DEFAULT_INTERVAL)
+        self._retry_count = config.get("retry_count", self.DEFAULT_RETRY_COUNT)
+        self._retry_delay = config.get("retry_delay", self.DEFAULT_RETRY_DELAY)
+        self._reconnect_interval = config.get("reconnect_interval", self.DEFAULT_RECONNECT_INTERVAL)
+        self._reconnect_max_delay = config.get("reconnect_max_delay", self.DEFAULT_RECONNECT_MAX_DELAY)
         self._reconnect_attempts = 0
         self._reconnect_lock = asyncio.Lock()
         

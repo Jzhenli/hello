@@ -4,9 +4,7 @@ Downlink: External system → XAgent (commands, read/write requests)
 Uplink: XAgent → External system (data upload, property updates)
 """
 
-import json
 import logging
-import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
@@ -38,7 +36,6 @@ class DownlinkHandler:
     
     Responsibilities:
     - Handle Protobuf format commands (READ_PROPERTY, WRITE_PROPERTY)
-    - Handle JSON format commands
     - Send responses back to client
     
     Does NOT handle:
@@ -51,9 +48,6 @@ class DownlinkHandler:
         
         # Handle Protobuf command
         result = await handler.handle_protobuf(data, addr, transport)
-        
-        # Handle JSON command
-        result = await handler.handle_json(data, addr, transport)
     """
     
     def __init__(
@@ -107,58 +101,6 @@ class DownlinkHandler:
         except Exception as e:
             logger.error(f"Error handling protobuf command: {e}", exc_info=True)
             return DownlinkResult(success=False, error=str(e))
-    
-    async def handle_json(
-        self,
-        data: bytes,
-        addr: tuple,
-        transport: Optional["asyncio.DatagramTransport"] = None
-    ) -> DownlinkResult:
-        """Handle JSON format command
-        
-        Args:
-            data: Raw JSON data
-            addr: Client address (host, port)
-            transport: UDP transport for sending response
-            
-        Returns:
-            DownlinkResult with execution status
-        """
-        try:
-            payload = data.decode("utf-8")
-            logger.info(f"Received JSON command from {addr}: {payload}")
-            
-            command = json.loads(payload)
-            asset = command.get("asset")
-            cmd_data = command.get("data")
-            
-            if not asset or not cmd_data:
-                logger.warning("Invalid command: missing asset or data")
-                result = DownlinkResult(success=False, error="Invalid command: missing asset or data")
-            else:
-                await self._event_bus.publish(Event(
-                    event_type=EventType.COMMAND_RECEIVED,
-                    data={"asset": asset, "data": cmd_data}
-                ))
-                result = DownlinkResult(success=True, device_id=asset, data=cmd_data)
-            
-            if transport:
-                await self._send_json_response(addr, transport, result)
-            
-            return result
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON command: {e}")
-            result = DownlinkResult(success=False, error=f"Invalid JSON: {str(e)}")
-            if transport:
-                await self._send_json_response(addr, transport, result)
-            return result
-        except Exception as e:
-            logger.error(f"Error handling JSON command: {e}", exc_info=True)
-            result = DownlinkResult(success=False, error=str(e))
-            if transport:
-                await self._send_json_response(addr, transport, result)
-            return result
     
     async def _handle_read_property(self, msg: apiMsg) -> DownlinkResult:
         """Handle READ_PROPERTY command"""
@@ -232,35 +174,6 @@ class DownlinkHandler:
             
         except Exception as e:
             logger.error(f"Error sending protobuf response: {e}")
-    
-    async def _send_json_response(
-        self,
-        addr: tuple,
-        transport: "asyncio.DatagramTransport",
-        result: DownlinkResult
-    ) -> None:
-        """Send JSON response"""
-        try:
-            response = {
-                "status": "success" if result.success else "error",
-                "timestamp": time.time()
-            }
-            
-            if result.success:
-                if result.device_id:
-                    response["asset"] = result.device_id
-                if result.data:
-                    response["data"] = result.data
-            else:
-                response["error"] = result.error
-            
-            response_json = json.dumps(response, ensure_ascii=False)
-            response_bytes = response_json.encode("utf-8")
-            transport.sendto(response_bytes, addr)
-            logger.debug(f"Sent JSON response to {addr}")
-            
-        except Exception as e:
-            logger.error(f"Error sending JSON response: {e}")
 
 
 # Backward compatibility alias

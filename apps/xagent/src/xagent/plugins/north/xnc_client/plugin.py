@@ -5,23 +5,22 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from xagent.xcore.core.event_bus import EventBus, Event, EventType
+from xagent.xcore.core.event_bus import EventBus
 from xagent.xcore.plugins.north import NorthPluginBase
 from xagent.xcore.storage.interface import Reading
-from .adapter import XNCJsonAdapter, XNCProtobufAdapter
+from .adapter import XNCProtobufAdapter
 from .mapping import DeviceMapper
 from .protocol import UDPProtocolCodec
 from .codec import ProtobufCodec
 from .downlink import DownlinkHandler
-from .generated import MessageType, apiMsg
+from .generated import apiMsg
 from .constants import (
     DEFAULT_REMOTE_HOST,
     DEFAULT_REMOTE_PORT,
     DEFAULT_LOCAL_PORT,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_INTERVAL,
-    DEFAULT_RECONNECT_INTERVAL,
-    PROTOCOL_MODE_PROTOBUF,
+    DEFAULT_BATCH_SIZE as XNC_DEFAULT_BATCH_SIZE,
+    DEFAULT_INTERVAL as XNC_DEFAULT_INTERVAL,
+    DEFAULT_RECONNECT_INTERVAL as XNC_DEFAULT_RECONNECT_INTERVAL,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +66,7 @@ class XNCClientPlugin(NorthPluginBase):
     
     Features:
     - UDP protocol data upload
-    - JSON and Protobuf format support
+    - Protobuf format support
     - Downlink command reception
     - Automatic device/point mapping
     
@@ -82,9 +81,11 @@ class XNCClientPlugin(NorthPluginBase):
     
     __plugin_name__ = "xnc"
     
+    DEFAULT_BATCH_SIZE = XNC_DEFAULT_BATCH_SIZE
+    DEFAULT_INTERVAL = XNC_DEFAULT_INTERVAL
+    DEFAULT_RECONNECT_INTERVAL = XNC_DEFAULT_RECONNECT_INTERVAL
+    
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: EventBus):
-        self._protocol_mode = config.get("protocol", PROTOCOL_MODE_PROTOBUF)
-        
         self._remote_host = config.get("remote_host", DEFAULT_REMOTE_HOST)
         self._remote_port = config.get("remote_port", DEFAULT_REMOTE_PORT)
         self._local_port = config.get("local_port", DEFAULT_LOCAL_PORT)
@@ -104,7 +105,7 @@ class XNCClientPlugin(NorthPluginBase):
         logger.info(
             f"XNC Client plugin initialized: "
             f"remote={self._remote_host}:{self._remote_port}, "
-            f"local_port={self._local_port}, protocol={self._protocol_mode}"
+            f"local_port={self._local_port}"
         )
     
     # ===== Override properties to use XNC-specific mapper =====
@@ -136,11 +137,7 @@ class XNCClientPlugin(NorthPluginBase):
     
     def _create_data_adapter(self) -> Any:
         adapter_config = self.config.get("adapter_config", {})
-        
-        if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-            return XNCProtobufAdapter(mapper=self._mapper, config=adapter_config)
-        else:
-            return XNCJsonAdapter(adapter_config)
+        return XNCProtobufAdapter(mapper=self._mapper, config=adapter_config)
     
     async def _do_connect(self) -> bool:
         loop = asyncio.get_event_loop()
@@ -173,10 +170,7 @@ class XNCClientPlugin(NorthPluginBase):
         if not self._send_transport:
             return False
         
-        if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-            return await self._send_protobuf_payload(payload)
-        else:
-            return await self._send_json_payload(payload)
+        return await self._send_protobuf_payload(payload)
     
     async def _do_subscribe(self) -> None:
         """UDP doesn't need active subscription, commands received via UDPCommandProtocol"""
@@ -204,28 +198,12 @@ class XNCClientPlugin(NorthPluginBase):
             logger.error(f"Error sending protobuf: {e}")
             return False
     
-    async def _send_json_payload(self, payload: Any) -> bool:
-        """Send JSON format data"""
-        try:
-            payload_json = self._data_adapter.to_json(payload)
-            payload_bytes = payload_json.encode("utf-8")
-            self._send_transport.sendto(payload_bytes)
-            return True
-        except Exception as e:
-            logger.error(f"Error sending JSON: {e}")
-            return False
-    
     async def _handle_command_data(self, data: bytes, addr: tuple) -> None:
         """Handle received command data - delegates to CommandHandler"""
         try:
-            if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-                await self._command_handler.handle_protobuf(
-                    data, addr, self._command_transport
-                )
-            else:
-                await self._command_handler.handle_json(
-                    data, addr, self._command_transport
-                )
+            await self._command_handler.handle_protobuf(
+                data, addr, self._command_transport
+            )
         except Exception as e:
             logger.error(f"Error handling command: {e}", exc_info=True)
     
@@ -240,7 +218,7 @@ class XNCClientPlugin(NorthPluginBase):
         if not readings:
             return 0
         
-        logger.info(f"Sending {len(readings)} readings via UDP ({self._protocol_mode})")
+        logger.info(f"Sending {len(readings)} readings via UDP")
         
         context = {"timestamp": time.time()}
         payload = self.adapt_readings(readings, context)
@@ -248,21 +226,14 @@ class XNCClientPlugin(NorthPluginBase):
         if payload is None:
             return 0
         
-        if self._protocol_mode == PROTOCOL_MODE_PROTOBUF:
-            messages = payload if isinstance(payload, list) else [payload]
-            sent = 0
-            
-            for msg in messages:
-                if await self._send_protobuf_payload(msg):
-                    sent += 1
-            
-            if sent > 0:
-                logger.info(f"Sent {sent} protobuf messages to {self._remote_host}:{self._remote_port}")
-            
-            return sent
-        else:
-            success = await self._send_json_payload(payload)
-            if success:
-                logger.info(f"Sent {len(readings)} readings to {self._remote_host}:{self._remote_port}")
-                return len(readings)
-            return 0
+        messages = payload if isinstance(payload, list) else [payload]
+        sent = 0
+        
+        for msg in messages:
+            if await self._send_protobuf_payload(msg):
+                sent += 1
+        
+        if sent > 0:
+            logger.info(f"Sent {sent} protobuf messages to {self._remote_host}:{self._remote_port}")
+        
+        return sent
