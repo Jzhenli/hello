@@ -117,10 +117,10 @@ class HealthMonitor(ILifecycle):
         health = self.get_system_health()
         
         status_emoji = {
-            "healthy": "✓",
-            "partial": "⚠",
-            "degraded": "✗",
-            "not_initialized": "?"
+            "healthy": "[OK]",
+            "partial": "[WARN]",
+            "degraded": "[FAIL]",
+            "not_initialized": "[?]"
         }
         
         emoji = status_emoji.get(health["overall_status"], "?")

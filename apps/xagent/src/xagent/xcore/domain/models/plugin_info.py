@@ -27,7 +27,7 @@ class PluginStartupResult:
     plugin_id: Optional[str] = None
     
     def __repr__(self) -> str:
-        status = "✓" if self.success else "✗"
+        status = "[OK]" if self.success else "[FAIL]"
         return (
             f"PluginStartupResult({status} {self.name}/{self.plugin_type} "
             f"stage={self.stage})"

@@ -41,6 +41,7 @@ from .interfaces import (
     IConfigManager,
 )
 from .container import Container, ContainerError
+from .lifecycle import SimpleLifecycleManager
 
 __all__ = [
     "ConfigManager",
@@ -83,4 +84,5 @@ __all__ = [
     "IConfigManager",
     "Container",
     "ContainerError",
+    "SimpleLifecycleManager",
 ]

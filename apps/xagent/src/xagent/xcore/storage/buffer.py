@@ -7,6 +7,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 from .interface import StorageInterface, Reading
+from ..core.interfaces import ILifecycle
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class BufferStats:
     pending_count: int = 0
 
 
-class WriteBehindBuffer:
+class WriteBehindBuffer(ILifecycle):
     def __init__(
         self,
         storage: StorageInterface,
@@ -36,6 +37,11 @@ class WriteBehindBuffer:
         self._running: bool = False
         self._flush_task: Optional[asyncio.Task] = None
         self._stats = BufferStats(buffer_size=batch_size)
+
+    @property
+    def is_running(self) -> bool:
+        """检查缓冲区是否正在运行"""
+        return self._running
 
     async def start(self):
         if self._running:

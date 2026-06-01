@@ -8,11 +8,12 @@ from collections import OrderedDict
 
 from ..models.command import CommandStatus, ControlCommand
 from ...core.plugin_loader import PluginType, PluginLoader
+from ...core.interfaces import ILifecycle
 
 logger = logging.getLogger(__name__)
 
 
-class CommandExecutor:
+class CommandExecutor(ILifecycle):
     """Async command execution system"""
     
     def __init__(self, max_history: int = 100, default_timeout: float = 30.0):
@@ -24,6 +25,11 @@ class CommandExecutor:
         self._running: bool = False
         self._worker_task: Optional[asyncio.Task] = None
         self._plugin_loader: Optional[PluginLoader] = None
+
+    @property
+    def is_running(self) -> bool:
+        """检查命令执行器是否正在运行"""
+        return self._running
 
     def set_plugin_loader(self, plugin_loader: PluginLoader) -> None:
         self._plugin_loader = plugin_loader

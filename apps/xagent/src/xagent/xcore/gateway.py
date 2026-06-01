@@ -14,10 +14,11 @@ from .core.paths import get_plugins_dir
 from .core.plugin_loader import PluginLoader, PluginType
 from .core.interfaces import ILifecycle
 from .core.scheduler import Scheduler, TaskType
+from .core.lifecycle import SimpleLifecycleManager
 from .services.orchestration import PluginOrchestrator
 from .services.initialization import GatewayInitializer, DeviceLoader
 from .services.monitoring import HealthMonitor
-from .storage import DataCleanupTask
+from .storage import DataCleanupTask, StorageAdapter
 from .api.dependencies import set_gateway_storage
 
 if TYPE_CHECKING:
@@ -43,6 +44,7 @@ class Gateway(ILifecycle):
         """
         self.container = Container()
         self._external_config_manager = config_manager
+        self._lifecycle_manager = SimpleLifecycleManager()
         
         # 服务层
         self._initializer: Optional[GatewayInitializer] = None
@@ -101,6 +103,23 @@ class Gateway(ILifecycle):
         self.config_manager = self.container.resolve(ConfigManager)
         self.plugin_loader = self.container.resolve(PluginLoader)
         
+        # 注册核心组件到生命周期管理器
+        from .storage import SQLiteStorage, WriteBehindBuffer
+        from .core.metadata import MetadataManager
+        from .api.services.command_executor import CommandExecutor
+        
+        storage = self.container.resolve(SQLiteStorage)
+        buffer = self.container.resolve(WriteBehindBuffer)
+        metadata_manager = self.container.resolve(MetadataManager)
+        command_executor = self.container.resolve(CommandExecutor)
+        
+        # 注册组件（按启动顺序）
+        self._lifecycle_manager.register(self._initializer, "GatewayInitializer")
+        self._lifecycle_manager.register(StorageAdapter(storage), "StorageAdapter")
+        self._lifecycle_manager.register(buffer, "WriteBehindBuffer")
+        self._lifecycle_manager.register(command_executor, "CommandExecutor")
+        self._lifecycle_manager.register(self.plugin_loader, "PluginLoader")
+        
         # 创建服务层
         self._orchestrator = PluginOrchestrator(
             plugin_loader=self.plugin_loader,
@@ -109,6 +128,7 @@ class Gateway(ILifecycle):
         
         self._health_monitor = HealthMonitor(self.plugin_loader)
         await self._health_monitor.start()
+        self._lifecycle_manager.register(self._health_monitor, "HealthMonitor")
         
         # 初始化数据清理任务
         await self._initialize_cleanup_task()
@@ -116,19 +136,19 @@ class Gateway(ILifecycle):
         # 初始化规则引擎
         await self._initialize_rule_engine()
         
+        # 注册规则引擎到生命周期管理器
+        if self.rule_engine:
+            self._lifecycle_manager.register(self.rule_engine, "RuleEngineOrchestrator")
+        
         # 初始化用户权限服务
         await self._initialize_user_permission_service()
         
         # 设置API依赖
-        from .storage import SQLiteStorage, WriteBehindBuffer
-        from .core.metadata import MetadataManager
-        from .api.services.command_executor import CommandExecutor
-        
         set_gateway_storage(
-            storage=self.container.resolve(SQLiteStorage),
-            buffer=self.container.resolve(WriteBehindBuffer),
-            metadata_manager=self.container.resolve(MetadataManager),
-            command_executor=self.container.resolve(CommandExecutor),
+            storage=storage,
+            buffer=buffer,
+            metadata_manager=metadata_manager,
+            command_executor=command_executor,
             gateway=self,
             cleanup_task=self.cleanup_task,
             user_permission_service=self._user_permission_service
@@ -235,6 +255,9 @@ class Gateway(ILifecycle):
             await self.initialize()
         
         logger.info("Starting XAgent Gateway core services...")
+        
+        # 启动生命周期管理器
+        await self._lifecycle_manager.start()
         
         # 启动清理任务
         if self.cleanup_task:
@@ -404,13 +427,24 @@ class Gateway(ILifecycle):
         self._plugins_started = False
         self._core_started = False
         
-        # 停止规则引擎
-        if self.rule_engine:
-            try:
-                await self.rule_engine.stop()
-                logger.info("Rule Engine stopped")
-            except Exception as e:
-                logger.error(f"Error stopping rule engine: {e}")
+        # 停止调度任务
+        if self._config_watcher_task_id:
+            scheduler = self.container.try_resolve(Scheduler)
+            if scheduler:
+                try:
+                    await scheduler.stop_task(self._config_watcher_task_id)
+                    logger.info("Config watcher task stopped")
+                except Exception as e:
+                    logger.error(f"Error stopping config watcher: {e}")
+        
+        if self._cleanup_scheduler_task_id:
+            scheduler = self.container.try_resolve(Scheduler)
+            if scheduler:
+                try:
+                    await scheduler.stop_task(self._cleanup_scheduler_task_id)
+                    logger.info("Data cleanup scheduler task stopped")
+                except Exception as e:
+                    logger.error(f"Error stopping cleanup task: {e}")
         
         # 关闭持久化管理器
         from .rule_engine.persistence import RulePersistenceManager
@@ -422,38 +456,7 @@ class Gateway(ILifecycle):
             except Exception as e:
                 logger.error(f"Error closing persistence manager: {e}")
         
-        # 停止配置监控
-        if self._config_watcher_task_id:
-            scheduler = self.container.try_resolve(Scheduler)
-            if scheduler:
-                try:
-                    await scheduler.stop_task(self._config_watcher_task_id)
-                    logger.info("Config watcher task stopped")
-                except Exception as e:
-                    logger.error(f"Error stopping config watcher task: {e}")
-        
-        # 停止清理任务
-        if self._cleanup_scheduler_task_id:
-            scheduler = self.container.try_resolve(Scheduler)
-            if scheduler:
-                try:
-                    await scheduler.stop_task(self._cleanup_scheduler_task_id)
-                    logger.info("Data cleanup scheduler task stopped")
-                except Exception as e:
-                    logger.error(f"Error stopping cleanup task: {e}")
-        
-        # 停止健康监控
-        if self._health_monitor:
-            try:
-                await self._health_monitor.stop()
-            except Exception as e:
-                logger.error(f"Error stopping health monitor: {e}")
-        
-        # 停止初始化服务（会关闭所有组件）
-        if self._initializer:
-            try:
-                await self._initializer.stop()
-            except Exception as e:
-                logger.error(f"Error stopping initializer: {e}")
+        # 使用生命周期管理器统一停止所有组件
+        await self._lifecycle_manager.stop()
         
         logger.info("XAgent Gateway stopped")
