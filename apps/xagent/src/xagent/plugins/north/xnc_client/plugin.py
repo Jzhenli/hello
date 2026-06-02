@@ -236,4 +236,14 @@ class XNCClientPlugin(NorthPluginBase):
         if sent > 0:
             logger.info(f"Sent {sent} protobuf messages to {self._remote_host}:{self._remote_port}")
         
+        success = sent > 0
+        sent_count = len(readings) if success else 0
+        
+        if self._stats_manager:
+            await self._stats_manager.record_channel_stats(
+                self._service_name,
+                sent_count,
+                success=success
+            )
+        
         return sent

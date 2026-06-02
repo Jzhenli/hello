@@ -276,9 +276,21 @@ class MQTTClientPlugin(NorthPluginBase):
             return 0
         
         if self._publish_mode == PUBLISH_MODE_BATCH:
-            return await self._send_batch(readings)
+            sent = await self._send_batch(readings)
         else:
-            return await self._send_single(readings)
+            sent = await self._send_single(readings)
+        
+        success = sent > 0
+        sent_count = sent if success else 0
+        
+        if self._stats_manager:
+            await self._stats_manager.record_channel_stats(
+                self._service_name,
+                sent_count,
+                success=success
+            )
+        
+        return sent
     
     async def _send_single(self, readings: List[Reading]) -> int:
         """Send readings one by one"""

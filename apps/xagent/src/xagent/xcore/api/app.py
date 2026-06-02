@@ -36,6 +36,8 @@ async def lifespan(app: FastAPI):
     logger.info("XAgent Gateway starting...")
     
     from ..gateway import Gateway
+    from .services.north_channel_service import NorthChannelService
+    from ..core.container import Container
     
     state = get_app_state()
     
@@ -44,6 +46,16 @@ async def lifespan(app: FastAPI):
         await gateway.initialize()
         await gateway.start_core()
         state._gateway_owned = True
+        
+        # 初始化 NorthChannelService
+        container = Container.get_instance()
+        north_channel_service = NorthChannelService(
+            db_path=gateway.config_manager.config.database.path,
+            plugin_loader=gateway.plugin_loader
+        )
+        await north_channel_service.initialize()
+        container.register_instance(NorthChannelService, north_channel_service)
+        logger.info("NorthChannelService initialized")
     else:
         state._gateway_owned = False
     

@@ -16,6 +16,7 @@ from ...core.interfaces import ILifecycle
 from ...storage import SQLiteStorage, WriteBehindBuffer
 from ...api.services.command_executor import CommandExecutor
 from ...core.exceptions import InitializationError
+from ...statistics import StatisticsManager
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class GatewayInitializer(ILifecycle):
         self.buffer: Optional[WriteBehindBuffer] = None
         self.command_executor: Optional[CommandExecutor] = None
         self.metadata_manager: Optional[MetadataManager] = None
+        self.stats_manager: Optional[StatisticsManager] = None
     
     @property
     def is_running(self) -> bool:
@@ -93,10 +95,13 @@ class GatewayInitializer(ILifecycle):
             # 6. 初始化命令执行器
             await self._initialize_command_executor()
             
-            # 7. 初始化插件加载器
+            # 7. 初始化统计管理器
+            await self._initialize_stats_manager()
+            
+            # 8. 初始化插件加载器
             await self._initialize_plugin_loader()
             
-            # 8. 配置依赖注入容器
+            # 9. 配置依赖注入容器
             self._configure_container()
             
             logger.info("All components initialized successfully")
@@ -163,6 +168,21 @@ class GatewayInitializer(ILifecycle):
         await self.command_executor.start()
         logger.debug("CommandExecutor initialized")
     
+    async def _initialize_stats_manager(self) -> None:
+        """初始化统计管理器"""
+        logger.debug("Initializing StatisticsManager...")
+        
+        stats_config = {}
+        if hasattr(self.config_manager.config, 'statistics'):
+            stats_config = self.config_manager.config.statistics
+        
+        self.stats_manager = StatisticsManager(
+            storage=self.storage,
+            config=stats_config
+        )
+        
+        logger.debug("StatisticsManager initialized")
+    
     async def _initialize_plugin_loader(self) -> None:
         """初始化插件加载器"""
         logger.debug("Initializing PluginLoader...")
@@ -190,7 +210,8 @@ class GatewayInitializer(ILifecycle):
             metadata_manager=self.metadata_manager,
             plugin_dirs=plugin_dirs,
             discovery_service=discovery_service,
-            registry=shared_registry
+            registry=shared_registry,
+            stats_manager=self.stats_manager
         )
         await self.plugin_loader.start()
         
@@ -218,6 +239,7 @@ class GatewayInitializer(ILifecycle):
         self.container.register_instance(WriteBehindBuffer, self.buffer)
         self.container.register_instance(CommandExecutor, self.command_executor)
         self.container.register_instance(MetadataManager, self.metadata_manager)
+        self.container.register_instance(StatisticsManager, self.stats_manager)
         
         logger.debug("Dependency injection container configured")
     

@@ -5,13 +5,16 @@ import logging
 import time
 import warnings
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..storage.interface import Reading
 from ..core.event_bus import EventBus, EventType, Event
 from ..core.plugin_loader import PluginType
 from ..core.exceptions import PluginStartError
 from ..core.interfaces import IPlugin
+
+if TYPE_CHECKING:
+    from ..statistics import StatisticsManager
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +69,8 @@ class NorthPluginBase(IPlugin):
         
         self._running = False
         self._connected = False
-        self._service_name = self.__plugin_name__ or self.__class__.__name__
+        
+        self._service_name = config.get("channel_id") or self.__plugin_name__ or self.__class__.__name__
         
         self._data_adapter = self._create_data_adapter()
         
@@ -82,6 +86,8 @@ class NorthPluginBase(IPlugin):
         
         self._upload_task: Optional[asyncio.Task] = None
         self._command_task: Optional[asyncio.Task] = None
+        
+        self._stats_manager = None
         
         if self._immediate_upload and event_bus:
             event_bus.subscribe(EventType.WRITE_COMPLETED, self._handle_write_completed)
@@ -101,6 +107,15 @@ class NorthPluginBase(IPlugin):
     def shutdown(self) -> None:
         if self._running:
             self._running = False
+    
+    def set_stats_manager(self, stats_manager: "StatisticsManager") -> None:
+        """设置统计管理器
+        
+        Args:
+            stats_manager: StatisticsManager 实例
+        """
+        self._stats_manager = stats_manager
+        logger.debug(f"Stats manager set for {self._service_name}")
     
     # ===== 子类必须实现的钩子方法 =====
     
@@ -365,7 +380,16 @@ class NorthPluginBase(IPlugin):
             return 0
         
         success = await self._send_with_retry(payload)
-        return len(readings) if success else 0
+        sent_count = len(readings) if success else 0
+        
+        if self._stats_manager:
+            await self._stats_manager.record_channel_stats(
+                self._service_name,
+                sent_count,
+                success=success
+            )
+        
+        return sent_count
     
     async def _send_with_retry(self, payload: Any) -> bool:
         """带重试的发送

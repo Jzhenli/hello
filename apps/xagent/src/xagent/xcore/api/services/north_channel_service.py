@@ -32,6 +32,7 @@ class NorthChannelService:
     - 北向通道配置的 CRUD 操作
     - 通道状态管理
     - 插件实例生命周期管理
+    - 统计数据持久化（通过 StatisticsManager 调用）
     """
     
     def __init__(
@@ -53,6 +54,13 @@ class NorthChannelService:
     async def initialize(self) -> None:
         """初始化服务，从数据库加载配置到缓存"""
         await self._load_cache()
+        
+        if self._plugin_loader:
+            stats_manager = self._plugin_loader.lifecycle.stats_manager
+            if stats_manager and hasattr(stats_manager, 'set_channel_service'):
+                stats_manager.set_channel_service(self)
+                logger.debug("NorthChannelService injected into StatisticsManager")
+        
         logger.info(f"NorthChannelService initialized with {len(self._cache)} channels")
     
     async def _load_cache(self) -> None:
@@ -440,7 +448,9 @@ class NorthChannelService:
             sock.settimeout(5)
             
             test_data = b"TEST"
-            sock.sendto(test_data, (channel.connection.host, channel.connection.port))
+            remote_host = channel.connection.remote_host or "127.0.0.1"
+            remote_port = channel.connection.remote_port or 9000
+            sock.sendto(test_data, (remote_host, remote_port))
             
             try:
                 response, _ = sock.recvfrom(1024)
@@ -613,6 +623,10 @@ class NorthChannelService:
             )
             
             if plugin_info:
+                if hasattr(plugin_info.instance, 'set_statistics_service'):
+                    plugin_info.instance.set_statistics_service(self)
+                    logger.info(f"Statistics service injected for channel {channel.id}")
+                
                 await self._plugin_loader.start_plugin(plugin_info.plugin_id)
                 await self.update_status(channel.id, NorthChannelStatus.ONLINE)
                 logger.info(f"Plugin loaded for channel {channel.id}")

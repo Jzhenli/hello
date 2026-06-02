@@ -28,7 +28,8 @@ class PluginLifecycle:
         registry: PluginRegistry,
         event_bus: EventBus,
         scheduler: Scheduler,
-        storage: Any = None
+        storage: Any = None,
+        stats_manager: Any = None
     ):
         """初始化生命周期管理器
         
@@ -37,11 +38,13 @@ class PluginLifecycle:
             event_bus: 事件总线
             scheduler: 调度器
             storage: 存储对象
+            stats_manager: 统计管理器
         """
         self.registry = registry
         self.event_bus = event_bus
         self.scheduler = scheduler
         self.storage = storage
+        self.stats_manager = stats_manager
     
     async def load_plugin(
         self,
@@ -129,6 +132,10 @@ class PluginLifecycle:
                 storage=self.storage,
                 event_bus=self.event_bus
             )
+            
+            if self.stats_manager and hasattr(instance, 'set_stats_manager'):
+                instance.set_stats_manager(self.stats_manager)
+                logger.debug(f"Stats manager injected for {plugin_class.__name__}")
         else:
             instance = plugin_class()
             if config and hasattr(instance, 'initialize'):

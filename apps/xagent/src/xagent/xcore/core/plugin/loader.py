@@ -40,7 +40,8 @@ class PluginLoader(ILifecycle):
         metadata_manager: Optional[Any] = None,
         plugin_dirs: Optional[List[str]] = None,
         discovery_service: Optional[PluginDiscoveryService] = None,
-        registry: Optional[PluginRegistry] = None
+        registry: Optional[PluginRegistry] = None,
+        stats_manager: Any = None
     ):
         """初始化插件加载器
         
@@ -53,6 +54,7 @@ class PluginLoader(ILifecycle):
             plugin_dirs: 插件目录列表
             discovery_service: 插件发现服务（可选，用于共享发现结果）
             registry: 插件注册表（可选，用于共享注册表）
+            stats_manager: 统计管理器
         """
         self.config_manager = config_manager
         self.event_bus = event_bus
@@ -72,7 +74,8 @@ class PluginLoader(ILifecycle):
             registry=self.registry,
             event_bus=event_bus,
             scheduler=scheduler,
-            storage=storage
+            storage=storage,
+            stats_manager=stats_manager
         )
         
         self._running: bool = False

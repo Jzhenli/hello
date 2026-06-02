@@ -20,6 +20,7 @@ from .services.initialization import GatewayInitializer, DeviceLoader
 from .services.monitoring import HealthMonitor
 from .storage import DataCleanupTask, StorageAdapter
 from .api.dependencies import set_gateway_storage
+from .statistics import StatisticsManager
 
 if TYPE_CHECKING:
     from .rule_engine.orchestrator import RuleEngineOrchestrator
@@ -57,6 +58,7 @@ class Gateway(ILifecycle):
         self.plugin_loader: Optional[PluginLoader] = None
         self.cleanup_task: Optional[DataCleanupTask] = None
         self.rule_engine: Optional["RuleEngineOrchestrator"] = None
+        self.stats_manager: Optional[StatisticsManager] = None
         
         # 状态
         self._running: bool = False
@@ -102,6 +104,7 @@ class Gateway(ILifecycle):
         # 从容器获取组件引用
         self.config_manager = self.container.resolve(ConfigManager)
         self.plugin_loader = self.container.resolve(PluginLoader)
+        self.stats_manager = self.container.try_resolve(StatisticsManager)
         
         # 注册核心组件到生命周期管理器
         from .storage import SQLiteStorage, WriteBehindBuffer
@@ -270,6 +273,10 @@ class Gateway(ILifecycle):
         if self.rule_engine:
             await self.rule_engine.start()
             logger.info("Rule Engine started")
+        
+        # 启动统计管理器
+        if self.stats_manager:
+            await self.stats_manager.start()
         
         self._core_started = True
         logger.info("XAgent Gateway core services started")
@@ -455,6 +462,10 @@ class Gateway(ILifecycle):
                 logger.info("Rule Persistence Manager closed")
             except Exception as e:
                 logger.error(f"Error closing persistence manager: {e}")
+        
+        # 停止统计管理器
+        if self.stats_manager:
+            await self.stats_manager.stop()
         
         # 使用生命周期管理器统一停止所有组件
         await self._lifecycle_manager.stop()
