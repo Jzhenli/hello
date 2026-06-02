@@ -144,28 +144,36 @@ class StatisticsManager:
     async def record_data_collection(
         self, 
         device_id: str, 
-        point_count: int
+        point_count: int,
+        successful_count: Optional[int] = None
     ) -> None:
         """记录数据采集
         
         用于统计：
         - 按小时的采集趋势
         - 按设备的采集分布
+        - 采集成功率
         
         Args:
             device_id: 设备ID
             point_count: 采集的点位数量
+            successful_count: 成功采集的点位数量，None 时默认等于 point_count
         """
         if not self._enabled:
             return
         
+        if successful_count is None:
+            successful_count = point_count
+        
+        success = successful_count > 0 if point_count > 0 else True
+        
         hour_key = f"collection:{datetime.now().strftime('%Y-%m-%d:%H')}"
         hour_collector = self._get_or_create_collector(hour_key)
-        await hour_collector.record(point_count, success=True)
+        await hour_collector.record(point_count, success=success)
         
         device_key = f"device:{device_id}"
         device_collector = self._get_or_create_collector(device_key)
-        await device_collector.record(point_count, success=True)
+        await device_collector.record(point_count, success=success)
     
     async def get_hourly_trend(self, hours: int = 24) -> List[Dict[str, Any]]:
         """获取按小时的采集趋势

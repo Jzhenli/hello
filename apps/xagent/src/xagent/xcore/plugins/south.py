@@ -1,9 +1,9 @@
 """South Plugin - Base class for data acquisition plugins"""
 
 import logging
-from abc import abstractmethod
-from typing import Any, Dict, List, Optional
 import time
+from abc import abstractmethod
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..storage.interface import Reading
 from ..core.event_bus import EventBus, EventType, Event
@@ -11,6 +11,9 @@ from ..core.plugin_loader import PluginType
 from ..core.exceptions import PluginStartError
 from ..core.interfaces import IPlugin
 from ..transform import StandardDataPoint, ScaleOffsetTransformer
+
+if TYPE_CHECKING:
+    from ..statistics import StatisticsManager
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,18 @@ class SouthPluginBase(IPlugin):
         self._service_name = self.__plugin_name__ or self.__class__.__name__
         
         self._data_converter = self._create_data_converter()
+        
+        self._stats_manager: Optional["StatisticsManager"] = None
+        
+        self._performance_stats = {
+            "total_polls": 0,
+            "total_points_read": 0,
+            "successful_points_read": 0,
+            "last_poll_time": 0.0,
+            "avg_poll_time": 0.0,
+            "total_time": 0.0,
+            "success_rate": 0.0,
+        }
         
         if event_bus:
             event_bus.subscribe(EventType.COMMAND_RECEIVED, self._handle_command_event)
@@ -114,6 +129,55 @@ class SouthPluginBase(IPlugin):
     def shutdown(self) -> None:
         if self._running:
             self._running = False
+    
+    def set_stats_manager(self, stats_manager: "StatisticsManager") -> None:
+        """设置统计管理器
+        
+        Args:
+            stats_manager: StatisticsManager 实例
+        """
+        self._stats_manager = stats_manager
+        logger.debug(f"Stats manager set for {self._service_name}")
+    
+    async def _update_performance_stats(
+        self, 
+        poll_duration: float, 
+        points_count: int, 
+        successful_count: int = 0
+    ) -> None:
+        """更新性能统计
+        
+        更新本地统计并同步到 StatisticsManager。
+        
+        Args:
+            poll_duration: 轮询耗时（秒）
+            points_count: 点位总数
+            successful_count: 成功点位数
+        """
+        self._performance_stats["total_polls"] += 1
+        self._performance_stats["total_points_read"] += points_count
+        self._performance_stats["successful_points_read"] += successful_count
+        self._performance_stats["last_poll_time"] = poll_duration
+        self._performance_stats["total_time"] += poll_duration
+        
+        if self._performance_stats["total_polls"] > 0:
+            self._performance_stats["avg_poll_time"] = (
+                self._performance_stats["total_time"] /
+                self._performance_stats["total_polls"]
+            )
+        
+        if self._performance_stats["total_points_read"] > 0:
+            self._performance_stats["success_rate"] = (
+                self._performance_stats["successful_points_read"] /
+                self._performance_stats["total_points_read"]
+            )
+        
+        if self._stats_manager:
+            await self._stats_manager.record_data_collection(
+                device_id=self._asset_name,
+                point_count=points_count,
+                successful_count=successful_count
+            )
 
     @abstractmethod
     def _create_data_converter(self) -> Any:

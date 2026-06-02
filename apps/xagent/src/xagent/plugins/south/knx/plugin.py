@@ -177,16 +177,6 @@ class KNXPlugin(SouthPluginBase):
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._last_telegram_time: Dict[str, float] = {}
         
-        self._performance_stats = {
-            "total_polls": 0,
-            "total_points_read": 0,
-            "successful_points_read": 0,
-            "total_time": 0.0,
-            "avg_poll_time": 0.0,
-            "last_poll_time": 0.0,
-            "success_rate": 0.0,
-        }
-        
         if not self._points:
             logger.warning(f"No points configured for KNX device {self._asset_name}")
     
@@ -599,7 +589,7 @@ class KNXPlugin(SouthPluginBase):
         
         poll_duration = time.time() - poll_start
         successful_count = sum(1 for p in points_data if p.get("quality") == "good")
-        self._update_performance_stats(poll_duration, len(self._point_order), successful_count)
+        await self._update_performance_stats(poll_duration, len(self._point_order), successful_count)
         
         logger.info(
             f"Poll completed for {self._asset_name}: "
@@ -1032,22 +1022,3 @@ class KNXPlugin(SouthPluginBase):
             raw_data[point_name] = value
         
         return raw_data
-    
-    def _update_performance_stats(self, poll_duration: float, points_count: int, successful_count: int = 0):
-        self._performance_stats["total_polls"] += 1
-        self._performance_stats["total_points_read"] += points_count
-        self._performance_stats["successful_points_read"] += successful_count
-        self._performance_stats["total_time"] += poll_duration
-        self._performance_stats["last_poll_time"] = poll_duration
-
-        if self._performance_stats["total_polls"] > 0:
-            self._performance_stats["avg_poll_time"] = (
-                self._performance_stats["total_time"] /
-                self._performance_stats["total_polls"]
-            )
-
-        if self._performance_stats["total_points_read"] > 0:
-            self._performance_stats["success_rate"] = (
-                self._performance_stats["successful_points_read"] /
-                self._performance_stats["total_points_read"]
-            )

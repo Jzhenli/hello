@@ -66,16 +66,6 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
         self._read_groups: List[Dict[str, Any]] = []
         self._group_points()
 
-        self._performance_stats = {
-            "total_polls": 0,
-            "total_points_read": 0,
-            "successful_points_read": 0,
-            "last_poll_time": 0.0,
-            "avg_poll_time": 0.0,
-            "total_time": 0.0,
-            "success_rate": 0.0,
-        }
-
         if not self._points:
             logger.warning(f"No points configured for Modbus device {self._asset_name}")
 
@@ -168,7 +158,7 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
             logger.debug("poll: connection check failed, creating offline reading")
             readings = await self._create_offline_reading()
             poll_duration = time.time() - poll_start
-            self._update_performance_stats(poll_duration, 0)
+            await self._update_performance_stats(poll_duration, 0)
             return readings
 
         if self._heartbeat_address is not None:
@@ -176,7 +166,7 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
                 logger.debug("poll: heartbeat check failed, creating offline reading")
                 readings = await self._create_offline_reading()
                 poll_duration = time.time() - poll_start
-                self._update_performance_stats(poll_duration, 0)
+                await self._update_performance_stats(poll_duration, 0)
                 return readings
         else:
             self._device_online = True
@@ -192,7 +182,7 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
                 1 for p in readings[0].standard_points
                 if p.get("quality") == "good"
             )
-        self._update_performance_stats(poll_duration, points_count, successful_count)
+        await self._update_performance_stats(poll_duration, points_count, successful_count)
 
         logger.info(
             f"Poll completed for {self._asset_name}: "
@@ -810,22 +800,3 @@ class ModbusBasePlugin(SouthPluginBase, ModbusPluginMixin):
         }
         info.update(self._get_connection_info())
         return info
-
-    def _update_performance_stats(self, poll_duration: float, points_count: int, successful_count: int = 0):
-        self._performance_stats["total_polls"] += 1
-        self._performance_stats["total_points_read"] += points_count
-        self._performance_stats["successful_points_read"] += successful_count
-        self._performance_stats["last_poll_time"] = poll_duration
-        self._performance_stats["total_time"] += poll_duration
-
-        if self._performance_stats["total_polls"] > 0:
-            self._performance_stats["avg_poll_time"] = (
-                self._performance_stats["total_time"] /
-                self._performance_stats["total_polls"]
-            )
-
-        if self._performance_stats["total_points_read"] > 0:
-            self._performance_stats["success_rate"] = (
-                self._performance_stats["successful_points_read"] /
-                self._performance_stats["total_points_read"]
-            )
