@@ -37,7 +37,6 @@ async def lifespan(app: FastAPI):
     
     from ..gateway import Gateway
     from .services.north_channel_service import NorthChannelService
-    from ..core.container import Container
     
     state = get_app_state()
     
@@ -46,18 +45,19 @@ async def lifespan(app: FastAPI):
         await gateway.initialize()
         await gateway.start_core()
         state._gateway_owned = True
-        
-        # 初始化 NorthChannelService
-        container = Container.get_instance()
-        north_channel_service = NorthChannelService(
-            db_path=gateway.config_manager.config.database.path,
-            plugin_loader=gateway.plugin_loader
-        )
-        await north_channel_service.initialize()
-        container.register_instance(NorthChannelService, north_channel_service)
-        logger.info("NorthChannelService initialized")
     else:
         state._gateway_owned = False
+    
+    if state.gateway:
+        container = state.gateway.container
+        north_channel_service = container.try_resolve(NorthChannelService)
+        
+        if north_channel_service:
+            logger.info("NorthChannelService ready")
+        else:
+            logger.warning("NorthChannelService not available")
+    else:
+        logger.warning("Gateway not available")
     
     yield
     

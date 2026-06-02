@@ -146,6 +146,9 @@ class Gateway(ILifecycle):
         # 初始化用户权限服务
         await self._initialize_user_permission_service()
         
+        # 初始化北向通道服务
+        await self._initialize_north_channel_service()
+        
         # 设置API依赖
         set_gateway_storage(
             storage=storage,
@@ -235,6 +238,31 @@ class Gateway(ILifecycle):
         await self._user_permission_service.initialize()
         
         logger.info("User Permission Service initialized")
+    
+    async def _initialize_north_channel_service(self) -> None:
+        """初始化北向通道服务"""
+        from .api.services.north_channel_service import NorthChannelService
+        from .storage.sqlite import SQLiteStorage
+        
+        storage = self.container.try_resolve(SQLiteStorage)
+        if not storage:
+            logger.warning("SQLiteStorage not available, skipping NorthChannelService initialization")
+            return
+        
+        db_connection = storage.get_connection()
+        if not db_connection:
+            logger.warning("Database connection not available, skipping NorthChannelService initialization")
+            return
+        
+        north_channel_service = NorthChannelService(
+            db=db_connection,
+            plugin_loader=self.plugin_loader
+        )
+        await north_channel_service.initialize()
+        
+        self.container.register_instance(NorthChannelService, north_channel_service)
+        
+        logger.info("NorthChannelService initialized")
     
     async def start(self) -> None:
         """启动网关
