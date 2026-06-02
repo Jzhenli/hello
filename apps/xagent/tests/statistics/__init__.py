@@ -1,0 +1,2 @@
+"""Tests for statistics module"""
+
