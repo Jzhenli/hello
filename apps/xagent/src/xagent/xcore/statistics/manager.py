@@ -227,6 +227,82 @@ class StatisticsManager:
     
     # ===== 扩展功能 =====
     
+    async def record_operation(
+        self,
+        category: str,
+        name: str,
+        success: bool = True,
+        count: int = 1,
+        duration: float = 0.0,
+        **extra
+    ) -> None:
+        """记录操作统计（通用方法）
+        
+        适用于 Rule、Delivery、Filter 等插件类型的统计。
+        统一入口，简化调用。
+        
+        Args:
+            category: 分类（如 rule, delivery, filter, south, north）
+            name: 操作名称（如 threshold_rule, webhook, dedup）
+            success: 是否成功
+            count: 操作计数
+            duration: 耗时（秒）
+            **extra: 额外指标（如 triggered, filtered_count 等）
+        """
+        if not self._enabled:
+            return
+        
+        key = f"plugin:{category}:{name}"
+        collector = self._get_or_create_collector(key)
+        await collector.record(count, success)
+        
+        extra_metrics = {}
+        if duration > 0:
+            extra_metrics["total_duration"] = duration
+            extra_metrics["call_count"] = 1
+            extra_metrics["avg_duration"] = duration
+        
+        for k, v in extra.items():
+            if v is not None:
+                extra_metrics[k] = v
+        
+        if extra_metrics:
+            collector.record_extra(extra_metrics)
+    
+    def get_operation_stats(
+        self,
+        category: str,
+        name: str
+    ) -> Optional[Dict[str, Any]]:
+        """获取操作统计信息
+        
+        Args:
+            category: 分类
+            name: 操作名称
+            
+        Returns:
+            统计信息字典
+        """
+        key = f"plugin:{category}:{name}"
+        if key in self._collectors:
+            return self._collectors[key].get_stats()
+        return None
+    
+    def get_all_plugin_stats(self) -> Dict[str, Dict[str, Any]]:
+        """获取所有插件统计信息
+        
+        Returns:
+            插件统计信息字典，key 格式为 "category:name"
+        """
+        result = {}
+        for key, collector in self._collectors.items():
+            if key.startswith("plugin:"):
+                parts = key.split(":", 2)
+                if len(parts) == 3:
+                    category, name = parts[1], parts[2]
+                    result[f"{category}:{name}"] = collector.get_stats()
+        return result
+    
     def register_exporter(self, exporter: Any) -> None:
         """注册统计导出器
         

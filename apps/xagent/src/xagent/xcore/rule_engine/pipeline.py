@@ -7,11 +7,14 @@ import asyncio
 import logging
 import time
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from .base import ReadingSet
 from .plugins import RuleFilterPlugin
 from .plugin_protocol import IRuleEnginePluginManager
+
+if TYPE_CHECKING:
+    from ..statistics import StatsRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -315,21 +318,25 @@ class FilterPipelineExecutor:
     """过滤器管道执行器
 
     支持重试、退避、错误回调、超时控制和指标收集。
+    支持通过 StatsRecorder 在编排层记录统计。
     """
 
     def __init__(
         self,
         plugin_manager: IRuleEnginePluginManager,
-        config: PipelineConfig
+        config: PipelineConfig,
+        stats_recorder: Optional["StatsRecorder"] = None,
     ):
         """初始化管道执行器
 
         Args:
             plugin_manager: 插件管理器
             config: 管道配置
+            stats_recorder: 统计记录器（可选）
         """
         self.plugin_manager = plugin_manager
         self.config = config
+        self._stats_recorder = stats_recorder
         self._filters: List[RuleFilterPlugin] = []
         self._filter_names: List[str] = []
         self._metrics: Optional[PipelineMetrics] = None
@@ -337,6 +344,10 @@ class FilterPipelineExecutor:
 
         if config.enable_metrics:
             self._metrics = PipelineMetrics(config.pipeline_id)
+    
+    def set_stats_recorder(self, recorder: "StatsRecorder") -> None:
+        """设置统计记录器"""
+        self._stats_recorder = recorder
 
     def initialize(self) -> None:
         """初始化管道，加载过滤器"""
@@ -422,6 +433,8 @@ class FilterPipelineExecutor:
         retries = 0
         delay = self.config.retry_delay
         last_error: Optional[Exception] = None
+        
+        input_count = len(data.points)
 
         while retries <= self.config.max_retries:
             start_time = time.monotonic()
@@ -441,6 +454,14 @@ class FilterPipelineExecutor:
                     self._metrics.record_execution(
                         name, True, duration
                     )
+                
+                await self._record_filter_stats(
+                    plugin_name=name,
+                    success=True,
+                    duration=duration,
+                    input_count=input_count,
+                    output_count=len(result.points),
+                )
 
                 return result
 
@@ -485,11 +506,55 @@ class FilterPipelineExecutor:
 
         if last_error:
             await self._invoke_error_callback(name, data, last_error)
+            
+            await self._record_filter_stats(
+                plugin_name=name,
+                success=False,
+                duration=time.monotonic() - start_time,
+                input_count=input_count,
+                output_count=0,
+                error=str(last_error),
+            )
 
             if not self.config.continue_on_error:
                 raise last_error
 
         return data
+    
+    async def _record_filter_stats(
+        self,
+        plugin_name: str,
+        success: bool,
+        duration: float,
+        input_count: int = 0,
+        output_count: int = 0,
+        error: Optional[str] = None,
+    ) -> None:
+        """记录过滤器统计到 StatisticsManager"""
+        if not self._stats_recorder or not self._stats_recorder.stats_manager:
+            return
+        
+        try:
+            extra = {
+                "pipeline_id": self.config.pipeline_id,
+            }
+            if input_count > 0:
+                extra["input_count"] = input_count
+                extra["output_count"] = output_count
+                extra["filtered_count"] = input_count - output_count
+                extra["filter_rate"] = (input_count - output_count) / input_count
+            if error:
+                extra["error"] = error
+            
+            await self._stats_recorder.stats_manager.record_operation(
+                category="filter",
+                name=plugin_name,
+                success=success,
+                duration=duration,
+                **extra
+            )
+        except Exception as stats_error:
+            logger.debug(f"Stats recording failed: {stats_error}")
 
     async def _invoke_error_callback(
         self,
@@ -548,14 +613,26 @@ class PipelineManager:
     管理多个过滤器管道。
     """
 
-    def __init__(self, plugin_manager: IRuleEnginePluginManager):
+    def __init__(
+        self,
+        plugin_manager: IRuleEnginePluginManager,
+        stats_recorder: Optional["StatsRecorder"] = None,
+    ):
         """初始化管道管理器
 
         Args:
             plugin_manager: 插件管理器
+            stats_recorder: 统计记录器（可选）
         """
         self.plugin_manager = plugin_manager
+        self._stats_recorder = stats_recorder
         self._pipelines: Dict[str, FilterPipelineExecutor] = {}
+    
+    def set_stats_recorder(self, recorder: "StatsRecorder") -> None:
+        """设置统计记录器"""
+        self._stats_recorder = recorder
+        for pipeline in self._pipelines.values():
+            pipeline.set_stats_recorder(recorder)
 
     def create_pipeline(self, config: PipelineConfig) -> FilterPipelineExecutor:
         """创建管道
@@ -566,7 +643,11 @@ class PipelineManager:
         Returns:
             管道执行器
         """
-        executor = FilterPipelineExecutor(self.plugin_manager, config)
+        executor = FilterPipelineExecutor(
+            self.plugin_manager, 
+            config,
+            stats_recorder=self._stats_recorder,
+        )
         executor.initialize()
 
         self._pipelines[config.pipeline_id] = executor

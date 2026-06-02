@@ -26,6 +26,7 @@ class StatsCollector:
     - success_rate: 上传成功率（百分比）
     - total_uploaded: 总上传数据条数
     - total_failed: 总失败次数
+    - extra_metrics: 额外指标（如 duration, triggered 等）
     """
     
     __slots__ = [
@@ -34,7 +35,8 @@ class StatsCollector:
         '_failure_count',
         '_timestamps',
         '_lock',
-        '_max_timestamps'
+        '_max_timestamps',
+        '_extra_metrics'
     ]
     
     def __init__(self, max_timestamps: int = 120):
@@ -49,6 +51,7 @@ class StatsCollector:
         self._timestamps: list = []
         self._lock = asyncio.Lock()
         self._max_timestamps = max_timestamps
+        self._extra_metrics: Dict[str, Any] = {}
     
     async def record(self, count: int, success: bool) -> None:
         """记录一次上传操作
@@ -74,6 +77,32 @@ class StatsCollector:
             if len(self._timestamps) > self._max_timestamps:
                 self._timestamps = self._timestamps[-self._max_timestamps:]
     
+    def record_extra(self, metrics: Dict[str, Any]) -> None:
+        """记录额外指标（同步方法，用于非计数指标）
+        
+        Args:
+            metrics: 额外指标字典
+        """
+        for key, value in metrics.items():
+            if key not in self._extra_metrics:
+                self._extra_metrics[key] = value
+                if key.startswith("avg_") or key.endswith("_avg"):
+                    self._extra_metrics[f"_count_{key}"] = 1
+            elif isinstance(value, (int, float)) and isinstance(self._extra_metrics.get(key), (int, float)):
+                if key.startswith("total_") or key.startswith("sum_"):
+                    self._extra_metrics[key] += value
+                elif key.startswith("avg_") or key.endswith("_avg"):
+                    count_key = f"_count_{key}"
+                    current_count = self._extra_metrics.get(count_key, 1) + 1
+                    self._extra_metrics[count_key] = current_count
+                    self._extra_metrics[key] = (
+                        (self._extra_metrics[key] * (current_count - 1) + value) / current_count
+                    )
+                else:
+                    self._extra_metrics[key] += value
+            else:
+                self._extra_metrics[key] = value
+    
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息
         
@@ -96,13 +125,20 @@ class StatsCollector:
         if total_operations > 0:
             success_rate = (self._success_count / total_operations) * 100
         
-        return {
+        stats = {
             "upload_rate": recent_count,
             "success_rate": round(success_rate, 2),
             "total_uploaded": self._total_uploaded,
             "total_failed": self._failure_count,
             "backlog_count": 0
         }
+        
+        if self._extra_metrics:
+            for key, value in self._extra_metrics.items():
+                if not key.startswith("_count_"):
+                    stats[key] = value
+        
+        return stats
     
     def reset(self) -> None:
         """重置统计数据
@@ -113,6 +149,7 @@ class StatsCollector:
         self._success_count = 0
         self._failure_count = 0
         self._timestamps.clear()
+        self._extra_metrics.clear()
     
     @property
     def total_uploaded(self) -> int:

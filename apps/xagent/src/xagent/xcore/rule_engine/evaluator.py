@@ -5,7 +5,8 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .base import (
     RuleContext,
@@ -18,6 +19,9 @@ from .base import (
 from .plugins import RulePlugin
 from .plugin_protocol import IRuleEnginePluginManager
 
+if TYPE_CHECKING:
+    from ..statistics import StatsRecorder
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,10 +30,12 @@ class RuleEvaluator:
 
     负责调度规则插件进行规则评估。
     支持与聚合引擎集成，在评估时注入聚合数据。
+    支持通过 StatsRecorder 在编排层记录统计。
 
     Attributes:
         plugin_manager: 插件管理器
         aggregation_engine: 聚合引擎（可选）
+        stats_recorder: 统计记录器（可选）
         _rule_plugins: 规则插件实例字典
         _rule_configs: 规则配置字典
         _subscriptions: 规则关联的聚合订阅字典
@@ -39,18 +45,25 @@ class RuleEvaluator:
         self,
         plugin_manager: IRuleEnginePluginManager,
         aggregation_engine: Any = None,
+        stats_recorder: Optional["StatsRecorder"] = None,
     ):
         """初始化规则评估器
 
         Args:
             plugin_manager: 插件管理器
             aggregation_engine: 聚合引擎（可选）
+            stats_recorder: 统计记录器（可选）
         """
         self.plugin_manager = plugin_manager
         self.aggregation_engine = aggregation_engine
+        self._stats_recorder = stats_recorder
         self._rule_plugins: Dict[str, RulePlugin] = {}
         self._rule_configs: Dict[str, Dict[str, Any]] = {}
         self._subscriptions: Dict[str, List[str]] = {}
+    
+    def set_stats_recorder(self, recorder: "StatsRecorder") -> None:
+        """设置统计记录器"""
+        self._stats_recorder = recorder
 
     def load_rule(self, rule_config: Dict[str, Any]) -> tuple:
         """加载规则
@@ -201,6 +214,63 @@ class RuleEvaluator:
 
         await self._inject_aggregation_data(rule_id, context)
 
+        if self._stats_recorder:
+            return await self._evaluate_with_stats(plugin, rule_id, context)
+        
+        return self._evaluate_without_stats(plugin, rule_id, context)
+    
+    async def _evaluate_with_stats(
+        self,
+        plugin: RulePlugin,
+        rule_id: str,
+        context: RuleContext,
+    ) -> RuleEvaluationResult:
+        """带统计的规则评估"""
+        start_time = time.time()
+        success = True
+        result = None
+        error_msg = None
+        
+        try:
+            result = plugin.evaluate(context)
+            logger.debug(
+                f"Rule {rule_id} evaluated: "
+                f"result={result.result.value}, triggered={result.triggered}"
+            )
+            return result
+        except Exception as e:
+            success = False
+            error_msg = str(e)
+            logger.error(f"Rule evaluation error for {rule_id}: {e}")
+            raise
+        finally:
+            if self._stats_recorder and self._stats_recorder.stats_manager:
+                try:
+                    extra = {}
+                    if result:
+                        extra["triggered"] = result.triggered
+                        extra["result_type"] = result.result.value if hasattr(result.result, 'value') else str(result.result)
+                    if error_msg:
+                        extra["error"] = error_msg
+                    
+                    await self._stats_recorder.stats_manager.record_operation(
+                        category="rule",
+                        name=plugin.__plugin_name__,
+                        success=success,
+                        duration=time.time() - start_time,
+                        rule_id=rule_id,
+                        **extra
+                    )
+                except Exception as stats_error:
+                    logger.debug(f"Stats recording failed: {stats_error}")
+    
+    def _evaluate_without_stats(
+        self,
+        plugin: RulePlugin,
+        rule_id: str,
+        context: RuleContext,
+    ) -> RuleEvaluationResult:
+        """不带统计的规则评估（原有逻辑）"""
         try:
             result = plugin.evaluate(context)
             logger.debug(

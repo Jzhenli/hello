@@ -33,6 +33,7 @@ from ._core_compat import HAS_CORE, EventType, Event, ILifecycleBase, is_reading
 if TYPE_CHECKING:
     from .persistence import RulePersistenceManager
     from ..core.plugin.interfaces import IPluginRegistry
+    from ..statistics import StatisticsManager, StatsRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         pipeline_manager: 管道管理器
         aggregation_engine: 聚合引擎
         persistence_manager: 持久化管理器
+        stats_manager: 统计管理器（可选）
     """
 
     def __init__(
@@ -68,6 +70,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
         plugin_dirs: Optional[List[str]] = None,
         persistence_manager: Optional["RulePersistenceManager"] = None,
         plugin_registry: Optional["IPluginRegistry"] = None,
+        stats_manager: Optional["StatisticsManager"] = None,
     ):
         """初始化规则引擎编排器
 
@@ -76,6 +79,7 @@ class RuleEngineOrchestrator(ILifecycleBase):
             plugin_dirs: 插件目录列表（已废弃，保留向后兼容）
             persistence_manager: 持久化管理器实例
             plugin_registry: 插件注册表接口（必需）
+            stats_manager: 统计管理器实例（可选）
         """
         if plugin_registry is None:
             raise ValueError(
@@ -83,10 +87,12 @@ class RuleEngineOrchestrator(ILifecycleBase):
                 "Please provide the shared plugin registry from PluginLoader."
             )
         
-        # 使用新的 RuleEnginePluginManager
         self.plugin_manager = RuleEnginePluginManager(registry=plugin_registry)
         
         self._event_bus = event_bus
+        self._stats_manager = stats_manager
+        self._stats_recorder: Optional["StatsRecorder"] = None
+        
         self.aggregation_engine = AggregationEngine()
         self.evaluator = RuleEvaluator(
             plugin_manager=self.plugin_manager,
@@ -95,6 +101,9 @@ class RuleEngineOrchestrator(ILifecycleBase):
         self.router = DeliveryRouter(self.plugin_manager)
         self.pipeline_manager = PipelineManager(self.plugin_manager)
         self._persistence_manager = persistence_manager
+        
+        if stats_manager:
+            self._init_stats_recorder(stats_manager)
 
         self._running: bool = False
         self._rule_pipeline_map: Dict[str, str] = {}
@@ -106,6 +115,27 @@ class RuleEngineOrchestrator(ILifecycleBase):
         self._schedule_tasks: Dict[str, str] = {}
         self._schedule_tick_interval: int = 10
         self._rule_stats: Dict[str, Dict[str, Any]] = {}
+    
+    def _init_stats_recorder(self, stats_manager: "StatisticsManager") -> None:
+        """初始化统计记录器并注入到子组件"""
+        from ..statistics import StatsRecorder
+        
+        self._stats_recorder = StatsRecorder(stats_manager)
+        
+        self.evaluator.set_stats_recorder(self._stats_recorder)
+        self.router.set_stats_recorder(self._stats_recorder)
+        self.pipeline_manager.set_stats_recorder(self._stats_recorder)
+        
+        logger.debug("StatsRecorder initialized and injected into sub-components")
+    
+    def set_stats_manager(self, stats_manager: "StatisticsManager") -> None:
+        """设置统计管理器
+        
+        Args:
+            stats_manager: StatisticsManager 实例
+        """
+        self._stats_manager = stats_manager
+        self._init_stats_recorder(stats_manager)
 
     @property
     def event_bus(self) -> Optional[Any]:

@@ -201,11 +201,12 @@ class Gateway(ILifecycle):
         persistence_manager = RulePersistenceManager(db_path=db_path)
         await persistence_manager.initialize()
         
-        # 使用新的架构：传入 plugin_registry
+        # 使用新的架构：传入 plugin_registry 和 stats_manager
         self.rule_engine = RuleEngineOrchestrator(
             event_bus=event_bus,
             plugin_registry=plugin_registry,
             persistence_manager=persistence_manager,
+            stats_manager=self.stats_manager,
         )
         
         self.container.register_instance(RuleEngineOrchestrator, self.rule_engine)
@@ -225,7 +226,7 @@ class Gateway(ILifecycle):
             set_command_executor(command_executor)
             self.rule_engine.set_command_executor(command_executor)
 
-        logger.info("Rule Engine initialized with persistence and shared plugin registry")
+        logger.info("Rule Engine initialized with persistence, shared plugin registry and stats manager")
     
     async def _initialize_user_permission_service(self) -> None:
         """初始化用户权限服务"""

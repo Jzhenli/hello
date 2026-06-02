@@ -5,11 +5,15 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .base import Notification, DeliveryResult, DeliveryStatus
 from .plugins import DeliveryPlugin
 from .plugin_protocol import IRuleEnginePluginManager
+
+if TYPE_CHECKING:
+    from ..statistics import StatsRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +23,34 @@ class DeliveryRouter:
 
     负责将通知路由到正确的交付插件。
     支持多渠道并行投递。
+    支持通过 StatsRecorder 在编排层记录统计。
 
     Attributes:
         plugin_manager: 插件管理器
+        stats_recorder: 统计记录器（可选）
         _delivery_plugins: 交付插件实例字典
         _channel_configs: 渠道配置字典
     """
 
-    def __init__(self, plugin_manager: IRuleEnginePluginManager):
+    def __init__(
+        self,
+        plugin_manager: IRuleEnginePluginManager,
+        stats_recorder: Optional["StatsRecorder"] = None,
+    ):
         """初始化交付路由器
 
         Args:
             plugin_manager: 插件管理器
+            stats_recorder: 统计记录器（可选）
         """
         self.plugin_manager = plugin_manager
+        self._stats_recorder = stats_recorder
         self._delivery_plugins: Dict[str, DeliveryPlugin] = {}
         self._channel_configs: Dict[str, Dict[str, Any]] = {}
+    
+    def set_stats_recorder(self, recorder: "StatsRecorder") -> None:
+        """设置统计记录器"""
+        self._stats_recorder = recorder
 
     def register_channel(
         self,
@@ -177,22 +193,100 @@ class DeliveryRouter:
         Returns:
             交付结果
         """
+        if self._stats_recorder and self._stats_recorder.stats_manager:
+            return await self._deliver_with_stats(plugin, channel_id, notification)
+        
+        return await self._deliver_without_stats(plugin, channel_id, notification)
+    
+    def _log_delivery_result(
+        self,
+        channel_id: str,
+        notification_id: str,
+        success: bool,
+        error: Optional[str] = None
+    ) -> None:
+        """记录交付结果日志
+        
+        Args:
+            channel_id: 渠道ID
+            notification_id: 通知ID
+            success: 是否成功
+            error: 错误信息（可选）
+        """
+        if success:
+            logger.info(
+                f"Notification {notification_id} "
+                f"delivered to {channel_id}: success=True"
+            )
+        else:
+            logger.error(f"Delivery error for {channel_id}: {error}")
+    
+    async def _deliver_with_stats(
+        self,
+        plugin: DeliveryPlugin,
+        channel_id: str,
+        notification: Notification
+    ) -> DeliveryResult:
+        """带统计的交付"""
+        start_time = time.time()
+        success = True
+        result = None
+        error_msg = None
+        
         try:
             result = await plugin.deliver(notification)
-
-            logger.info(
-                f"Notification {notification.notification_id} "
-                f"delivered to {channel_id}: success={result.success}"
+            self._log_delivery_result(
+                channel_id, notification.notification_id, result.success
             )
-
             return result
 
         except Exception as e:
-            logger.error(f"Delivery error for {channel_id}: {e}")
+            success = False
+            error_msg = str(e)
+            self._log_delivery_result(channel_id, notification.notification_id, False, error_msg)
+            raise
+        finally:
+            if self._stats_recorder and self._stats_recorder.stats_manager:
+                try:
+                    extra = {
+                        "channel_id": channel_id,
+                    }
+                    if result:
+                        extra["status"] = result.status.value if hasattr(result.status, 'value') else str(result.status)
+                    if error_msg:
+                        extra["error"] = error_msg
+                    
+                    await self._stats_recorder.stats_manager.record_operation(
+                        category="delivery",
+                        name=plugin.__plugin_name__,
+                        success=success,
+                        duration=time.time() - start_time,
+                        **extra
+                    )
+                except Exception as stats_error:
+                    logger.debug(f"Stats recording failed: {stats_error}")
+    
+    async def _deliver_without_stats(
+        self,
+        plugin: DeliveryPlugin,
+        channel_id: str,
+        notification: Notification
+    ) -> DeliveryResult:
+        """不带统计的交付（原有逻辑）"""
+        try:
+            result = await plugin.deliver(notification)
+            self._log_delivery_result(
+                channel_id, notification.notification_id, result.success
+            )
+            return result
+
+        except Exception as e:
+            error_msg = str(e)
+            self._log_delivery_result(channel_id, notification.notification_id, False, error_msg)
             return DeliveryResult(
                 status=DeliveryStatus.FAILED,
                 success=False,
-                error=str(e)
+                error=error_msg
             )
 
     async def deliver_to_channel(
