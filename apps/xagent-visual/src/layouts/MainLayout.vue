@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { 
   Odometer, 
@@ -28,6 +28,17 @@ const { isTablet, isMobile, width, height } = useResponsive()
 const isCollapsed = ref(false)
 const isDrawerVisible = ref(false)
 const forceExpanded = ref(false)
+
+// 当前时间
+const currentTime = ref(new Date().toLocaleString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+}))
+let timeTimer: ReturnType<typeof setInterval>
 
 const shouldCollapseSidebar = computed(() => {
   if (forceExpanded.value) return false
@@ -80,6 +91,26 @@ function handleLogout() {
   userStore.logout()
   router.push('/login')
 }
+
+// 时间更新
+onMounted(() => {
+  timeTimer = setInterval(() => {
+    currentTime.value = new Date().toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timeTimer) {
+    clearInterval(timeTimer)
+  }
+})
 </script>
 
 <template>
@@ -207,11 +238,11 @@ function handleLogout() {
       </el-main>
       
       <el-footer v-if="!isFullscreenMode && !isMobile && height > 700" class="app-footer" height="32px">
-        <span>设备在线 12/15</span>
+        <span class="copyright">© 2026 XAgent 数据采集网关系统</span>
         <span class="divider">|</span>
-        <span>规则执行 156 次/今日</span>
+        <span class="icp">京ICP备XXXXXXXX号</span>
         <span class="divider">|</span>
-        <span class="status-ok">系统正常</span>
+        <span class="current-time">{{ currentTime }}</span>
       </el-footer>
     </el-container>
   </el-container>
@@ -417,13 +448,21 @@ function handleLogout() {
   color: #7f8c8d;
 }
 
-.divider {
-  color: #ddd;
+.copyright {
+  color: #95a5a6;
 }
 
-.status-ok {
-  color: #27ae60;
-  font-weight: 500;
+.icp {
+  color: #95a5a6;
+}
+
+.current-time {
+  color: #7f8c8d;
+  font-family: 'Courier New', monospace;
+}
+
+.divider {
+  color: #ddd;
 }
 
 .fade-enter-active,

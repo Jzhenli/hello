@@ -59,5 +59,29 @@ export const dataApi = {
   async deleteReadings(beforeTimestamp: number): Promise<{ success: boolean; deleted: number }> {
     const res = await api.delete('/api/data/readings', { params: { before_timestamp: beforeTimestamp } })
     return res.data
+  },
+
+  async getCollectionStats(params?: {
+    start_time?: number
+    end_time?: number
+    interval?: 'hour' | 'day'
+  }): Promise<{
+    stats: Array<{ time: string; count: number; timestamp: number }>
+    total_count: number
+    avg_rate: number
+  }> {
+    const res = await api.get('/api/data/stats', { params })
+    return res.data
+  },
+
+  async getDataQuality(): Promise<{
+    good: number
+    bad: number
+    uncertain: number
+    total: number
+    quality_rate: number
+  }> {
+    const res = await api.get('/api/data/quality')
+    return res.data
   }
 }

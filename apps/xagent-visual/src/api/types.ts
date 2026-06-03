@@ -352,3 +352,35 @@ export interface NorthChannelLogListResponse {
   count: number
   logs: NorthChannelLog[]
 }
+
+export interface SystemStatsResponse {
+  cpu_usage: number
+  memory_usage: number
+  disk_usage: number
+  uptime: number
+  total_readings: number
+  today_readings: number
+  connection_count: number
+  process_count: number
+  load_average: number[]
+}
+
+export interface DataCollectionStats {
+  time: string
+  count: number
+  timestamp: number
+}
+
+export interface DataCollectionStatsResponse {
+  stats: DataCollectionStats[]
+  total_count: number
+  avg_rate: number
+}
+
+export interface DataQualityStats {
+  good: number
+  bad: number
+  uncertain: number
+  total: number
+  quality_rate: number
+}

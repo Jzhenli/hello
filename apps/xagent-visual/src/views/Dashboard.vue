@@ -1,27 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useDeviceStore } from '@/stores/devices'
 import { useRuleStore } from '@/stores/rules'
 import { useAlertStore } from '@/stores/alerts'
 import { useSystemStore } from '@/stores/system'
+import { useChannelStore } from '@/stores/channels'
 import { useResponsive } from '@/utils/useResponsive'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart, PieChart, GaugeChart } from 'echarts/charts'
-import { 
-  TitleComponent, 
-  TooltipComponent, 
+import { LineChart, BarChart, GaugeChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
   LegendComponent,
-  GridComponent 
+  GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import dayjs from 'dayjs'
+import { RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 use([
   CanvasRenderer,
   LineChart,
   BarChart,
-  PieChart,
   GaugeChart,
   TitleComponent,
   TooltipComponent,
@@ -33,21 +35,115 @@ const deviceStore = useDeviceStore()
 const ruleStore = useRuleStore()
 const alertStore = useAlertStore()
 const systemStore = useSystemStore()
-const { isTablet, isMobile } = useResponsive()
+const channelStore = useChannelStore()
+const { isTablet, isMobile, isSmallTablet, isMediumTablet, isLargeTablet, width, height } = useResponsive()
 
-const currentTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
-let timer: ReturnType<typeof setInterval>
+const lastUpdateTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
+const refreshing = ref(false)
+const timeRange = ref('24h')
+
+// 数据缓存
+const lastFetchTime = ref(0)
+const CACHE_DURATION = 10000 // 10秒缓存
+const isDataStale = computed(() => {
+  return Date.now() - lastFetchTime.value > CACHE_DURATION
+})
+
+// 防抖函数
+function debounce<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  return function (this: unknown, ...args: Parameters<T>) {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    timeoutId = setTimeout(() => {
+      fn.apply(this, args)
+      timeoutId = null
+    }, delay)
+  }
+}
+
+// 防抖的刷新函数
+const debouncedRefresh = debounce(async () => {
+  await refreshData()
+}, 300)
 
 const statCardSpan = computed(() => {
   if (isMobile.value) return 24
+  if (isSmallTablet.value) return 12
+  if (isMediumTablet.value) return 12
+  if (isLargeTablet.value) return 6
   if (isTablet.value) return 12
   return 6
 })
 
 const infoColSpan = computed(() => {
   if (isMobile.value) return 24
+  if (isSmallTablet.value) return 24
+  if (isMediumTablet.value) return 12
+  if (isLargeTablet.value) return 12
   if (isTablet.value) return 12
-  return 8
+  return 12
+})
+
+const chartHeight = computed(() => {
+  if (isSmallTablet.value) return 280
+  if (isMediumTablet.value) return 360
+  if (isLargeTablet.value) return 420
+  if (isMobile.value) return 300
+  return 420
+})
+
+function getProgressColor(percentage: number): string {
+  if (percentage > 80) return '#ef4444'
+  if (percentage > 60) return '#f59e0b'
+  return '#10b981'
+}
+
+const alertTrend = computed(() => {
+  const pending = alertStore.pendingAlerts
+  if (pending > 0) return { text: `${pending} 条待处理`, type: 'danger' }
+  return { text: '无新增', type: 'success' }
+})
+
+const deviceTrend = computed(() => {
+  const online = deviceStore.onlineDevices
+  const total = deviceStore.totalDevices
+  if (total === 0) return { text: '无设备', type: 'info' }
+  const percentage = Math.round((online / total) * 100)
+  if (percentage >= 80) return { text: '运行良好', type: 'success' }
+  if (percentage >= 50) return { text: '部分离线', type: 'warning' }
+  return { text: '多数离线', type: 'danger' }
+})
+
+const channelTrend = computed(() => {
+  const online = channelStore.onlineChannels
+  const total = channelStore.totalChannels
+  if (total === 0) return { text: '无通道', type: 'info' }
+  const percentage = Math.round((online / total) * 100)
+  if (percentage >= 80) return { text: '连接正常', type: 'success' }
+  if (percentage >= 50) return { text: '部分断开', type: 'warning' }
+  return { text: '多数断开', type: 'danger' }
+})
+
+const ruleTrend = computed(() => {
+  const active = ruleStore.activeRules
+  const total = ruleStore.totalRules
+  if (total === 0) return { text: '无规则', type: 'info' }
+  return { text: `${active}/${total} 启用`, type: active > 0 ? 'success' : 'warning' }
+})
+
+const chartSummary = computed(() => {
+  const data = dataChartOption.value.series[0].data
+  if (data.length === 0) return { peak: 0, average: 0 }
+
+  const peak = Math.max(...data)
+  const average = Math.round(data.reduce((a, b) => a + b, 0) / data.length)
+
+  return { peak, average }
 })
 
 const dataChartOption = ref({
@@ -77,81 +173,108 @@ const dataChartOption = ref({
         type: 'linear',
         x: 0, y: 0, x2: 0, y2: 1,
         colorStops: [
-          { offset: 0, color: 'rgba(52, 152, 219, 0.3)' },
-          { offset: 1, color: 'rgba(52, 152, 219, 0.05)' }
+          { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+          { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
         ]
       }
     },
-    lineStyle: { color: '#3498db' },
-    itemStyle: { color: '#3498db' },
+    lineStyle: { color: '#3b82f6', width: 2 },
+    itemStyle: { color: '#3b82f6' },
     data: [] as number[]
   }]
 })
 
-const deviceChartOption = ref({
-  tooltip: {
-    trigger: 'item',
-    formatter: '{b}: {c} ({d}%)'
-  },
-  legend: {
-    bottom: '5%',
-    left: 'center'
-  },
-  series: [{
-    type: 'pie',
-    radius: ['40%', '70%'],
-    avoidLabelOverlap: false,
-    itemStyle: {
-      borderRadius: 10,
-      borderColor: '#fff',
-      borderWidth: 2
-    },
-    label: {
-      show: false
-    },
-    emphasis: {
-      label: {
-        show: true,
-        fontSize: 16,
-        fontWeight: 'bold'
-      }
-    },
-    data: [
-      { value: deviceStore.onlineDevices, name: '在线', itemStyle: { color: '#27ae60' } },
-      { value: deviceStore.totalDevices - deviceStore.onlineDevices, name: '离线', itemStyle: { color: '#e74c3c' } }
-    ]
-  }]
-})
+async function fetchAllData(forceRefresh = false) {
+  if (!forceRefresh && !isDataStale.value) {
+    return
+  }
+
+  try {
+    const results = await Promise.allSettled([
+      deviceStore.fetchDevices(),
+      ruleStore.fetchRules(),
+      alertStore.fetchAlerts(),
+      channelStore.fetchChannels(),
+      systemStore.fetchAllStats()
+    ])
+
+    const failedRequests = results.filter(r => r.status === 'rejected')
+    if (failedRequests.length > 0) {
+      console.warn('Some requests failed:', failedRequests)
+    }
+
+    lastFetchTime.value = Date.now()
+    updateChartData()
+
+  } catch (error) {
+    console.error('Failed to fetch data:', error)
+    ElMessage.error('数据加载失败')
+  }
+}
+
+async function updateChartData() {
+  try {
+    const chartData = await systemStore.generateChartData()
+    
+    requestAnimationFrame(() => {
+      dataChartOption.value.xAxis.data = chartData.map(d => d.time)
+      dataChartOption.value.series[0].data = chartData.map(d => d.value)
+    })
+  } catch (error) {
+    console.error('Failed to update chart data:', error)
+    ElMessage.error('获取数据采集统计失败')
+  }
+}
+
+async function refreshData() {
+  if (refreshing.value) return
+  
+  refreshing.value = true
+  try {
+    await fetchAllData(true)
+    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    ElMessage.success('数据已刷新')
+  } finally {
+    refreshing.value = false
+  }
+}
 
 onMounted(async () => {
-  await Promise.all([
-    deviceStore.fetchDevices(),
-    ruleStore.fetchRules(),
-  ])
-  timer = setInterval(() => {
-    currentTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-  }, 1000)
-  
-  const chartData = systemStore.generateChartData()
-  dataChartOption.value.xAxis.data = chartData.map(d => d.time)
-  dataChartOption.value.series[0].data = chartData.map(d => d.value)
-})
-
-onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer)
-  }
+  await fetchAllData(true)
+  lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
 })
 </script>
 
 <template>
-  <div class="dashboard">
-    <div class="dashboard-header">
-      <h2>系统总览</h2>
-      <span class="update-time">最后更新: {{ currentTime }}</span>
+  <div class="dashboard" v-loading="systemStore.loading">
+    <div class="dashboard-toolbar">
+      <div class="toolbar-right">
+        <el-button
+          :icon="RefreshRight"
+          @click="refreshData"
+          :loading="refreshing"
+          circle
+          size="small"
+          title="刷新数据"
+        />
+        <span class="update-time">最后更新: {{ lastUpdateTime }}</span>
+      </div>
     </div>
-    
+
     <el-row :gutter="isMobile ? 12 : 20" class="stat-cards">
+      <el-col :span="statCardSpan">
+        <el-card class="stat-card alert-card-highlight" shadow="hover">
+          <div class="stat-icon alerts">
+            <span>🔔</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ alertStore.pendingAlerts }}</div>
+            <div class="stat-label">待处理告警</div>
+            <div class="stat-trend" :class="alertTrend.type">{{ alertTrend.text }}</div>
+          </div>
+        </el-card>
+      </el-col>
+
       <el-col :span="statCardSpan">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-icon devices">
@@ -160,20 +283,24 @@ onUnmounted(() => {
           <div class="stat-content">
             <div class="stat-value">{{ deviceStore.onlineDevices }}/{{ deviceStore.totalDevices }}</div>
             <div class="stat-label">在线设备</div>
+            <div class="stat-trend" :class="deviceTrend.type">{{ deviceTrend.text }}</div>
           </div>
         </el-card>
       </el-col>
+
       <el-col :span="statCardSpan">
         <el-card class="stat-card" shadow="hover">
-          <div class="stat-icon data">
-            <span>📊</span>
+          <div class="stat-icon channels">
+            <span>📤</span>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ systemStore.stats.totalReadings.toLocaleString() }}</div>
-            <div class="stat-label">采集总量</div>
+            <div class="stat-value">{{ channelStore.onlineChannels }}/{{ channelStore.totalChannels }}</div>
+            <div class="stat-label">在线通道</div>
+            <div class="stat-trend" :class="channelTrend.type">{{ channelTrend.text }}</div>
           </div>
         </el-card>
       </el-col>
+
       <el-col :span="statCardSpan">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-icon rules">
@@ -182,108 +309,136 @@ onUnmounted(() => {
           <div class="stat-content">
             <div class="stat-value">{{ ruleStore.activeRules }}/{{ ruleStore.totalRules }}</div>
             <div class="stat-label">活跃规则</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="statCardSpan">
-        <el-card class="stat-card alert" shadow="hover">
-          <div class="stat-icon alerts">
-            <span>🔔</span>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ alertStore.pendingAlerts }}</div>
-            <div class="stat-label">待处理告警</div>
+            <div class="stat-trend" :class="ruleTrend.type">{{ ruleTrend.text }}</div>
           </div>
         </el-card>
       </el-col>
     </el-row>
-    
+
     <el-row :gutter="isMobile ? 12 : 20" class="chart-row">
-      <el-col :span="isTablet || isMobile ? 24 : 16">
-        <el-card class="chart-card" shadow="hover">
+      <el-col :span="24">
+        <el-card class="chart-card" shadow="hover" :style="{ height: chartHeight + 'px' }">
           <template #header>
             <div class="card-header">
-              <span>数据采集趋势 (24小时)</span>
+              <div class="header-left">
+                <span class="chart-title">数据采集趋势</span>
+                <el-radio-group v-model="timeRange" size="small" class="time-range-selector">
+                  <el-radio-button label="1h">1小时</el-radio-button>
+                  <el-radio-button label="24h">24小时</el-radio-button>
+                  <el-radio-button label="7d">7天</el-radio-button>
+                </el-radio-group>
+              </div>
+              <div class="chart-summary">
+                <span class="summary-item">
+                  <span class="label">峰值:</span>
+                  <span class="value">{{ chartSummary.peak }} 条/时</span>
+                </span>
+                <span class="summary-item">
+                  <span class="label">均值:</span>
+                  <span class="value">{{ chartSummary.average }} 条/时</span>
+                </span>
+              </div>
             </div>
           </template>
           <v-chart :option="dataChartOption" class="chart" autoresize />
         </el-card>
       </el-col>
-      <el-col :span="isTablet || isMobile ? 24 : 8" :class="{ 'mt-20': isTablet || isMobile }">
-        <el-card class="chart-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>设备状态</span>
-            </div>
-          </template>
-          <v-chart :option="deviceChartOption" class="chart" autoresize />
-        </el-card>
-      </el-col>
     </el-row>
-    
+
     <el-row :gutter="isMobile ? 12 : 20" class="info-row">
       <el-col :span="infoColSpan">
-        <el-card class="info-card" shadow="hover">
+        <el-card class="info-card resource-panel" shadow="hover">
           <template #header>
-            <span>系统资源</span>
+            <div class="panel-title">
+              <span>系统资源</span>
+              <el-tag size="small" :type="systemStore.stats.cpuUsage > 80 ? 'danger' : 'success'">
+                {{ systemStore.stats.cpuUsage > 80 ? '负载较高' : '运行正常' }}
+              </el-tag>
+            </div>
           </template>
-          <div class="resource-grid">
-            <div class="resource-item">
-              <span class="resource-label">CPU</span>
-              <el-progress 
-                :percentage="systemStore.stats.cpuUsage" 
-                :color="systemStore.stats.cpuUsage > 80 ? '#e74c3c' : '#3498db'"
-              />
+          <div class="resource-gauges">
+            <div class="gauge-item">
+              <div class="gauge-chart">
+                <el-progress
+                  type="dashboard"
+                  :percentage="systemStore.stats.cpuUsage"
+                  :color="getProgressColor(systemStore.stats.cpuUsage)"
+                  :width="80"
+                />
+              </div>
+              <div class="gauge-label">CPU</div>
             </div>
-            <div class="resource-item">
-              <span class="resource-label">内存</span>
-              <el-progress 
-                :percentage="systemStore.stats.memoryUsage"
-                :color="systemStore.stats.memoryUsage > 80 ? '#e74c3c' : '#27ae60'"
-              />
+            <div class="gauge-item">
+              <div class="gauge-chart">
+                <el-progress
+                  type="dashboard"
+                  :percentage="systemStore.stats.memoryUsage"
+                  :color="getProgressColor(systemStore.stats.memoryUsage)"
+                  :width="80"
+                />
+              </div>
+              <div class="gauge-label">内存</div>
             </div>
-            <div class="resource-item">
-              <span class="resource-label">磁盘</span>
-              <el-progress 
-                :percentage="systemStore.stats.diskUsage"
-                :color="systemStore.stats.diskUsage > 80 ? '#e74c3c' : '#f39c12'"
-              />
+            <div class="gauge-item">
+              <div class="gauge-chart">
+                <el-progress
+                  type="dashboard"
+                  :percentage="systemStore.stats.diskUsage"
+                  :color="getProgressColor(systemStore.stats.diskUsage)"
+                  :width="80"
+                />
+              </div>
+              <div class="gauge-label">磁盘</div>
             </div>
           </div>
         </el-card>
       </el-col>
+
       <el-col :span="infoColSpan" :class="{ 'mt-20': isMobile }">
         <el-card class="info-card" shadow="hover">
           <template #header>
-            <span>规则执行历史</span>
+            <div class="panel-title">
+              <span>通道上传统计</span>
+              <el-tag size="small" :type="channelStore.averageSuccessRate > 95 ? 'success' : 'warning'">
+                {{ channelStore.averageSuccessRate > 95 ? '传输良好' : '需要关注' }}
+              </el-tag>
+            </div>
           </template>
-          <div class="execution-list">
-            <div 
-              v-for="exec in ruleStore.executions.slice(0, 4)" 
-              :key="exec.id" 
-              class="execution-item"
-            >
-              <el-icon :class="exec.status === 'success' ? 'success' : 'error'">
-                <component :is="exec.status === 'success' ? 'CircleCheck' : 'CircleClose'" />
-              </el-icon>
-              <span class="exec-name">{{ exec.ruleName }}</span>
-              <span class="exec-time">{{ exec.triggeredAt }}</span>
+          <div class="channel-stats">
+            <div class="channel-stat-item">
+              <span class="stat-label">总上传速率</span>
+              <span class="stat-value">{{ channelStore.totalUploadRate }} 条/秒</span>
+            </div>
+            <div class="channel-stat-item">
+              <span class="stat-label">平均成功率</span>
+              <span class="stat-value">{{ channelStore.averageSuccessRate }}%</span>
+            </div>
+            <div class="channel-stat-item">
+              <span class="stat-label">数据积压</span>
+              <span class="stat-value" :class="{ 'text-danger': channelStore.totalBacklog > 100 }">
+                {{ channelStore.totalBacklog }} 条
+              </span>
             </div>
           </div>
         </el-card>
       </el-col>
-      <el-col :span="infoColSpan" :class="{ 'mt-20': isTablet || isMobile }">
+    </el-row>
+
+    <el-row :gutter="isMobile ? 12 : 20" class="info-row">
+      <el-col :span="infoColSpan">
         <el-card class="info-card alert-card" shadow="hover">
           <template #header>
             <div class="card-header">
               <span>最新告警</span>
-              <el-button type="primary" link size="small">全部清除</el-button>
+              <el-button type="primary" link size="small" @click="alertStore.clearResolvedAlerts">
+                全部清除
+              </el-button>
             </div>
           </template>
           <div class="alert-list">
-            <div 
-              v-for="alert in alertStore.alerts.slice(0, 3)" 
-              :key="alert.id" 
+            <div
+              v-for="alert in alertStore.alerts.slice(0, 3)"
+              :key="alert.id"
               class="alert-item"
               :class="alert.level"
             >
@@ -296,6 +451,38 @@ onUnmounted(() => {
               </div>
               <span class="alert-time">{{ alert.triggeredAt.split(' ')[1] }}</span>
             </div>
+            <el-empty v-if="alertStore.alerts.length === 0" description="暂无告警" :image-size="60" />
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="infoColSpan" :class="{ 'mt-20': isMobile }">
+        <el-card class="info-card" shadow="hover">
+          <template #header>
+            <div class="panel-title">
+              <span>系统信息</span>
+              <el-tag size="small" type="info">详情</el-tag>
+            </div>
+          </template>
+          <div class="system-info">
+            <div class="info-item">
+              <span class="info-label">运行时长</span>
+              <span class="info-value">{{ Math.floor(systemStore.stats.uptime / 3600) }} 小时</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">采集总量</span>
+              <span class="info-value">{{ systemStore.stats.totalReadings.toLocaleString() }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">今日采集</span>
+              <span class="info-value">{{ systemStore.stats.todayReadings.toLocaleString() }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">数据质量</span>
+              <span class="info-value" :class="{ 'text-success': systemStore.dataQuality.qualityRate > 95 }">
+                {{ systemStore.dataQuality.qualityRate }}%
+              </span>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -306,39 +493,62 @@ onUnmounted(() => {
 <style scoped>
 .dashboard {
   padding: 0;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-.dashboard-header {
+.dashboard-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 20px;
+  padding: 0 4px;
 }
 
-.dashboard-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #2c3e50;
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .update-time {
-  color: #7f8c8d;
-  font-size: 14px;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .stat-cards {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .stat-card {
   display: flex;
   align-items: center;
   padding: 20px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
 }
 
-.stat-card.alert {
-  border-left: 4px solid #e74c3c;
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.alert-card-highlight {
+  border-left: 4px solid #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+}
+
+.alert-card-highlight .stat-icon.alerts {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .stat-icon {
@@ -354,19 +564,19 @@ onUnmounted(() => {
 }
 
 .stat-icon.devices {
-  background: linear-gradient(135deg, #3498db, #2980b9);
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
-.stat-icon.data {
-  background: linear-gradient(135deg, #27ae60, #219a52);
+.stat-icon.channels {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
 }
 
 .stat-icon.rules {
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 
 .stat-icon.alerts {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 .stat-content {
@@ -377,27 +587,54 @@ onUnmounted(() => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #2c3e50;
+  color: #1e293b;
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #7f8c8d;
+  color: #64748b;
   margin-top: 4px;
 }
 
+.stat-trend {
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.stat-trend.success {
+  color: #10b981;
+}
+
+.stat-trend.warning {
+  color: #f59e0b;
+}
+
+.stat-trend.danger {
+  color: #ef4444;
+}
+
+.stat-trend.info {
+  color: #64748b;
+}
+
 .chart-row {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .chart-card {
-  height: 320px;
+  border-radius: 12px;
+}
+
+.chart-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .chart-card :deep(.el-card__body) {
-  height: calc(100% - 60px);
-  padding: 10px 20px;
+  height: calc(100% - 70px);
+  padding: 20px;
 }
 
 .card-header {
@@ -406,111 +643,173 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.time-range-selector {
+  margin-left: 16px;
+}
+
+.chart-summary {
+  display: flex;
+  gap: 20px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.summary-item .label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.summary-item .value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
 .chart {
   width: 100%;
   height: 100%;
 }
 
+.info-row {
+  margin-bottom: 24px;
+}
+
 .info-card {
-  height: 280px;
+  border-radius: 12px;
+  height: 100%;
+}
+
+.info-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .info-card :deep(.el-card__body) {
-  padding: 15px;
+  padding: 20px;
 }
 
-.resource-grid {
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.resource-panel {
+  height: auto;
+}
+
+.resource-gauges {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 20px;
+  padding: 10px 0;
+}
+
+.gauge-item {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
 }
 
-.resource-item {
+.gauge-chart {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
 }
 
-.resource-label {
-  width: 50px;
+.gauge-label {
+  font-size: 14px;
   font-weight: 500;
-  color: #2c3e50;
+  color: #64748b;
 }
 
-.resource-item :deep(.el-progress) {
-  flex: 1;
-}
-
-.execution-list {
+.channel-stats {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.execution-item {
+.channel-stat-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 6px;
-  background: #f8f9fa;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
-.execution-item .success {
-  color: #27ae60;
-  font-size: 18px;
+.channel-stat-item .stat-label {
+  font-size: 14px;
+  color: #64748b;
 }
 
-.execution-item .error {
-  color: #e74c3c;
-  font-size: 18px;
+.channel-stat-item .stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
-.exec-name {
-  flex: 1;
-  font-size: 13px;
-  color: #2c3e50;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.text-danger {
+  color: #ef4444 !important;
 }
 
-.exec-time {
-  font-size: 12px;
-  color: #7f8c8d;
+.text-success {
+  color: #10b981 !important;
 }
 
 .alert-card :deep(.el-card__header) {
-  padding: 12px 15px;
+  padding: 12px 20px;
 }
 
 .alert-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .alert-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 6px;
-  background: #f8f9fa;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.alert-item:hover {
+  background: #f1f5f9;
 }
 
 .alert-item.critical {
-  background: #fef0f0;
-  border-left: 3px solid #e74c3c;
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
 }
 
 .alert-item.warning {
-  background: #fdf6ec;
-  border-left: 3px solid #e6a23c;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
 }
 
 .alert-icon {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .alert-content {
@@ -519,14 +818,14 @@ onUnmounted(() => {
 }
 
 .alert-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  color: #2c3e50;
+  color: #1e293b;
 }
 
 .alert-desc {
-  font-size: 12px;
-  color: #7f8c8d;
+  font-size: 13px;
+  color: #64748b;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -534,103 +833,239 @@ onUnmounted(() => {
 }
 
 .alert-time {
-  font-size: 11px;
-  color: #95a5a6;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.system-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .mt-20 {
   margin-top: 20px;
 }
 
-@media (max-width: 1024px) {
-  .dashboard-header h2 {
-    font-size: 20px;
-  }
-  
-  .stat-card {
-    padding: 16px;
-  }
-  
-  .stat-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-  }
-  
-  .stat-value {
-    font-size: 24px;
-  }
-  
-  .chart-card {
-    height: 260px;
+@media (max-width: 1365px) and (max-height: 700px) {
+  .dashboard-toolbar {
+    margin-bottom: 16px;
   }
 
-  .info-card {
-    height: auto;
-    min-height: 220px;
-  }
-}
-
-@media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .dashboard-header h2 {
-    font-size: 18px;
-  }
-  
-  .update-time {
-    font-size: 12px;
-  }
-  
   .stat-card {
-    padding: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
   }
-  
+
   .stat-icon {
     width: 48px;
     height: 48px;
     font-size: 22px;
     margin-right: 12px;
   }
-  
+
   .stat-value {
     font-size: 22px;
   }
-  
+
+  .stat-label {
+    font-size: 13px;
+  }
+
+  .stat-trend {
+    font-size: 11px;
+  }
+
+  .chart-card :deep(.el-card__header) {
+    padding: 12px 16px;
+  }
+
+  .chart-title {
+    font-size: 14px;
+  }
+
+  .time-range-selector {
+    margin-left: 12px;
+  }
+
+  .info-card :deep(.el-card__header) {
+    padding: 12px 16px;
+  }
+
+  .info-card :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  .resource-gauges {
+    margin-bottom: 16px;
+    padding: 8px 0;
+  }
+
+  .gauge-item {
+    gap: 6px;
+  }
+
+  .gauge-label {
+    font-size: 13px;
+  }
+
+  .channel-stats {
+    gap: 10px;
+  }
+
+  .channel-stat-item {
+    padding: 10px 12px;
+  }
+
+  .alert-list {
+    gap: 10px;
+  }
+
+  .alert-item {
+    padding: 10px;
+  }
+
+  .system-info {
+    gap: 10px;
+  }
+
+  .info-item {
+    padding: 8px 12px;
+  }
+}
+
+@media (min-width: 1366px) and (max-width: 1919px) {
+  .stat-card {
+    padding: 18px;
+  }
+
+  .stat-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 26px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard {
+    max-width: 1800px;
+  }
+
+  .stat-card {
+    padding: 20px;
+  }
+
+  .stat-icon {
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .stat-card {
+    padding: 16px;
+  }
+
+  .stat-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+
+  .resource-gauges {
+    flex-wrap: wrap;
+  }
+
+  .gauge-item {
+    flex: 1;
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-toolbar {
+    padding: 0;
+  }
+
+  .update-time {
+    font-size: 12px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    margin-right: 12px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
   .stat-label {
     font-size: 12px;
   }
-  
-  .chart-card {
-    height: 240px;
-    margin-bottom: 12px;
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
-  
-  .info-card {
-    min-height: 200px;
-    margin-bottom: 12px;
+
+  .chart-summary {
+    width: 100%;
+    justify-content: space-around;
+  }
+
+  .resource-gauges {
+    gap: 16px;
   }
 }
 
 @media (max-width: 1024px) and (orientation: landscape) {
-  .chart-card {
-    height: 220px;
-  }
-
-  .info-card {
-    min-height: 180px;
-  }
-
   .stat-cards {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
 
   .chart-row {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
 }
 </style>

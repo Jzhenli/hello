@@ -17,9 +17,18 @@ import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
 import type { UserInfo, RoleInfo } from '@/api/users'
 
-const { isTablet, isMobile, width } = useResponsive()
+const { isTablet, isMobile, isMediumTablet, width } = useResponsive()
 
-const useCompactLayout = computed(() => isTablet.value || isMobile.value || width.value <= 1024)
+// 优化布局判断：1280×800平板使用紧凑布局
+const useCompactLayout = computed(() => {
+  if (isMobile.value) return true
+  if (isTablet.value) return true
+  // 1280×800平板使用紧凑布局
+  if (isMediumTablet.value) return true
+  // 宽度小于1366的设备使用紧凑布局
+  if (width.value <= 1366) return true
+  return false
+})
 
 const activeMenu = ref('general')
 
@@ -512,28 +521,28 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 </div>
               </template>
               <el-table :data="userStore.users" stripe v-loading="userStore.loading">
-                <el-table-column prop="username" label="用户名" min-width="100" />
-                <el-table-column prop="display_name" label="显示名称" min-width="100" />
-                <el-table-column label="角色" min-width="100">
+                <el-table-column prop="username" label="用户名" min-width="90" />
+                <el-table-column prop="display_name" label="显示名称" min-width="90" />
+                <el-table-column label="角色" min-width="90">
                   <template #default="{ row }">
                     <el-tag size="small">{{ row.role_display_name || row.role_name }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="状态" width="80" align="center">
+                <el-table-column label="状态" width="70" align="center">
                   <template #default="{ row }">
                     <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="最后登录" min-width="160">
+                <el-table-column label="最后登录" min-width="140">
                   <template #default="{ row }">
                     {{ formatTime(row.last_login) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="200" fixed="right" align="center">
+                <el-table-column label="操作" width="180" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" :icon="Edit" @click="openEditUserDialog(row)">编辑</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" :icon="Lock" @click="openChangePasswordDialog(row)">改密</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" :icon="Delete" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditUserDialog(row)">编辑</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" @click="openChangePasswordDialog(row)">改密</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -547,20 +556,20 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 </div>
               </template>
               <el-table :data="userStore.roles" stripe>
-                <el-table-column prop="name" label="角色标识" min-width="100" />
-                <el-table-column prop="display_name" label="显示名称" min-width="100" />
-                <el-table-column prop="description" label="描述" min-width="160" />
-                <el-table-column label="类型" width="80" align="center">
+                <el-table-column prop="name" label="角色标识" min-width="90" />
+                <el-table-column prop="display_name" label="显示名称" min-width="90" />
+                <el-table-column prop="description" label="描述" min-width="140" />
+                <el-table-column label="类型" width="70" align="center">
                   <template #default="{ row }">
                     <el-tag :type="row.is_system ? 'info' : 'success'" size="small">
                       {{ row.is_system ? '系统' : '自定义' }}
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right" align="center">
+                <el-table-column label="操作" width="120" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" :icon="Edit" @click="openEditRoleDialog(row)">编辑</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" :icon="Delete" @click="handleDeleteRole(row)" :disabled="row.is_system">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditRoleDialog(row)">编辑</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteRole(row)" :disabled="row.is_system">删除</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -828,6 +837,170 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   .settings-tab {
     padding: 6px 10px;
     font-size: 13px;
+  }
+}
+
+/* 中平板优化 (1280×800) */
+@media (min-width: 1025px) and (max-width: 1366px) {
+  .settings-container {
+    flex-direction: column;
+    min-height: calc(100vh - 180px);
+  }
+
+  .settings-tabs {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .settings-tab {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .settings-content {
+    padding: 16px;
+    overflow-x: auto;
+  }
+
+  .settings-section h3 {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .section-card {
+    margin-bottom: 16px;
+  }
+
+  .section-card :deep(.el-card__header) {
+    padding: 10px 16px;
+  }
+
+  .card-title {
+    font-size: 13px;
+  }
+
+  /* 表格优化 */
+  .el-table {
+    font-size: 13px;
+  }
+
+  .el-table th {
+    padding: 8px 0;
+  }
+
+  .el-table td {
+    padding: 8px 0;
+  }
+
+  /* 表格横向滚动 */
+  .section-card :deep(.el-table__body-wrapper) {
+    overflow-x: auto;
+    position: relative;
+  }
+
+  /* 表格横向滚动提示 - 右侧渐变阴影 */
+  .section-card :deep(.el-table__body-wrapper)::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    background: linear-gradient(to left, rgba(255, 255, 255, 0.9), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  /* 当表格内容超出时显示滚动提示 */
+  .section-card :deep(.el-table__body-wrapper:hover)::after {
+    opacity: 1;
+  }
+
+  /* 表格内容不换行 */
+  .el-table .cell {
+    white-space: nowrap;
+  }
+
+  /* 权限矩阵优化 */
+  .matrix-table {
+    font-size: 13px;
+  }
+
+  .matrix-table th,
+  .matrix-table td {
+    padding: 8px 12px;
+  }
+
+  .resource-header,
+  .action-header {
+    min-width: 80px;
+  }
+
+  .resource-header {
+    min-width: 100px;
+  }
+
+  /* 表单优化 */
+  .settings-form {
+    max-width: 100%;
+  }
+
+  .el-form-item {
+    margin-bottom: 16px;
+  }
+
+  .el-form-item__label {
+    font-size: 13px;
+  }
+
+  /* 日志查看优化 */
+  .log-content {
+    font-size: 12px;
+    max-height: 300px;
+  }
+
+  .log-line {
+    gap: 8px;
+  }
+
+  .log-time {
+    font-size: 11px;
+  }
+
+  .log-level {
+    width: 50px;
+    font-size: 11px;
+  }
+
+  /* 备份列表优化 */
+  .backup-item {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .backup-name {
+    font-size: 13px;
+  }
+
+  .backup-time {
+    font-size: 12px;
+  }
+
+  /* 用户管理卡片优化 */
+  .user-section {
+    gap: 12px;
+  }
+
+  /* 操作按钮优化 */
+  .el-table .el-button + .el-button {
+    margin-left: 4px;
+  }
+
+  /* 权限矩阵容器优化 */
+  .permission-matrix {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

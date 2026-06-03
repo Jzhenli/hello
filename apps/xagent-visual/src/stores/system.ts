@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { systemApi } from '@/api/system'
+import { dataApi } from '@/api/data'
 
 export interface SystemStats {
   cpuUsage: number
@@ -8,32 +10,112 @@ export interface SystemStats {
   uptime: number
   totalReadings: number
   todayReadings: number
+  connectionCount: number
+  processCount: number
+  loadAverage: number[]
+}
+
+export interface DataQualityStats {
+  good: number
+  bad: number
+  uncertain: number
+  total: number
+  qualityRate: number
 }
 
 export const useSystemStore = defineStore('system', () => {
   const stats = ref<SystemStats>({
-    cpuUsage: 45,
-    memoryUsage: 62,
-    diskUsage: 38,
-    uptime: 864000,
-    totalReadings: 125456,
-    todayReadings: 3456
+    cpuUsage: 0,
+    memoryUsage: 0,
+    diskUsage: 0,
+    uptime: 0,
+    totalReadings: 0,
+    todayReadings: 0,
+    connectionCount: 0,
+    processCount: 0,
+    loadAverage: [0, 0, 0]
   })
 
-  const generateChartData = (hours: number = 24) => {
-    const now = Date.now()
-    const data: { time: string; value: number }[] = []
-    
-    for (let i = hours; i >= 0; i--) {
-      const time = new Date(now - i * 3600000)
-      const hour = time.getHours().toString().padStart(2, '0')
-      data.push({
-        time: `${hour}:00`,
-        value: Math.floor(Math.random() * 500) + 100
-      })
+  const dataQuality = ref<DataQualityStats>({
+    good: 0,
+    bad: 0,
+    uncertain: 0,
+    total: 0,
+    qualityRate: 0
+  })
+
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  async function fetchSystemStats() {
+    try {
+      const res = await systemApi.getSystemStats()
+      stats.value = {
+        cpuUsage: res.cpu_usage,
+        memoryUsage: res.memory_usage,
+        diskUsage: res.disk_usage,
+        uptime: res.uptime,
+        totalReadings: res.total_readings,
+        todayReadings: res.today_readings,
+        connectionCount: res.connection_count,
+        processCount: res.process_count,
+        loadAverage: res.load_average
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '获取系统统计失败'
+      error.value = msg
+      console.error('Failed to fetch system stats:', e)
     }
-    
-    return data
+  }
+
+  async function fetchDataQuality() {
+    try {
+      const res = await dataApi.getDataQuality()
+      dataQuality.value = {
+        good: res.good,
+        bad: res.bad,
+        uncertain: res.uncertain,
+        total: res.total,
+        qualityRate: res.quality_rate
+      }
+    } catch (e: unknown) {
+      console.error('Failed to fetch data quality:', e)
+    }
+  }
+
+  async function fetchAllStats() {
+    loading.value = true
+    error.value = null
+    try {
+      await Promise.all([
+        fetchSystemStats(),
+        fetchDataQuality()
+      ])
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const generateChartData = async (hours: number = 24) => {
+    try {
+      const now = Date.now()
+      const startTime = now - hours * 3600000 // hours小时前的时间戳
+      
+      const res = await dataApi.getCollectionStats({
+        start_time: startTime / 1000, // 转换为秒
+        end_time: now / 1000,
+        interval: 'hour'
+      })
+      
+      return res.stats.map(item => ({
+        time: item.time,
+        value: item.count
+      }))
+    } catch (e: unknown) {
+      console.error('Failed to fetch collection stats:', e)
+      // 抛出错误让调用方处理
+      throw new Error('获取数据采集统计失败,请稍后重试')
+    }
   }
 
   const generateTemperatureData = () => {
@@ -55,6 +137,12 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     stats,
+    dataQuality,
+    loading,
+    error,
+    fetchSystemStats,
+    fetchDataQuality,
+    fetchAllStats,
     generateChartData,
     generateTemperatureData
   }

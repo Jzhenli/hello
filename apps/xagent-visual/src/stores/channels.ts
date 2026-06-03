@@ -79,6 +79,21 @@ export const useChannelStore = defineStore('channels', () => {
     channelList.value.reduce((sum, c) => sum + c.uploadRate, 0)
   )
 
+  const totalBacklog = computed(() =>
+    channelList.value.reduce((sum, c) => sum + c.backlogCount, 0)
+  )
+
+  const averageSuccessRate = computed(() => {
+    const enabledChannels = channelList.value.filter(c => c.enabled)
+    if (enabledChannels.length === 0) return 0
+    const totalRate = enabledChannels.reduce((sum, c) => sum + c.successRate, 0)
+    return Math.round(totalRate / enabledChannels.length)
+  })
+
+  const errorChannels = computed(() =>
+    channelList.value.filter(c => c.connectionStatus === 'error').length
+  )
+
   async function fetchChannels() {
     loading.value = true
     error.value = null
@@ -155,6 +170,9 @@ export const useChannelStore = defineStore('channels', () => {
     onlineChannels,
     totalChannels,
     totalUploadRate,
+    totalBacklog,
+    averageSuccessRate,
+    errorChannels,
     fetchChannels,
     createChannel,
     updateChannel,
