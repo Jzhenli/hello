@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 import aiosqlite
 
 from .interface import StorageInterface, Reading
+from ..utils.constants import DataConstants
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +557,161 @@ class SQLiteStorage(StorageInterface):
                 ))
         
         return readings
+    
+    async def get_quality_stats(self) -> Dict[str, Any]:
+        """获取数据质量统计
+
+        Returns:
+            数据质量统计字典，包含：
+            - good: 良好数据点数
+            - bad: 不良数据点数
+            - uncertain: 不确定数据点数
+            - total: 总数据点数
+        """
+        if not self._initialized or not self._db:
+            return {"good": 0, "bad": 0, "uncertain": 0, "total": 0}
+
+        try:
+            # 先获取总记录数，决定使用哪种策略
+            async with self._db.execute("SELECT COUNT(*) FROM readings") as cursor:
+                row = await cursor.fetchone()
+                total_records = row[0] if row else 0
+
+            # 轻量级网关场景：数据量通常不大，使用智能策略
+            if total_records < DataConstants.QUALITY_STATS_THRESHOLD:
+                # 数据量小：完整扫描
+                return await self._get_quality_stats_full_scan()
+            else:
+                # 数据量大：采样统计（最近N条）
+                return await self._get_quality_stats_sample()
+
+        except Exception as e:
+            logger.error(f"Failed to get quality stats: {e}")
+            return {"good": 0, "bad": 0, "uncertain": 0, "total": 0}
+
+    def _process_quality_rows(self, rows: list) -> Dict[str, int]:
+        """处理质量统计行数据的公共方法
+
+        Args:
+            rows: 数据库查询结果行
+
+        Returns:
+            质量统计字典
+        """
+        stats = {"good": 0, "bad": 0, "uncertain": 0, "total": 0}
+
+        # 遍历每条记录的standard_points
+        for row in rows:
+            if row[0]:
+                try:
+                    # 解析JSON数据
+                    points = json.loads(row[0])
+
+                    # 统计每个数据点的质量
+                    for point in points:
+                        quality = point.get("quality", "good").lower()
+                        stats["total"] += 1
+
+                        if quality == "good":
+                            stats["good"] += 1
+                        elif quality == "bad":
+                            stats["bad"] += 1
+                        elif quality == "uncertain":
+                            stats["uncertain"] += 1
+                        else:
+                            # 未知质量标记为uncertain
+                            stats["uncertain"] += 1
+                except (json.JSONDecodeError, TypeError) as e:
+                    # JSON解析失败，跳过该记录
+                    logger.warning(f"Failed to parse standard_points: {e}")
+                    continue
+
+        return stats
+
+    async def _get_quality_stats_full_scan(self) -> Dict[str, int]:
+        """完整扫描统计（适用于小数据量）
+
+        Returns:
+            数据质量统计字典
+        """
+        async with self._db.execute(
+            "SELECT standard_points FROM readings WHERE standard_points IS NOT NULL"
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        stats = self._process_quality_rows(rows)
+        logger.debug(f"Quality stats (full scan): {stats}")
+        return stats
+
+    async def _get_quality_stats_sample(self) -> Dict[str, int]:
+        """采样统计（适用于大数据量）
+
+        Returns:
+            数据质量统计字典
+        """
+        # 只统计最近N条记录
+        async with self._db.execute(
+            f"""SELECT standard_points FROM readings
+               WHERE standard_points IS NOT NULL
+               ORDER BY timestamp DESC
+               LIMIT {DataConstants.QUALITY_STATS_SAMPLE_LIMIT}"""
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        stats = self._process_quality_rows(rows)
+        logger.debug(f"Quality stats (sample): {stats}")
+        return stats
+    
+    async def count_readings_since(self, timestamp: float) -> int:
+        """统计指定时间后的采集量
+        
+        Args:
+            timestamp: Unix时间戳
+            
+        Returns:
+            采集量
+        """
+        if not self._initialized or not self._db:
+            return 0
+        
+        try:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM readings WHERE timestamp >= ?",
+                (timestamp,)
+            ) as cursor:
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Failed to count readings since {timestamp}: {e}")
+            return 0
+    
+    async def count_readings_in_range(
+        self,
+        start_time: float,
+        end_time: float
+    ) -> int:
+        """统计时间范围内的采集量
+        
+        Args:
+            start_time: 开始时间戳
+            end_time: 结束时间戳
+            
+        Returns:
+            采集量
+        """
+        if not self._initialized or not self._db:
+            return 0
+        
+        try:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM readings WHERE timestamp >= ? AND timestamp < ?",
+                (start_time, end_time)
+            ) as cursor:
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Failed to count readings in range: {e}")
+            return 0
     
     def get_connection(self) -> Optional[aiosqlite.Connection]:
         """Get the internal database connection.

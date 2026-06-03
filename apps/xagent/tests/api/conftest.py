@@ -1,4 +1,4 @@
-"""pytest configuration for statistics tests"""
+"""pytest configuration for API tests"""
 
 import pytest
 import sys

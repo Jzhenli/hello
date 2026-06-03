@@ -56,3 +56,45 @@ class StorageInterface(ABC):
 
     async def get_latest_readings_by_device(self, active_only: bool = False) -> List["Reading"]:
         return []
+    
+    @abstractmethod
+    async def get_quality_stats(self) -> Dict[str, Any]:
+        """获取数据质量统计
+        
+        Returns:
+            数据质量统计字典，包含:
+            - good: 良好数据点数
+            - bad: 不良数据点数
+            - uncertain: 不确定数据点数
+            - total: 总数据点数
+        """
+        pass
+    
+    @abstractmethod
+    async def count_readings_since(self, timestamp: float) -> int:
+        """统计指定时间后的采集量
+        
+        Args:
+            timestamp: Unix时间戳
+            
+        Returns:
+            采集量
+        """
+        pass
+    
+    @abstractmethod
+    async def count_readings_in_range(
+        self,
+        start_time: float,
+        end_time: float
+    ) -> int:
+        """统计时间范围内的采集量
+        
+        Args:
+            start_time: 开始时间戳
+            end_time: 结束时间戳
+            
+        Returns:
+            采集量
+        """
+        pass

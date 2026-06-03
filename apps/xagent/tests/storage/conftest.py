@@ -1,4 +1,4 @@
-"""pytest configuration for statistics tests"""
+"""pytest configuration for storage tests"""
 
 import pytest
 import sys

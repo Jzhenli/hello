@@ -9,6 +9,7 @@ from ..storage import StorageInterface, SQLiteStorage, WriteBehindBuffer
 from ..core.metadata import MetadataManager
 from ..core.config import ConfigManager
 from ..core.paths import get_paths
+from ..statistics import StatisticsManager
 from .services.command_executor import CommandExecutor
 
 if TYPE_CHECKING:
@@ -106,3 +107,17 @@ def set_gateway_storage(
     state.gateway = gateway
     state.cleanup_task = cleanup_task
     state.user_permission_service = user_permission_service
+
+
+def get_stats_manager(state: AppState = Depends(get_app_state)) -> Optional[StatisticsManager]:
+    """Get statistics manager instance via dependency injection
+    
+    Args:
+        state: Application state
+        
+    Returns:
+        StatisticsManager instance or None if not available
+    """
+    if state.gateway is None:
+        return None
+    return state.gateway.stats_manager

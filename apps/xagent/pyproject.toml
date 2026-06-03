@@ -64,6 +64,7 @@ requires = [
     "xknx==2.12.2",
     "protobuf>=4.25.0",
     "platformdirs>=3.0.0",
+    "psutil"
 ]
 
 [tool.briefcase.app.xagent.windows]
@@ -84,6 +85,7 @@ requires = [
     "bacpypes3==0.0.106",
     "protobuf>=4.25.0",
     "platformdirs>=3.0.0",
+    "psutil"
 ]
 
 # Mobile deployments
@@ -108,6 +110,7 @@ requires = [
     "bacpypes3==0.0.106",
     "protobuf>=4.25.0",
     "platformdirs>=3.0.0",
+    "psutil"
 ]
 requirement_installer_args = [
     "--extra-index-url", "https://jzhenli.github.io/my-pypi/"

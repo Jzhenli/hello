@@ -4,7 +4,9 @@
 1. 北向通道上传统计
 2. 数据采集趋势统计
 3. 设备性能统计
-4. 自定义统计
+4. 系统资源统计
+5. 数据质量统计
+6. 自定义统计
 
 设计原则：
 - 高内聚：所有统计逻辑集中管理
@@ -15,9 +17,11 @@
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Callable, TYPE_CHECKING
 from .collector import StatsCollector
+from ..utils.system_monitor import get_system_monitor
+from ..utils.constants import SystemDefaults, TimeConstants
 
 if TYPE_CHECKING:
     from ..api.services.north_channel_service import NorthChannelService
@@ -167,7 +171,7 @@ class StatisticsManager:
         
         success = successful_count > 0 if point_count > 0 else True
         
-        hour_key = f"collection:{datetime.now().strftime('%Y-%m-%d:%H')}"
+        hour_key = f"collection:{datetime.now(timezone.utc).strftime('%Y-%m-%d:%H')}"
         hour_collector = self._get_or_create_collector(hour_key)
         await hour_collector.record(point_count, success=success)
         
@@ -186,9 +190,9 @@ class StatisticsManager:
         Returns:
             趋势数据列表，每项包含 time 和 value
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         trend = []
-        
+
         for i in range(hours, 0, -1):
             hour = now - timedelta(hours=i)
             hour_key = f"collection:{hour.strftime('%Y-%m-%d:%H')}"
@@ -426,3 +430,220 @@ class StatisticsManager:
             key: collector.get_stats()
             for key, collector in self._collectors.items()
         }
+    
+    # ===== 系统资源统计 =====
+    
+    async def get_system_stats(self) -> Dict[str, Any]:
+        """获取系统资源统计
+        
+        Returns:
+            系统资源统计信息，包括CPU、内存、磁盘使用率等
+        """
+        try:
+            # 使用SystemMonitor获取系统指标（单例+共享线程池）
+            monitor = get_system_monitor()
+            metrics = await monitor.get_system_metrics()
+            
+            # 获取采集统计
+            total_readings = await self._get_total_readings()
+            today_readings = await self._get_today_readings()
+            
+            return {
+                "cpu_usage": round(metrics["cpu_usage"], 2),
+                "memory_usage": round(metrics["memory"].percent, 2),
+                "disk_usage": round(metrics["disk"].percent, 2),
+                "uptime": int(metrics["uptime"]),
+                "total_readings": total_readings,
+                "today_readings": today_readings,
+                "connection_count": metrics["connections"],
+                "process_count": metrics["process_count"],
+                "load_average": metrics["load_avg"]
+            }
+        except Exception as e:
+            logger.error(f"Failed to get system stats: {e}")
+            return SystemDefaults.get_default_system_stats()
+    
+    async def _get_total_readings(self) -> int:
+        """获取总采集量"""
+        if not self._storage:
+            return 0
+        
+        try:
+            stats = await self._storage.get_stats()
+            return stats.get("total_readings", 0)
+        except Exception as e:
+            logger.error(f"Failed to get total readings: {e}")
+            return 0
+    
+    async def _get_today_readings(self) -> int:
+        """获取今日采集量"""
+        if not self._storage:
+            return 0
+        
+        try:
+            # 计算今天开始的时间戳
+            now = datetime.now(timezone.utc)
+            today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).timestamp()
+            
+            # 查询今天的采集量
+            count = await self._storage.count_readings_since(today_start)
+            return count
+        except Exception as e:
+            logger.error(f"Failed to get today readings: {e}")
+            return 0
+    
+    # ===== 数据质量统计 =====
+    
+    async def get_quality_stats(self) -> Dict[str, Any]:
+        """获取数据质量统计
+        
+        Returns:
+            数据质量统计信息，包括良好、不良、不确定数据点数
+        """
+        if not self._storage:
+            return SystemDefaults.get_default_quality_stats()
+        
+        try:
+            # 从存储中获取数据质量统计
+            quality_stats = await self._storage.get_quality_stats()
+            
+            total = quality_stats.get("total", 0)
+            good = quality_stats.get("good", 0)
+            bad = quality_stats.get("bad", 0)
+            uncertain = quality_stats.get("uncertain", 0)
+            
+            quality_rate = (good / total * 100) if total > 0 else 0
+            
+            return {
+                "good": good,
+                "bad": bad,
+                "uncertain": uncertain,
+                "total": total,
+                "quality_rate": round(quality_rate, 2)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get data quality stats: {e}")
+            return SystemDefaults.get_default_quality_stats()
+    
+    # ===== 数据采集趋势统计 =====
+    
+    async def get_collection_stats(
+        self,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        interval: str = "hour"
+    ) -> Dict[str, Any]:
+        """获取数据采集统计
+        
+        Args:
+            start_time: 开始时间戳
+            end_time: 结束时间戳
+            interval: 统计间隔
+            
+        Returns:
+            采集统计数据，包括趋势、总数、平均速率
+        """
+        # 默认查询最近24小时
+        if not end_time:
+            end_time = time.time()
+        if not start_time:
+            start_time = end_time - TimeConstants.SECONDS_PER_DAY  # 24小时前
+        
+        # 参数验证
+        if start_time < 0 or end_time < 0:
+            logger.error(f"Invalid timestamp: start_time={start_time}, end_time={end_time}")
+            return SystemDefaults.get_default_collection_stats()
+        
+        if start_time > end_time:
+            logger.error(f"start_time ({start_time}) cannot be greater than end_time ({end_time})")
+            return SystemDefaults.get_default_collection_stats()
+        
+        if interval not in ("hour", "day"):
+            logger.error(f"Invalid interval: {interval}, must be 'hour' or 'day'")
+            return SystemDefaults.get_default_collection_stats()
+        
+        try:
+            # 使用已有的 get_hourly_trend 方法
+            if interval == "hour":
+                hours = int((end_time - start_time) / TimeConstants.SECONDS_PER_HOUR)
+                trend = await self.get_hourly_trend(hours=max(hours, 24))
+                
+                stats = []
+                now = datetime.now(timezone.utc)
+                
+                for i, item in enumerate(trend):
+                    # 使用get_hourly_trend的实际时间基准计算timestamp
+                    # trend中的数据是从now往前推的,所以第i个数据点对应 now - (hours - i) 小时
+                    hour_offset = hours - i
+                    actual_time = now - timedelta(hours=hour_offset)
+                    timestamp = int(actual_time.timestamp())
+                    
+                    stats.append({
+                        "time": item["time"],
+                        "count": item["value"],
+                        "timestamp": timestamp
+                    })
+                
+                total_count = sum(s["count"] for s in stats)
+                avg_rate = total_count / len(stats) if stats else 0
+                
+                return {
+                    "stats": stats,
+                    "total_count": total_count,
+                    "avg_rate": round(avg_rate, 2)
+                }
+            else:
+                # 按天统计
+                return await self._get_daily_collection_stats(start_time, end_time)
+                
+        except Exception as e:
+            logger.error(f"Failed to get collection stats: {e}")
+            return SystemDefaults.get_default_collection_stats()
+    
+    async def _get_daily_collection_stats(
+        self,
+        start_time: float,
+        end_time: float
+    ) -> Dict[str, Any]:
+        """获取按天的采集统计
+        
+        Args:
+            start_time: 开始时间戳
+            end_time: 结束时间戳
+            
+        Returns:
+            按天统计的采集数据
+        """
+        if not self._storage:
+            return SystemDefaults.get_default_collection_stats()
+        
+        try:
+            # 计算天数
+            days = int((end_time - start_time) / TimeConstants.SECONDS_PER_DAY)
+            
+            stats = []
+            for i in range(days):
+                day_start = start_time + (i * TimeConstants.SECONDS_PER_DAY)
+                day_end = day_start + TimeConstants.SECONDS_PER_DAY
+                
+                # 查询当天的采集量
+                count = await self._storage.count_readings_in_range(day_start, day_end)
+                
+                day_date = datetime.fromtimestamp(day_start)
+                stats.append({
+                    "time": day_date.strftime('%Y-%m-%d'),
+                    "count": count,
+                    "timestamp": int(day_start)
+                })
+            
+            total_count = sum(s["count"] for s in stats)
+            avg_rate = total_count / len(stats) if stats else 0
+            
+            return {
+                "stats": stats,
+                "total_count": total_count,
+                "avg_rate": round(avg_rate, 2)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get daily collection stats: {e}")
+            return SystemDefaults.get_default_collection_stats()
