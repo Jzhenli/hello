@@ -8,7 +8,6 @@ import {
   Lock,
   Plus,
   Edit,
-  Delete,
   Check,
   Close
 } from '@element-plus/icons-vue'

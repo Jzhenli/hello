@@ -36,40 +36,11 @@ const ruleStore = useRuleStore()
 const alertStore = useAlertStore()
 const systemStore = useSystemStore()
 const channelStore = useChannelStore()
-const { isTablet, isMobile, isSmallTablet, isMediumTablet, isLargeTablet, width, height } = useResponsive()
+const { isTablet, isMobile, isSmallTablet, isMediumTablet, isLargeTablet } = useResponsive()
 
 const lastUpdateTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
 const refreshing = ref(false)
 const timeRange = ref('24h')
-
-// 数据缓存
-const lastFetchTime = ref(0)
-const CACHE_DURATION = 10000 // 10秒缓存
-const isDataStale = computed(() => {
-  return Date.now() - lastFetchTime.value > CACHE_DURATION
-})
-
-// 防抖函数
-function debounce<T extends (...args: unknown[]) => unknown>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
-  return function (this: unknown, ...args: Parameters<T>) {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-    timeoutId = setTimeout(() => {
-      fn.apply(this, args)
-      timeoutId = null
-    }, delay)
-  }
-}
-
-// 防抖的刷新函数
-const debouncedRefresh = debounce(async () => {
-  await refreshData()
-}, 300)
 
 const statCardSpan = computed(() => {
   if (isMobile.value) return 24
@@ -184,11 +155,7 @@ const dataChartOption = ref({
   }]
 })
 
-async function fetchAllData(forceRefresh = false) {
-  if (!forceRefresh && !isDataStale.value) {
-    return
-  }
-
+async function fetchAllData() {
   try {
     const results = await Promise.allSettled([
       deviceStore.fetchDevices(),
@@ -203,7 +170,6 @@ async function fetchAllData(forceRefresh = false) {
       console.warn('Some requests failed:', failedRequests)
     }
 
-    lastFetchTime.value = Date.now()
     updateChartData()
 
   } catch (error) {
@@ -231,7 +197,7 @@ async function refreshData() {
   
   refreshing.value = true
   try {
-    await fetchAllData(true)
+    await fetchAllData()
     lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
     ElMessage.success('数据已刷新')
   } finally {
@@ -240,7 +206,7 @@ async function refreshData() {
 }
 
 onMounted(async () => {
-  await fetchAllData(true)
+  await fetchAllData()
   lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
 })
 </script>
