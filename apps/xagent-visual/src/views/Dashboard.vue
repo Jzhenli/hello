@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDeviceStore } from '@/stores/devices'
 import { useRuleStore } from '@/stores/rules'
 import { useAlertStore } from '@/stores/alerts'
@@ -31,6 +32,7 @@ use([
   GridComponent
 ])
 
+const router = useRouter()
 const deviceStore = useDeviceStore()
 const ruleStore = useRuleStore()
 const alertStore = useAlertStore()
@@ -396,8 +398,8 @@ onMounted(async () => {
           <template #header>
             <div class="card-header">
               <span>最新告警</span>
-              <el-button type="primary" link size="small" @click="alertStore.clearResolvedAlerts">
-                全部清除
+              <el-button type="primary" link size="small" @click="router.push('/alerts')">
+                查看全部
               </el-button>
             </div>
           </template>
