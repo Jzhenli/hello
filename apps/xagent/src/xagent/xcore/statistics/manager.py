@@ -17,7 +17,7 @@
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Callable, TYPE_CHECKING
 from .collector import StatsCollector
 from ..utils.system_monitor import get_system_monitor
@@ -171,7 +171,7 @@ class StatisticsManager:
         
         success = successful_count > 0 if point_count > 0 else True
         
-        hour_key = f"collection:{datetime.now(timezone.utc).strftime('%Y-%m-%d:%H')}"
+        hour_key = f"collection:{datetime.now().strftime('%Y-%m-%d:%H')}"  # 本地时间
         hour_collector = self._get_or_create_collector(hour_key)
         await hour_collector.record(point_count, success=success)
         
@@ -188,25 +188,34 @@ class StatisticsManager:
             hours: 小时数，默认 24
             
         Returns:
-            趋势数据列表，每项包含 time 和 value
+            趋势数据列表，每项包含 time(本地时间字符串)、value 和 timestamp
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now()  # 使用本地时间（适合局域网场景）
         trend = []
 
-        for i in range(hours, 0, -1):
+        # 从 hours-1 小时前到当前小时（包含当前小时）
+        for i in range(hours - 1, -1, -1):
             hour = now - timedelta(hours=i)
-            hour_key = f"collection:{hour.strftime('%Y-%m-%d:%H')}"
+            hour_start = datetime(hour.year, hour.month, hour.day, hour.hour)
+            hour_end = hour_start + timedelta(hours=1)
             
-            if hour_key in self._collectors:
-                stats = self._collectors[hour_key].get_stats()
+            try:
+                # 从数据库查询该小时的采集数量
+                count = await self._storage.count_readings_in_range(
+                    hour_start.timestamp(),
+                    hour_end.timestamp()
+                )
                 trend.append({
-                    "time": hour.strftime('%H:00'),
-                    "value": stats['total_uploaded']
+                    "time": hour.strftime('%H:00'),  # 本地时间字符串
+                    "value": count,
+                    "timestamp": int(hour_start.timestamp())  # 整点时间戳
                 })
-            else:
+            except Exception as e:
+                logger.warning(f"Failed to get hourly count for {hour}: {e}")
                 trend.append({
                     "time": hour.strftime('%H:00'),
-                    "value": 0
+                    "value": 0,
+                    "timestamp": int(hour_start.timestamp())
                 })
         
         return trend
@@ -481,9 +490,9 @@ class StatisticsManager:
             return 0
         
         try:
-            # 计算今天开始的时间戳
-            now = datetime.now(timezone.utc)
-            today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).timestamp()
+            # 计算今天开始的时间戳（本地时间）
+            now = datetime.now()
+            today_start = datetime(now.year, now.month, now.day).timestamp()
             
             # 查询今天的采集量
             count = await self._storage.count_readings_since(today_start)
@@ -565,23 +574,19 @@ class StatisticsManager:
         try:
             # 使用已有的 get_hourly_trend 方法
             if interval == "hour":
-                hours = int((end_time - start_time) / TimeConstants.SECONDS_PER_HOUR)
-                trend = await self.get_hourly_trend(hours=max(hours, 24))
+                # 使用四舍五入避免时间差导致的取整误差
+                hours = round((end_time - start_time) / TimeConstants.SECONDS_PER_HOUR)
+                hours = max(1, hours)  # 至少1小时
+                trend = await self.get_hourly_trend(hours=hours)
                 
                 stats = []
-                now = datetime.now(timezone.utc)
                 
-                for i, item in enumerate(trend):
-                    # 使用get_hourly_trend的实际时间基准计算timestamp
-                    # trend中的数据是从now往前推的,所以第i个数据点对应 now - (hours - i) 小时
-                    hour_offset = hours - i
-                    actual_time = now - timedelta(hours=hour_offset)
-                    timestamp = int(actual_time.timestamp())
-                    
+                for item in trend:
+                    # 直接使用 trend 中已计算好的 timestamp，确保一致性
                     stats.append({
-                        "time": item["time"],
+                        "time": item["time"],  # 本地时间字符串
                         "count": item["value"],
-                        "timestamp": timestamp
+                        "timestamp": item["timestamp"]
                     })
                 
                 total_count = sum(s["count"] for s in stats)
