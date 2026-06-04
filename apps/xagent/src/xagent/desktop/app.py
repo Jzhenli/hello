@@ -68,8 +68,10 @@ class XAgentDesktopApp(toga.App):
         """Show the main UI with WebView.
         
         The webview will load the frontend from the backend server.
-        After loading, it will force a reload to ensure fresh content
-        and prevent caching issues in desktop app webview.
+        No force reload is needed because:
+        1. HTML is served with no-cache headers
+        2. JS/CSS use content-hash filenames (Vite)
+        3. webview will always get the latest HTML
         """
         self.splash_screen.update_progress(5)
         
@@ -78,26 +80,8 @@ class XAgentDesktopApp(toga.App):
             host = "127.0.0.1"
         
         url = f"http://{host}:{self.backend_manager.server_port}/"
-        webview = self.webview_manager.create_webview(
-            url=url,
-            on_webview_load=self._on_webview_loaded
-        )
+        webview = self.webview_manager.create_webview(url=url)
         self.main_window.content = webview
-    
-    async def _on_webview_loaded(self, widget):
-        """Callback when webview finishes loading.
-        
-        Force a page reload to ensure fresh content.
-        This prevents 404 errors when the frontend is updated.
-        
-        The reload is only performed once to prevent infinite loops.
-        User session data in localStorage is preserved.
-        """
-        logger.info("WebView loaded, forcing reload to prevent caching issues")
-        await asyncio.sleep(0.1)  # Small delay to ensure page is fully loaded
-        success = await self.webview_manager.clear_cache_and_reload()
-        if not success:
-            logger.warning("Failed to reload webview")
 
     def _show_error(self, message: str):
         """Show an error message."""

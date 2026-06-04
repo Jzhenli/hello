@@ -212,54 +212,107 @@ async function refreshData() {
   }
 }
 
-const isInitialLoading = ref(false)
-const isContentReady = ref(true) // 默认显示内容，除非需要loading
+const showContent = ref(false)        // 是否显示真实内容
+const showSkeleton = ref(true)        // 是否显示骨架屏
 
 onMounted(async () => {
-  // 检查是否已有有效缓存数据（数据量大于0）
-  const hasCacheData = deviceStore.devices.length > 0 || 
-                       ruleStore.rules.length > 0 || 
+  // 检查 store 中是否已有已加载的数据（用于优化从其他页面切换回来的体验）
+  // 注意：这不是真正的缓存检测，而是检查内存中的 store 数据
+  // 页面刷新后 store 会被清空，会走首次加载逻辑
+  const hasCacheData = deviceStore.devices.length > 0 ||
+                       ruleStore.rules.length > 0 ||
                        alertStore.alerts.length > 0 ||
                        systemStore.stats.totalReadings > 0
   
-  // 只在无缓存时显示loading（首次访问）
-  if (!hasCacheData) {
-    isInitialLoading.value = true
-    isContentReady.value = false
+  // 如果有缓存数据，立即显示内容（从其他页面切换回来）
+  if (hasCacheData) {
+    showSkeleton.value = false
+    showContent.value = true
+    // 后台刷新数据，但不显示 loading
+    try {
+      await fetchAllData()
+      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    } catch (error) {
+      console.error('Failed to refresh data:', error)
+    }
+    return
   }
   
+  // 无缓存数据（首次访问），保持骨架屏显示，后台加载数据
   try {
-    // 一次性加载所有数据
     await fetchAllData()
     lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
     
     // 等待DOM更新完成
     await nextTick()
     
-    // 平滑过渡：隐藏loading并显示内容
-    if (isInitialLoading.value) {
-      // 使用单个requestAnimationFrame确保loading遮罩平滑消失
-      requestAnimationFrame(() => {
-        isInitialLoading.value = false
-        isContentReady.value = true
-      })
-    } else {
-      // 无loading，直接显示内容
-      isContentReady.value = true
-    }
+    // 平滑过渡：隐藏骨架屏并显示内容
+    requestAnimationFrame(() => {
+      showSkeleton.value = false
+      showContent.value = true
+    })
   } catch (error) {
     console.error('Failed to fetch data:', error)
     ElMessage.error('数据加载失败')
-    isInitialLoading.value = false
-    isContentReady.value = true
+    showSkeleton.value = false
+    showContent.value = true
   }
 })
 </script>
 
 <template>
-  <div class="dashboard" v-loading="isInitialLoading" element-loading-text="加载中...">
-    <Transition name="fade-slide">
-      <div v-if="isContentReady" class="dashboard-content">
+  <div class="dashboard">
+    <!-- 骨架屏：模拟真实内容布局 -->
+    <!-- 使用 v-show 而非 v-if 的原因：
+         1. 切换性能更好，避免 v-if 的重新渲染开销
+         2. 骨架屏和真实内容结构相似，内存开销可控
+         3. 平滑过渡，避免切换时的闪烁感
+         对于中等复杂度的 Dashboard 页面，这种实现方式是合理的性能与体验权衡
+    -->
+    <div
+      v-show="showSkeleton"
+      class="dashboard-skeleton"
+      role="region"
+      aria-busy="true"
+      aria-label="内容加载中"
+    >
+      <el-row :gutter="isMobile ? 12 : 20" class="skeleton-cards">
+        <el-col :span="statCardSpan" v-for="i in 4" :key="i">
+          <el-card class="skeleton-card" shadow="hover">
+            <div class="skeleton-icon"></div>
+            <div class="skeleton-content">
+              <div class="skeleton-value"></div>
+              <div class="skeleton-label"></div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <el-row :gutter="isMobile ? 12 : 20" class="skeleton-chart-row">
+        <el-col :span="24">
+          <el-card class="skeleton-chart" shadow="hover">
+            <div class="skeleton-chart-header"></div>
+            <div class="skeleton-chart-body"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <el-row :gutter="isMobile ? 12 : 20" class="skeleton-info-row">
+        <el-col :span="infoColSpan" v-for="i in 2" :key="i">
+          <el-card class="skeleton-info" shadow="hover">
+            <div class="skeleton-info-header"></div>
+            <div class="skeleton-info-body"></div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <!-- 真实内容 -->
+    <div
+      v-show="showContent"
+      class="dashboard-content"
+      role="region"
+      :aria-busy="!showContent"
+      aria-label="仪表盘内容"
+    >
     <div class="dashboard-toolbar">
       <div class="toolbar-right">
         <el-button
@@ -336,9 +389,9 @@ onMounted(async () => {
               <div class="header-left">
                 <span class="chart-title">数据采集趋势</span>
                 <el-radio-group v-model="timeRange" size="small" class="time-range-selector">
-                  <el-radio-button label="1h">1小时</el-radio-button>
-                  <el-radio-button label="24h">24小时</el-radio-button>
-                  <el-radio-button label="7d">7天</el-radio-button>
+                  <el-radio-button value="1h">1小时</el-radio-button>
+                  <el-radio-button value="24h">24小时</el-radio-button>
+                  <el-radio-button value="7d">7天</el-radio-button>
                 </el-radio-group>
               </div>
               <div class="chart-summary">
@@ -501,7 +554,6 @@ onMounted(async () => {
       </el-col>
     </el-row>
       </div>
-    </Transition>
   </div>
 </template>
 
@@ -510,6 +562,124 @@ onMounted(async () => {
   padding: 0;
   max-width: 1600px;
   margin: 0 auto;
+}
+
+/* 骨架屏样式 */
+.dashboard-skeleton {
+  padding: 0;
+}
+
+.skeleton-cards,
+.skeleton-chart-row,
+.skeleton-info-row {
+  margin-bottom: 20px;
+}
+
+.skeleton-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.skeleton-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-content {
+  flex: 1;
+}
+
+.skeleton-value {
+  height: 28px;
+  width: 60%;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-label {
+  height: 16px;
+  width: 40%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-chart {
+  height: 350px;
+}
+
+.skeleton-chart-header {
+  height: 40px;
+  width: 30%;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-chart-body {
+  height: 250px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-info {
+  height: 200px;
+}
+
+.skeleton-info-header {
+  height: 24px;
+  width: 25%;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-info-body {
+  height: 120px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 深色模式骨架屏样式 */
+@media (prefers-color-scheme: dark) {
+  .skeleton-icon,
+  .skeleton-value,
+  .skeleton-label,
+  .skeleton-chart-header,
+  .skeleton-chart-body,
+  .skeleton-info-header,
+  .skeleton-info-body {
+    background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+  }
 }
 
 .dashboard-toolbar {
