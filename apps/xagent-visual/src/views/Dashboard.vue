@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStore } from '@/stores/devices'
 import { useRuleStore } from '@/stores/rules'
@@ -207,14 +207,54 @@ async function refreshData() {
   }
 }
 
+const isInitialLoading = ref(false)
+const isContentReady = ref(true) // 默认显示内容，除非需要loading
+
 onMounted(async () => {
-  await fetchAllData()
-  lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+  // 检查是否已有有效缓存数据（数据量大于0）
+  const hasCacheData = deviceStore.devices.length > 0 || 
+                       ruleStore.rules.length > 0 || 
+                       alertStore.alerts.length > 0 ||
+                       systemStore.stats.totalReadings > 0
+  
+  // 只在无缓存时显示loading（首次访问）
+  if (!hasCacheData) {
+    isInitialLoading.value = true
+    isContentReady.value = false
+  }
+  
+  try {
+    // 一次性加载所有数据
+    await fetchAllData()
+    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    
+    // 等待DOM更新完成
+    await nextTick()
+    
+    // 平滑过渡：隐藏loading并显示内容
+    if (isInitialLoading.value) {
+      // 使用单个requestAnimationFrame确保loading遮罩平滑消失
+      requestAnimationFrame(() => {
+        isInitialLoading.value = false
+        isContentReady.value = true
+      })
+    } else {
+      // 无loading，直接显示内容
+      isContentReady.value = true
+    }
+  } catch (error) {
+    console.error('Failed to fetch data:', error)
+    ElMessage.error('数据加载失败')
+    isInitialLoading.value = false
+    isContentReady.value = true
+  }
 })
 </script>
 
 <template>
-  <div class="dashboard" v-loading="systemStore.loading">
+  <div class="dashboard" v-loading="isInitialLoading" element-loading-text="加载中...">
+    <Transition name="fade-slide">
+      <div v-if="isContentReady" class="dashboard-content">
     <div class="dashboard-toolbar">
       <div class="toolbar-right">
         <el-button
@@ -455,6 +495,8 @@ onMounted(async () => {
         </el-card>
       </el-col>
     </el-row>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -1035,5 +1077,34 @@ onMounted(async () => {
   .chart-row {
     margin-bottom: 16px;
   }
+}
+
+/* 过渡动画 - 丝滑显示 */
+.dashboard-content {
+  width: 100%;
+}
+
+/* 淡入滑动动画 */
+.fade-slide-enter-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 优化loading遮罩的过渡 */
+.dashboard :deep(.el-loading-mask) {
+  transition: opacity 0.3s ease-in-out;
 }
 </style>
