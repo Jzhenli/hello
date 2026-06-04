@@ -22,17 +22,17 @@ def get_os_platform() -> str:
         
         # ARM architectures
         if machine in ("aarch64", "arm64", "armv8l", "armv7l", "armv6l"):
-            return "Linux (ARM)"
+            return "Linux_arm"
         # x86 architectures (Explicitly handle i386/i686)
         if machine in ("x86_64", "amd64", "i386", "i686"):
-            return "Linux (x86)"
+            return "Linux_x86"
             
-        return "Linux (Other)"
+        return "Linux_unknown"
 
     if sys.platform == "darwin":
         return "macOS"
 
-    return "Other"
+    return "Unknown"
 
 
 @lru_cache(maxsize=None)
@@ -49,15 +49,15 @@ def get_os_bitness() -> int:
         return 64 if machine in ("amd64", "x86_64", "arm64") else 32
 
     # Android and Linux (ARM) share the exact same bitness logic
-    if plat in ("Android", "Linux (ARM)"):
+    if plat in ("Android", "Linux_arm"):
         # aarch64 / arm64 -> 64-bit
         # armv8l / armv7l / armv6l -> 32-bit (armv8l = ARMv8 chip running AArch32)
         return 64 if machine in ("aarch64", "arm64") else 32
 
-    if plat == "Linux (x86)":
+    if plat == "Linux_x86":
         return 64 if machine in ("x86_64", "amd64") else 32
 
-    if plat == "Linux (RISC-V)":
+    if plat == "Linux_unknown":
         # riscv64 -> 64-bit, riscv32 -> 32-bit
         return 64 if machine == "riscv64" else 32
 
@@ -92,6 +92,6 @@ if __name__ == "__main__":
 
     # Common usage scenarios
     if plat == "Android" and os_bit == 64 and py_bit == 32:
-        print("⚠️  32-bit Python running on 64-bit Android. Consider upgrading Python.")
-    elif plat == "Linux (ARM)" and os_bit == 32:
-        print("ℹ️  32-bit ARM Linux. Memory limit is around 3-4GB.")
+        print("32-bit Python running on 64-bit Android. Consider upgrading Python.")
+    elif plat == "Linux_arm" and os_bit == 32:
+        print("32-bit ARM Linux. Memory limit is around 3-4GB.")

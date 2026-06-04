@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+import platform
 import os
 import psutil
 from concurrent.futures import ThreadPoolExecutor
@@ -9,16 +10,14 @@ from typing import Dict, Any, Optional
 from collections import namedtuple
 import logging
 
-from .platform_utils import get_os_platform
-
 logger = logging.getLogger(__name__)
 
-# 安卓存储路径常量，按普通应用最可能可访问的路径优先
+# 安卓存储路径常量
 ANDROID_STORAGE_PATHS = [
-    '/storage/emulated/0', # 安卓10+内部存储，通常可访问
-    '/sdcard',             # 外部存储软链接
-    '/storage/sdcard0',    # 旧 Android 设备内部存储
-    '/data',               # 系统数据分区，可能需要 root 权限
+    '/data',              # 用户数据分区（优先）
+    '/storage/emulated/0', # 安卓10+内部存储
+    '/storage/sdcard0',   # 内部存储
+    '/sdcard',            # 外部存储软链接
 ]
 
 
@@ -107,17 +106,20 @@ class SystemMonitor:
             磁盘使用信息对象
         """
         try:
-            os_platform = get_os_platform()
+            system = platform.system()
 
-            if os_platform == "Windows":
+            if system == "Windows":
                 # Windows: 优先使用系统盘（通常是C盘）
                 return psutil.disk_usage('C:\\')
-            elif os_platform == "Android":
-                # 安卓: 优先使用最可能可访问的用户存储路径
-                return self._get_android_disk_usage()
-            elif os_platform.startswith("Linux"):
-                # Linux: 使用根目录
-                return psutil.disk_usage('/')
+            elif system == "Linux":
+                # Linux: 需要区分安卓和桌面Linux
+                # 检测是否为安卓系统
+                if self._is_android():
+                    # 安卓: 优先使用数据分区（用户实际使用的存储）
+                    return self._get_android_disk_usage()
+                else:
+                    # 桌面Linux: 使用根目录
+                    return psutil.disk_usage('/')
             else:
                 # 其他系统（macOS等）: 使用根目录
                 return psutil.disk_usage('/')
@@ -127,6 +129,20 @@ class SystemMonitor:
             FakeDisk = namedtuple('FakeDisk', ['total', 'used', 'percent'])
             return FakeDisk(total=0, used=0, percent=0.0)
 
+    def _is_android(self) -> bool:
+        """检测是否为安卓系统
+
+        Returns:
+            True表示安卓系统，False表示其他系统
+        """
+        # 检查ANDROID_ROOT环境变量（最可靠）
+        if os.environ.get('ANDROID_ROOT'):
+            return True
+
+        # 检查安卓特有目录
+        android_markers = ['/system/bin', '/system/app', '/system/build.prop']
+        return all(os.path.exists(marker) for marker in android_markers[:2]) or os.path.exists(android_markers[2])
+
     def _get_android_disk_usage(self):
         """获取安卓系统的磁盘使用情况
 
@@ -135,14 +151,13 @@ class SystemMonitor:
         """
         for path in ANDROID_STORAGE_PATHS:
             try:
-                if os.path.isdir(path) and os.access(path, os.R_OK):
+                if os.path.exists(path):
                     return psutil.disk_usage(path)
-            except (PermissionError, OSError) as exc:
-                logger.debug("Android disk path unavailable %s: %s", path, exc)
+            except Exception:
                 continue
 
-        # 降级：尝试根目录
-        logger.warning("Android disk usage detection failed on known mount points, using root")
+        # 降级：使用根目录
+        logger.warning("Android disk usage detection failed, using root")
         return psutil.disk_usage('/')
 
     def _get_connection_count(self) -> int:
