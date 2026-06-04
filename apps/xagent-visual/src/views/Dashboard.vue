@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStore } from '@/stores/devices'
 import { useRuleStore } from '@/stores/rules'
@@ -182,7 +182,7 @@ async function fetchAllData() {
 
 async function updateChartData() {
   try {
-    const chartData = await systemStore.generateChartData()
+    const chartData = await systemStore.generateChartData(timeRange.value)
     
     requestAnimationFrame(() => {
       dataChartOption.value.xAxis.data = chartData.map(d => d.time)
@@ -193,6 +193,11 @@ async function updateChartData() {
     ElMessage.error('获取数据采集统计失败')
   }
 }
+
+// 监听时间范围变化，自动更新图表
+watch(timeRange, async () => {
+  await updateChartData()
+})
 
 async function refreshData() {
   if (refreshing.value) return

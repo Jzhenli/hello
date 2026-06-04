@@ -96,17 +96,38 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  const generateChartData = async (hours: number = 24) => {
+  const generateChartData = async (timeRange: string = '24h') => {
     try {
       const now = Date.now()
-      const startTime = now - hours * 3600000 // hours小时前的时间戳
+      let startTime: number
+      let interval: 'hour' | 'day'
+      
+      // 根据时间范围计算起始时间和统计间隔
+      switch (timeRange) {
+        case '1h':
+          startTime = now - 1 * 3600000  // 1小时前
+          interval = 'hour'
+          break
+        case '24h':
+          startTime = now - 24 * 3600000  // 24小时前
+          interval = 'hour'
+          break
+        case '7d':
+          startTime = now - 7 * 24 * 3600000  // 7天前
+          interval = 'day'
+          break
+        default:
+          startTime = now - 24 * 3600000  // 默认24小时
+          interval = 'hour'
+      }
       
       const res = await dataApi.getCollectionStats({
         start_time: startTime / 1000, // 转换为秒
         end_time: now / 1000,
-        interval: 'hour'
+        interval: interval
       })
       
+      // 直接使用后端返回的时间字符串（本地时间）
       return res.stats.map(item => ({
         time: item.time,
         value: item.count
