@@ -199,4 +199,10 @@ export const useAlertStore = defineStore('alerts', () => {
     toggleChannel,
     updateChannelConfig
   }
+}, {
+  persist: {
+    key: 'xagent-alerts-v1',
+    storage: sessionStorage,
+    paths: ['alerts']
+  }
 })

@@ -205,4 +205,10 @@ export const useRuleStore = defineStore('rules', () => {
     toggleRule,
     copyRule,
   }
+}, {
+  persist: {
+    key: 'xagent-rules-v1',
+    storage: sessionStorage,
+    paths: ['rules']
+  }
 })

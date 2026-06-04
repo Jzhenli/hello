@@ -167,4 +167,12 @@ export const useDeviceStore = defineStore('devices', () => {
     batchCreate,
     getDeviceByAsset
   }
+}, {
+  persist: {
+    key: 'xagent-devices-v1',
+    storage: sessionStorage,
+    // 只持久化设备列表，不持久化实时连接状态
+    // 连接状态应在初始化时重新获取
+    paths: ['devices']
+  }
 })

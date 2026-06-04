@@ -183,4 +183,10 @@ export const useChannelStore = defineStore('channels', () => {
     getChannelStatistics,
     getChannelById
   }
+}, {
+  persist: {
+    key: 'xagent-channels-v1',
+    storage: sessionStorage,
+    paths: ['channels']
+  }
 })
