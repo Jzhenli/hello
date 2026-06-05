@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStore } from '@/stores/devices'
 import { useRuleStore } from '@/stores/rules'
@@ -8,6 +8,11 @@ import { useSystemStore } from '@/stores/system'
 import { useChannelStore } from '@/stores/channels'
 import { useResponsive } from '@/utils/useResponsive'
 import { use } from 'echarts/core'
+
+// 定义组件名称，用于 keep-alive 缓存
+defineOptions({
+  name: 'Dashboard'
+})
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, BarChart, GaugeChart } from 'echarts/charts'
 import {
@@ -214,20 +219,21 @@ async function refreshData() {
 
 const showContent = ref(false)        // 是否显示真实内容
 const showSkeleton = ref(true)        // 是否显示骨架屏
+const isInitialized = ref(false)      // 是否已初始化（用于 keep-alive）
 
+// 首次加载逻辑（只在组件创建时执行一次）
 onMounted(async () => {
-  // 检查 store 中是否已有已加载的数据（用于优化从其他页面切换回来的体验）
-  // 注意：这不是真正的缓存检测，而是检查内存中的 store 数据
-  // 页面刷新后 store 会被清空，会走首次加载逻辑
+  // 检查 store 中是否已有已加载的数据（来自 sessionStorage 持久化）
   const hasCacheData = deviceStore.devices.length > 0 ||
                        ruleStore.rules.length > 0 ||
                        alertStore.alerts.length > 0 ||
                        systemStore.stats.totalReadings > 0
-  
-  // 如果有缓存数据，立即显示内容（从其他页面切换回来）
+
+  // 如果有缓存数据，立即显示内容
   if (hasCacheData) {
     showSkeleton.value = false
     showContent.value = true
+    isInitialized.value = true
     // 后台刷新数据，但不显示 loading
     try {
       await fetchAllData()
@@ -237,25 +243,45 @@ onMounted(async () => {
     }
     return
   }
-  
+
   // 无缓存数据（首次访问），保持骨架屏显示，后台加载数据
   try {
     await fetchAllData()
     lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-    
+
     // 等待DOM更新完成
     await nextTick()
-    
+
     // 平滑过渡：隐藏骨架屏并显示内容
     requestAnimationFrame(() => {
       showSkeleton.value = false
       showContent.value = true
+      isInitialized.value = true
     })
   } catch (error) {
     console.error('Failed to fetch data:', error)
     ElMessage.error('数据加载失败')
     showSkeleton.value = false
     showContent.value = true
+    isInitialized.value = true
+  }
+})
+
+// 组件激活逻辑（每次从缓存中激活时执行）
+onActivated(async () => {
+  // 如果已经初始化，直接显示内容，后台刷新数据
+  if (isInitialized.value) {
+    // 确保显示内容（防止状态异常）
+    showSkeleton.value = false
+    showContent.value = true
+
+    // 后台静默刷新数据
+    try {
+      await fetchAllData()
+      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    } catch (error) {
+      console.error('Failed to refresh data on activation:', error)
+    }
   }
 })
 </script>

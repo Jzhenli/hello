@@ -232,7 +232,9 @@ onUnmounted(() => {
       <el-main class="app-main" :class="{ 'fullscreen-main': isFullscreenMode }">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <keep-alive :include="['Dashboard']">
+              <component :is="Component" />
+            </keep-alive>
           </transition>
         </router-view>
       </el-main>
