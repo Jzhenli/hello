@@ -793,3 +793,217 @@ class ConfigService:
             "task": delayed_restart,
             "delay": delay,
         }
+    
+    async def export_config(self) -> Dict[str, Any]:
+        """导出配置（手动备份）
+        
+        Returns:
+            导出结果
+        """
+        import uuid
+        
+        temp_db = None
+        try:
+            # 获取storage实例
+            storage = self._get_storage()
+            
+            # 创建临时数据库文件（添加UUID避免冲突）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = uuid.uuid4().hex[:8]
+            temp_db = self._paths.data_dir / f"config_export_{timestamp}_{unique_id}.db"
+            
+            # 导出配置表
+            export_stats = await storage.export_config_tables(str(temp_db))
+            
+            # 创建备份ZIP文件
+            backup_dir = self.backup_dir
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+            backup_file = backup_dir / f"config_{timestamp}.zip"
+            
+            with zipfile.ZipFile(backup_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # 添加配置数据库
+                zf.write(temp_db, "config.db")
+                
+                # 添加系统配置文件
+                config_file = self._paths.config_file
+                if config_file.exists():
+                    zf.write(config_file, "config.yaml")
+            
+            # 计算文件大小
+            file_size = backup_file.stat().st_size
+            
+            logger.info(f"Config exported: {backup_file}")
+            
+            return {
+                "success": True,
+                "file": backup_file.name,
+                "path": str(backup_file),
+                "size_mb": round(file_size / 1024 / 1024, 2),
+                "tables": export_stats["tables"],
+                "records": export_stats["records"],
+                "created_at": timestamp
+            }
+            
+        except Exception as e:
+            logger.error(f"Export failed: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            # 确保清理临时文件
+            if temp_db and temp_db.exists():
+                try:
+                    temp_db.unlink()
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp file: {e}")
+    
+    async def import_config(self, backup_file: str, auto_reload: bool = True) -> Dict[str, Any]:
+        """导入配置
+        
+        Args:
+            backup_file: 备份文件路径
+            auto_reload: 是否自动重载配置
+            
+        Returns:
+            导入结果
+        """
+        try:
+            backup_path = Path(backup_file)
+            
+            if not backup_path.exists():
+                return {"success": False, "error": "Backup file not found"}
+            
+            # 1. 停止所有插件（避免数据冲突）
+            stop_result = await self._stop_all_plugins()
+            
+            # 2. 解压备份文件
+            temp_dir = Path(tempfile.mkdtemp())
+            
+            try:
+                with zipfile.ZipFile(backup_path, 'r') as zf:
+                    zf.extractall(temp_dir)
+                
+                # 3. 导入配置数据库
+                config_db = temp_dir / "config.db"
+                
+                if not config_db.exists():
+                    return {"success": False, "error": "Config database not found"}
+                
+                storage = self._get_storage()
+                import_stats = await storage.import_config_tables(str(config_db))
+                
+                # 4. 恢复系统配置文件
+                config_yaml = temp_dir / "config.yaml"
+                if config_yaml.exists():
+                    shutil.copy2(config_yaml, self._paths.config_file)
+                
+                logger.info(f"Config imported: {backup_path}")
+                
+                # 5. 自动重载配置（如果启用）
+                reload_result = None
+                if auto_reload:
+                    reload_result = await self._reload_config()
+                
+                return {
+                    "success": True,
+                    "tables": import_stats["tables"],
+                    "records": import_stats["records"],
+                    "auto_reload": auto_reload,
+                    "reload_result": reload_result,
+                    "stop_result": stop_result,
+                    "message": "Config imported and reloaded" if auto_reload else "Config imported, manual reload required"
+                }
+                
+            finally:
+                # 清理临时目录
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def _stop_all_plugins(self) -> Dict[str, Any]:
+        """停止所有插件（避免数据冲突）"""
+        try:
+            from ..dependencies import get_app_state
+            state = get_app_state()
+            
+            if not state.gateway or not state.gateway.plugin_loader:
+                return {"success": False, "reason": "Gateway not initialized"}
+            
+            plugin_loader = state.gateway.plugin_loader
+            
+            # 获取所有插件
+            plugins = plugin_loader.get_all_plugins()
+            stopped = []
+            
+            # 停止所有插件
+            for plugin_id, plugin in plugins.items():
+                try:
+                    if hasattr(plugin, 'stop'):
+                        await plugin.stop()
+                    elif hasattr(plugin, 'shutdown'):
+                        plugin.shutdown()
+                    stopped.append(plugin_id)
+                except Exception as e:
+                    logger.error(f"Failed to stop plugin {plugin_id}: {e}")
+            
+            logger.info(f"Stopped {len(stopped)} plugins")
+            return {
+                "success": True,
+                "stopped_count": len(stopped),
+                "stopped_plugins": stopped
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to stop plugins: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def _reload_config(self) -> Dict[str, Any]:
+        """重载配置（热重载）"""
+        try:
+            from ..dependencies import get_app_state
+            state = get_app_state()
+            
+            results = {
+                "config": False,
+                "devices": False
+            }
+            
+            # 1. 重载主配置文件
+            if state.gateway and state.gateway.config_manager:
+                try:
+                    state.gateway.config_manager.reload()
+                    results["config"] = True
+                    logger.info("Main config reloaded")
+                except Exception as e:
+                    logger.error(f"Failed to reload config: {e}")
+            
+            # 2. 重载设备插件
+            if state.gateway and state.gateway.plugin_loader:
+                try:
+                    from .device_service_db import DeviceService
+                    service = DeviceService(
+                        metadata_manager=state.metadata_manager,
+                        plugin_loader=state.gateway.plugin_loader
+                    )
+                    reload_stats = await service.reload_devices()
+                    results["devices"] = reload_stats["succeeded"] > 0
+                    logger.info(f"Devices reloaded: {reload_stats}")
+                except Exception as e:
+                    logger.error(f"Failed to reload devices: {e}")
+            
+            return {
+                "success": results["config"] or results["devices"],
+                "details": results
+            }
+            
+        except Exception as e:
+            logger.error(f"Reload failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _get_storage(self):
+        """获取storage实例"""
+        from ..dependencies import get_app_state
+        state = get_app_state()
+        return state.storage

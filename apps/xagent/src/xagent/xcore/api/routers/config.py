@@ -1,8 +1,10 @@
 """Config API routes"""
 
 import os
+import re
 import logging
 from typing import List
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -52,6 +54,35 @@ def verify_api_token(credentials: HTTPAuthorizationCredentials = Depends(securit
         )
     
     return token
+
+
+def validate_backup_filename(filename: str) -> str:
+    """验证备份文件名（防止路径遍历攻击）
+    
+    Args:
+        filename: 文件名
+        
+    Returns:
+        验证后的文件名
+        
+    Raises:
+        HTTPException: 文件名无效
+    """
+    # 检查路径遍历字符
+    if '..' in filename or '/' in filename or '\\' in filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid filename: path traversal detected"
+        )
+    
+    # 检查文件名格式（config_YYYYMMDD_HHMMSS.zip）
+    if not re.match(r'^config_\d{8}_\d{6}\.zip$', filename):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid filename format"
+        )
+    
+    return filename
 
 
 @router.get("/info", response_model=ConfigInfoResponse)
@@ -286,3 +317,155 @@ async def get_application_paths(token: str = Depends(verify_api_token)):
     from ...core.paths import get_paths
     paths = get_paths()
     return paths.get_all_paths_info()
+
+
+# ==================== 配置备份相关API ====================
+
+@router.post("/export")
+async def export_config(token: str = Depends(verify_api_token)):
+    """导出配置（手动备份）
+    
+    这就是手动备份API！
+    
+    使用场景：
+    1. 定期备份配置
+    2. 导入新配置前先备份当前配置
+    3. 配置迁移到其他机器
+    
+    返回ZIP文件，包含：
+    - config.db: 配置数据库（不包含历史数据）
+    - config.yaml: 系统配置文件
+    """
+    service = _get_config_service()
+    result = await service.export_config()
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Export failed")
+        )
+    
+    return result
+
+
+@router.get("/export/download/{filename}")
+async def download_export(filename: str, token: str = Depends(verify_api_token)):
+    """下载导出的配置文件"""
+    # 验证文件名（防止路径遍历）
+    filename = validate_backup_filename(filename)
+    
+    service = _get_config_service()
+    backup_dir = service.backup_dir
+    backup_file = backup_dir / filename
+    
+    if not backup_file.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(
+        path=backup_file,
+        filename=filename,
+        media_type="application/zip"
+    )
+
+
+@router.post("/import")
+async def import_config(
+    file: UploadFile = File(...),
+    auto_reload: bool = True,
+    token: str = Depends(verify_api_token)
+):
+    """导入配置
+    
+    使用场景：空机器导入配置
+    
+    Args:
+        file: 上传的ZIP文件
+        auto_reload: 是否自动重载配置（默认True）
+    
+    自动重载会：
+    1. 重载主配置文件（config.yaml）
+    2. 重载所有设备插件
+    
+    如果auto_reload=False，需要手动调用：
+    - POST /api/config/reload
+    - POST /api/devices/reload
+    """
+    import tempfile
+    import shutil
+    from pathlib import Path
+    
+    # 文件大小限制（100MB）
+    MAX_FILE_SIZE = 100 * 1024 * 1024
+    
+    # 保存上传文件
+    temp_dir = Path(tempfile.mkdtemp())
+    temp_file = temp_dir / file.filename
+    
+    try:
+        content = await file.read()
+        
+        # 检查文件大小
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large: max {MAX_FILE_SIZE // 1024 // 1024}MB"
+            )
+        
+        with open(temp_file, 'wb') as f:
+            f.write(content)
+        
+        # 导入配置
+        service = _get_config_service()
+        result = await service.import_config(str(temp_file), auto_reload=auto_reload)
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("error", "Import failed")
+            )
+        
+        return result
+        
+    finally:
+        # 清理临时文件
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@router.get("/list")
+async def list_configs(token: str = Depends(verify_api_token)):
+    """列出所有导出的配置"""
+    service = _get_config_service()
+    backup_dir = service.backup_dir
+    
+    if not backup_dir.exists():
+        return {"configs": [], "total": 0}
+    
+    configs = []
+    for backup_file in sorted(backup_dir.glob("config_*.zip"), reverse=True):
+        stat = backup_file.stat()
+        configs.append({
+            "filename": backup_file.name,
+            "size_mb": round(stat.st_size / 1024 / 1024, 2),
+            "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat()
+        })
+    
+    return {"configs": configs, "total": len(configs)}
+
+
+@router.delete("/export/{filename}")
+async def delete_config(filename: str, token: str = Depends(verify_api_token)):
+    """删除导出的配置文件"""
+    # 验证文件名（防止路径遍历）
+    filename = validate_backup_filename(filename)
+    
+    service = _get_config_service()
+    backup_dir = service.backup_dir
+    backup_file = backup_dir / filename
+    
+    if not backup_file.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    backup_file.unlink()
+    
+    return {"success": True, "message": f"Deleted {filename}"}

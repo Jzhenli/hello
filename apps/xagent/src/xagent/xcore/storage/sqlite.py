@@ -739,3 +739,205 @@ class SQLiteStorage(StorageInterface):
     @property
     def is_initialized(self) -> bool:
         return self._initialized
+    
+    async def export_config_tables(self, output_db_path: str) -> Dict[str, Any]:
+        """导出配置表到新数据库（不包含历史数据）
+        
+        Args:
+            output_db_path: 输出数据库路径
+            
+        Returns:
+            导出结果，包含表数量、记录数等信息
+        """
+        if not self._initialized or not self._db:
+            raise RuntimeError("Storage not initialized")
+        
+        # 配置表列表（不包含历史数据表）
+        config_tables = [
+            'device_registry',
+            'point_registry',
+            'plugin_registry',
+            'service_registry',
+            'rule_registry',
+            'channel_registry',
+            'pipeline_registry',
+            'config_versions',
+            'audit_logs',
+            'mapping_registry'
+        ]
+        
+        # 创建输出数据库
+        output_db = await aiosqlite.connect(output_db_path)
+        await output_db.execute("PRAGMA journal_mode=WAL")
+        
+        stats = {"tables": 0, "records": 0, "table_details": {}}
+        
+        try:
+            # 使用ATTACH DATABASE
+            await self._db.execute(
+                "ATTACH DATABASE ? AS config_backup",
+                (output_db_path,)
+            )
+            
+            # 导出每个表
+            for table in config_tables:
+                try:
+                    # 检查表是否存在
+                    async with self._db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                        (table,)
+                    ) as cursor:
+                        if not await cursor.fetchone():
+                            continue
+                    
+                    # 导出表结构
+                    async with self._db.execute(
+                        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                        (table,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row and row[0]:
+                            await output_db.execute(row[0])
+                    
+                    # 导出数据
+                    await self._db.execute(
+                        f"INSERT INTO config_backup.{table} SELECT * FROM main.{table}"
+                    )
+                    
+                    # 导出索引
+                    async with self._db.execute(
+                        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+                        (table,)
+                    ) as cursor:
+                        async for row in cursor:
+                            if row[0]:
+                                try:
+                                    await output_db.execute(row[0])
+                                except:
+                                    pass
+                    
+                    # 统计记录数
+                    async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+                        count = (await cursor.fetchone())[0]
+                        stats["tables"] += 1
+                        stats["records"] += count
+                        stats["table_details"][table] = count
+                        
+                except Exception as e:
+                    logger.error(f"Failed to export table {table}: {e}")
+                    continue
+            
+            await output_db.commit()
+            await self._db.execute("DETACH DATABASE config_backup")
+            
+            logger.info(f"Config tables exported: {stats}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Failed to export config tables: {e}")
+            try:
+                await self._db.execute("DETACH DATABASE config_backup")
+            except:
+                pass
+            raise
+        finally:
+            await output_db.close()
+    
+    async def import_config_tables(self, source_db_path: str) -> Dict[str, Any]:
+        """从外部数据库导入配置表
+        
+        Args:
+            source_db_path: 源数据库路径
+            
+        Returns:
+            导入结果，包含表数量、记录数等信息
+        """
+        if not self._initialized or not self._db:
+            raise RuntimeError("Storage not initialized")
+        
+        if not Path(source_db_path).exists():
+            raise FileNotFoundError(f"Source database not found: {source_db_path}")
+        
+        # 配置表列表
+        config_tables = [
+            'device_registry',
+            'point_registry',
+            'plugin_registry',
+            'service_registry',
+            'rule_registry',
+            'channel_registry',
+            'pipeline_registry',
+            'config_versions',
+            'audit_logs',
+            'mapping_registry'
+        ]
+        
+        stats = {"tables": 0, "records": 0, "table_details": {}}
+        
+        try:
+            # 使用ATTACH DATABASE
+            await self._db.execute(
+                "ATTACH DATABASE ? AS config_source",
+                (source_db_path,)
+            )
+            
+            # 开始事务
+            await self._db.execute("BEGIN TRANSACTION")
+            
+            # 禁用外键约束
+            await self._db.execute("PRAGMA foreign_keys=OFF")
+            
+            # 导入每个表
+            for table in config_tables:
+                try:
+                    # 检查源表是否存在
+                    async with self._db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                        (table,)
+                    ) as cursor:
+                        if not await cursor.fetchone():
+                            continue
+                    
+                    # 清空目标表
+                    await self._db.execute(f"DELETE FROM main.{table}")
+                    
+                    # 导入数据
+                    await self._db.execute(
+                        f"INSERT INTO main.{table} SELECT * FROM config_source.{table}"
+                    )
+                    
+                    # 统计记录数
+                    async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+                        count = (await cursor.fetchone())[0]
+                        stats["tables"] += 1
+                        stats["records"] += count
+                        stats["table_details"][table] = count
+                        
+                except Exception as e:
+                    logger.error(f"Failed to import table {table}: {e}")
+                    continue
+            
+            # 启用外键约束
+            await self._db.execute("PRAGMA foreign_keys=ON")
+            
+            # 提交事务
+            await self._db.commit()
+            
+            await self._db.execute("DETACH DATABASE config_source")
+            
+            logger.info(f"Config tables imported: {stats}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Failed to import config tables: {e}")
+            # 回滚事务
+            try:
+                await self._db.rollback()
+            except:
+                pass
+            # 分离数据库
+            try:
+                await self._db.execute("DETACH DATABASE config_source")
+            except:
+                pass
+            raise
