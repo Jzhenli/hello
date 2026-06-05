@@ -9,12 +9,16 @@ import {
   Plus,
   Edit,
   Check,
-  Close
+  Close,
+  Download,
+  Upload
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
 import type { UserInfo, RoleInfo } from '@/api/users'
+import { configApi, type ConfigBackup } from '@/api/config'
 
 const { isTablet, isMobile, isMediumTablet, width } = useResponsive()
 
@@ -53,7 +57,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   settings: '系统设置',
   users: '用户管理',
   logs: '日志查看',
-  backup: '备份恢复',
+  backup: '配置管理',
   control: '控制命令',
 }
 
@@ -311,12 +315,204 @@ function clearAllForResource(resource: string) {
   }
 }
 
+// ==================== 备份恢复相关 ====================
+const backupList = ref<ConfigBackup[]>([])
+const backupLoading = ref(false)
+const exportLoading = ref(false)
+const importLoading = ref(false)
+
+// 加载备份列表
+async function loadBackupList() {
+  try {
+    backupLoading.value = true
+    const res = await configApi.listConfigs()
+    backupList.value = res.configs
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.detail || '加载备份列表失败')
+  } finally {
+    backupLoading.value = false
+  }
+}
+
+// 创建备份（导出配置）
+async function handleCreateBackup() {
+  try {
+    exportLoading.value = true
+    const res = await configApi.exportConfig()
+    if (res.success) {
+      ElMessage.success(`配置导出成功：${res.file} (${res.size_mb}MB)`)
+      await loadBackupList()
+    } else {
+      ElMessage.error(res.error || '导出配置失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.detail || '导出配置失败')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+// 下载配置文件（使用fetch + Blob URL，避免弹窗拦截）
+async function handleDownloadConfig(backup?: ConfigBackup) {
+  try {
+    const filename = backup?.filename || (backupList.value.length > 0 ? backupList.value[0].filename : null)
+
+    if (!filename) {
+      ElMessage.warning('没有可下载的备份文件')
+      return
+    }
+
+    const url = configApi.getDownloadUrl(filename)
+    const token = configApi.getDownloadUrl(filename).split('token=')[1]
+
+    // 使用fetch下载
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.statusText}`)
+    }
+
+    const blob = await response.blob()
+    const downloadUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(downloadUrl)
+  } catch (e: any) {
+    ElMessage.error(e.message || '下载失败')
+  }
+}
+
+// 导入配置
+async function handleImportConfig(uploadFile: UploadFile) {
+  const file = uploadFile.raw
+
+  if (!file) return
+
+  // 确认导入
+  try {
+    await ElMessageBox.confirm(
+      '导入配置将覆盖当前配置，是否继续？',
+      '确认导入',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+      }
+    )
+
+    importLoading.value = true
+    const res = await configApi.importConfig(file, true)
+
+    if (res.success) {
+      ElMessage.success(res.message)
+      await loadBackupList()
+    } else {
+      ElMessage.error(res.error || '导入配置失败')
+    }
+  } catch {
+    // 用户取消
+  } finally {
+    importLoading.value = false
+  }
+}
+
+// 删除备份
+async function handleDeleteBackup(backup: ConfigBackup) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除备份文件 "${backup.filename}" 吗？`,
+      '删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+      }
+    )
+    
+    await configApi.deleteConfig(backup.filename)
+    ElMessage.success('删除成功')
+    await loadBackupList()
+  } catch {
+    // 用户取消
+  }
+}
+
+// 恢复备份
+async function handleRestoreBackup(backup: ConfigBackup) {
+  try {
+    await ElMessageBox.confirm(
+      `恢复备份将覆盖当前配置，是否继续？`,
+      '确认恢复',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+      }
+    )
+
+    // 下载备份文件（添加超时控制）
+    const url = configApi.getDownloadUrl(backup.filename)
+    const token = url.split('token=')[1]
+
+    // 使用AbortController实现超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒超时
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+      const file = new File([blob], backup.filename, { type: 'application/zip' })
+
+      importLoading.value = true
+      const res = await configApi.importConfig(file, true)
+
+      if (res.success) {
+        ElMessage.success(res.message)
+        await loadBackupList()
+      } else {
+        ElMessage.error(res.error || '恢复备份失败')
+      }
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        throw new Error('下载超时，请检查网络连接后重试')
+      }
+      throw fetchError
+    }
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.detail || e.message || '恢复备份失败')
+    }
+  } finally {
+    importLoading.value = false
+  }
+}
+
 onMounted(async () => {
   userStore.restoreSession()
   await Promise.all([
     userStore.fetchUsers(),
     userStore.fetchRoles(),
     userStore.fetchPermissionMatrix(),
+    loadBackupList(),
   ])
   if (userStore.permissionMatrix?.roles?.length) {
     activePermissionRole.value = userStore.permissionMatrix.roles[0].name
@@ -346,7 +542,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
               <el-icon><Refresh /></el-icon>
-              <span>备份恢复</span>
+              <span>配置管理</span>
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
               <el-icon><User /></el-icon>
@@ -386,7 +582,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'backup'"
           >
             <el-icon><Refresh /></el-icon>
-            <span>备份恢复</span>
+            <span>配置管理</span>
           </div>
           <div 
             v-if="userStore.hasPermission('users', 'view')"
@@ -481,31 +677,76 @@ watch(() => userStore.permissionMatrix, (matrix) => {
         </div>
 
         <div v-if="activeMenu === 'backup'" class="settings-section">
-          <h3>备份恢复</h3>
+          <h3>配置管理</h3>
           <div class="backup-section">
-            <el-card shadow="hover">
-              <template #header>
-                <span>配置备份</span>
+            <!-- 操作按钮 -->
+            <div class="backup-actions">
+              <el-button 
+                type="primary" 
+                :icon="Refresh" 
+                :loading="exportLoading"
+                @click="handleCreateBackup"
+              >
+                导出配置
+              </el-button>
+              <el-upload
+                :show-file-list="false"
+                accept=".zip"
+                :auto-upload="false"
+                :disabled="importLoading"
+                :on-change="handleImportConfig"
+              >
+                <el-button :icon="Upload" :loading="importLoading">导入配置</el-button>
+              </el-upload>
+              <el-button 
+                :icon="Download" 
+                :disabled="backupList.length === 0"
+                @click="handleDownloadConfig()"
+              >
+                下载最新备份
+              </el-button>
+            </div>
+
+            <!-- 备份列表 -->
+            <el-table 
+              :data="backupList" 
+              v-loading="backupLoading"
+              stripe
+              style="width: 100%"
+            >
+              <el-table-column label="文件名" min-width="200">
+                <template #default="{ row, $index }">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-icon style="color: #409eff;"><Document /></el-icon>
+                    <span>{{ row.filename }}</span>
+                    <el-tag v-if="$index === 0" type="success" size="small">最新</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="大小" width="100" align="center">
+                <template #default="{ row }">
+                  {{ row.size_mb }} MB
+                </template>
+              </el-table-column>
+              <el-table-column label="创建时间" width="170" align="center">
+                <template #default="{ row }">
+                  {{ row.created_at.replace('T', ' ').substring(0, 19) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="200" align="center">
+                <template #default="{ row }">
+                  <el-button type="primary" link size="small" @click="handleRestoreBackup(row)">恢复</el-button>
+                  <el-button type="default" link size="small" @click="handleDownloadConfig(row)">下载</el-button>
+                  <el-button type="danger" link size="small" @click="handleDeleteBackup(row)">删除</el-button>
+                </template>
+              </el-table-column>
+              
+              <template #empty>
+                <el-empty description="暂无备份文件">
+                  <el-button type="primary" size="small" @click="handleCreateBackup">立即创建</el-button>
+                </el-empty>
               </template>
-              <div class="backup-actions">
-                <el-button type="primary">创建备份</el-button>
-                <el-button>下载配置</el-button>
-              </div>
-              <div class="backup-list">
-                <div class="backup-item">
-                  <span class="backup-name">backup-2026-04-27.zip</span>
-                  <span class="backup-time">2026-04-27 10:00:00</span>
-                  <el-button type="primary" link size="small">恢复</el-button>
-                  <el-button type="danger" link size="small">删除</el-button>
-                </div>
-                <div class="backup-item">
-                  <span class="backup-name">backup-2026-04-26.zip</span>
-                  <span class="backup-time">2026-04-26 10:00:00</span>
-                  <el-button type="primary" link size="small">恢复</el-button>
-                  <el-button type="danger" link size="small">删除</el-button>
-                </div>
-              </div>
-            </el-card>
+            </el-table>
           </div>
         </div>
 
@@ -1070,39 +1311,13 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .backup-section {
-  max-width: 600px;
+  max-width: 1000px;
 }
 
 .backup-actions {
   display: flex;
   gap: 12px;
-  margin-bottom: 16px;
-}
-
-.backup-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.backup-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-
-.backup-name {
-  flex: 1;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.backup-time {
-  color: #7f8c8d;
-  font-size: 13px;
+  margin-bottom: 20px;
 }
 
 .user-section {
