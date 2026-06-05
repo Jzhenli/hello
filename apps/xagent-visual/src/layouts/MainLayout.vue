@@ -84,8 +84,9 @@ const toggleDrawer = () => {
 
 const isFullscreenMode = computed(() => scadaStore.isFullscreenPreview)
 
-const showSidebar = computed(() => !isTablet.value && !isMobile.value)
-const showDrawer = computed(() => isTablet.value || isMobile.value)
+const showSidebar = computed(() => !isTablet.value && !isMobile.value && route.path !== '/login')
+const showDrawer = computed(() => (isTablet.value || isMobile.value) && route.path !== '/login')
+const isLoginPage = computed(() => route.path === '/login')
 
 function handleLogout() {
   userStore.logout()
@@ -191,7 +192,7 @@ onUnmounted(() => {
     </el-drawer>
 
     <el-container :class="{ 'fullscreen-mode': isFullscreenMode }">
-      <el-header v-if="!isFullscreenMode" class="app-header" :class="{ 'mobile-header': isMobile || isTablet }">
+      <el-header v-if="!isFullscreenMode && !isLoginPage" class="app-header" :class="{ 'mobile-header': isMobile || isTablet }">
         <div class="header-left">
           <el-button 
             v-if="showDrawer"
@@ -229,7 +230,7 @@ onUnmounted(() => {
         </div>
       </el-header>
       
-      <el-main class="app-main" :class="{ 'fullscreen-main': isFullscreenMode }">
+      <el-main class="app-main" :class="{ 'fullscreen-main': isFullscreenMode, 'login-main': isLoginPage }">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <keep-alive :include="['Dashboard']">
@@ -239,7 +240,7 @@ onUnmounted(() => {
         </router-view>
       </el-main>
       
-      <el-footer v-if="!isFullscreenMode && !isMobile && height > 700" class="app-footer" height="32px">
+      <el-footer v-if="!isFullscreenMode && !isMobile && !isLoginPage && height > 700" class="app-footer" height="32px">
         <span class="copyright">© 2026 XAgent 数据采集网关系统</span>
         <span class="divider">|</span>
         <span class="icp">京ICP备XXXXXXXX号</span>
@@ -428,6 +429,11 @@ onUnmounted(() => {
 
 .app-main.fullscreen-main {
   padding: 0;
+}
+
+.login-main {
+  padding: 0;
+  background: transparent;
 }
 
 .fullscreen-mode {
