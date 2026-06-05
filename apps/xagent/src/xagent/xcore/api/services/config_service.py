@@ -927,34 +927,44 @@ class ConfigService:
         try:
             from ..dependencies import get_app_state
             state = get_app_state()
-            
+
             if not state.gateway or not state.gateway.plugin_loader:
                 return {"success": False, "reason": "Gateway not initialized"}
-            
+
             plugin_loader = state.gateway.plugin_loader
-            
-            # 获取所有插件
+
+            # 获取所有插件（返回的是 List[PluginInfo]）
             plugins = plugin_loader.get_all_plugins()
             stopped = []
-            
+            failed = []
+
             # 停止所有插件
-            for plugin_id, plugin in plugins.items():
+            for plugin_info in plugins:
                 try:
+                    plugin_id = plugin_info.plugin_id
+                    plugin = plugin_info.instance
+
                     if hasattr(plugin, 'stop'):
                         await plugin.stop()
                     elif hasattr(plugin, 'shutdown'):
                         plugin.shutdown()
                     stopped.append(plugin_id)
                 except Exception as e:
-                    logger.error(f"Failed to stop plugin {plugin_id}: {e}")
-            
-            logger.info(f"Stopped {len(stopped)} plugins")
+                    logger.error(f"Failed to stop plugin {plugin_info.plugin_id}: {e}")
+                    failed.append({
+                        "plugin_id": plugin_info.plugin_id,
+                        "error": str(e)
+                    })
+
+            logger.info(f"Stopped {len(stopped)} plugins, failed {len(failed)} plugins")
             return {
                 "success": True,
                 "stopped_count": len(stopped),
-                "stopped_plugins": stopped
+                "stopped_plugins": stopped,
+                "failed_count": len(failed),
+                "failed_plugins": failed
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to stop plugins: {e}")
             return {"success": False, "error": str(e)}

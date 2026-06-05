@@ -743,6 +743,8 @@ class SQLiteStorage(StorageInterface):
     async def export_config_tables(self, output_db_path: str) -> Dict[str, Any]:
         """导出配置表到新数据库（不包含历史数据）
         
+        使用逐表复制的方式，避免长时间锁定数据库
+        
         Args:
             output_db_path: 输出数据库路径
             
@@ -766,18 +768,13 @@ class SQLiteStorage(StorageInterface):
             'mapping_registry'
         ]
         
-        # 创建输出数据库
-        output_db = await aiosqlite.connect(output_db_path)
-        await output_db.execute("PRAGMA journal_mode=WAL")
-        
+        output_db = None
         stats = {"tables": 0, "records": 0, "table_details": {}}
         
         try:
-            # 使用ATTACH DATABASE
-            await self._db.execute(
-                "ATTACH DATABASE ? AS config_backup",
-                (output_db_path,)
-            )
+            # 创建输出数据库
+            output_db = await aiosqlite.connect(output_db_path)
+            await output_db.execute("PRAGMA journal_mode=WAL")
             
             # 导出每个表
             for table in config_tables:
@@ -790,19 +787,77 @@ class SQLiteStorage(StorageInterface):
                         if not await cursor.fetchone():
                             continue
                     
-                    # 导出表结构
+                    # 获取表结构
                     async with self._db.execute(
                         "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
                         (table,)
                     ) as cursor:
                         row = await cursor.fetchone()
-                        if row and row[0]:
-                            await output_db.execute(row[0])
+                        if not row or not row[0]:
+                            continue
+                        
+                        # 创建表
+                        await output_db.execute(row[0])
                     
-                    # 导出数据
-                    await self._db.execute(
-                        f"INSERT INTO config_backup.{table} SELECT * FROM main.{table}"
-                    )
+                    # 读取数据并写入（分批处理，避免长时间锁定）
+                    batch_size = 1000
+                    total_count = 0
+
+                    # 获取列名
+                    async with self._db.execute(f"PRAGMA table_info({table})") as cursor:
+                        columns_info = await cursor.fetchall()
+                        columns = [row[1] for row in columns_info]
+
+                    # 检查是否有id列（用于基于主键的分页）
+                    has_id_column = any(col[1] == 'id' for col in columns_info)
+
+                    if has_id_column:
+                        # 使用基于主键的分页（性能更好）
+                        last_id = 0
+                        while True:
+                            async with self._db.execute(
+                                f"SELECT * FROM {table} WHERE id > ? ORDER BY id LIMIT ?",
+                                (last_id, batch_size)
+                            ) as cursor:
+                                rows = await cursor.fetchall()
+
+                                if not rows:
+                                    break
+
+                                # 构建INSERT语句
+                                placeholders = ','.join(['?' for _ in columns])
+                                await output_db.executemany(
+                                    f"INSERT INTO {table} VALUES ({placeholders})",
+                                    rows
+                                )
+
+                                total_count += len(rows)
+                                last_id = rows[-1][0]  # 更新last_id为最后一条记录的id
+                    else:
+                        # 回退到LIMIT OFFSET方式（兼容没有id列的表）
+                        offset = 0
+                        async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+                            total_records = (await cursor.fetchone())[0]
+
+                        while offset < total_records:
+                            async with self._db.execute(
+                                f"SELECT * FROM {table} LIMIT ? OFFSET ?",
+                                (batch_size, offset)
+                            ) as cursor:
+                                rows = await cursor.fetchall()
+
+                                if not rows:
+                                    break
+
+                                # 构建INSERT语句
+                                placeholders = ','.join(['?' for _ in columns])
+                                await output_db.executemany(
+                                    f"INSERT INTO {table} VALUES ({placeholders})",
+                                    rows
+                                )
+
+                                total_count += len(rows)
+                                offset += batch_size
                     
                     # 导出索引
                     async with self._db.execute(
@@ -816,35 +871,36 @@ class SQLiteStorage(StorageInterface):
                                 except:
                                     pass
                     
-                    # 统计记录数
-                    async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
-                        count = (await cursor.fetchone())[0]
-                        stats["tables"] += 1
-                        stats["records"] += count
-                        stats["table_details"][table] = count
+                    stats["tables"] += 1
+                    stats["records"] += total_count
+                    stats["table_details"][table] = total_count
+                    
+                    logger.debug(f"Exported table {table}: {total_count} records")
                         
                 except Exception as e:
                     logger.error(f"Failed to export table {table}: {e}")
                     continue
             
             await output_db.commit()
-            await self._db.execute("DETACH DATABASE config_backup")
             
             logger.info(f"Config tables exported: {stats}")
             return stats
             
         except Exception as e:
             logger.error(f"Failed to export config tables: {e}")
-            try:
-                await self._db.execute("DETACH DATABASE config_backup")
-            except:
-                pass
             raise
         finally:
-            await output_db.close()
+            # 关闭输出数据库
+            if output_db:
+                try:
+                    await output_db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to close output database: {e}")
     
     async def import_config_tables(self, source_db_path: str) -> Dict[str, Any]:
         """从外部数据库导入配置表
+        
+        使用逐表复制的方式，避免长时间锁定数据库
         
         Args:
             source_db_path: 源数据库路径
@@ -872,14 +928,12 @@ class SQLiteStorage(StorageInterface):
             'mapping_registry'
         ]
         
+        source_db = None
         stats = {"tables": 0, "records": 0, "table_details": {}}
         
         try:
-            # 使用ATTACH DATABASE
-            await self._db.execute(
-                "ATTACH DATABASE ? AS config_source",
-                (source_db_path,)
-            )
+            # 打开源数据库
+            source_db = await aiosqlite.connect(source_db_path)
             
             # 开始事务
             await self._db.execute("BEGIN TRANSACTION")
@@ -891,7 +945,7 @@ class SQLiteStorage(StorageInterface):
             for table in config_tables:
                 try:
                     # 检查源表是否存在
-                    async with self._db.execute(
+                    async with source_db.execute(
                         "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                         (table,)
                     ) as cursor:
@@ -900,18 +954,72 @@ class SQLiteStorage(StorageInterface):
                     
                     # 清空目标表
                     await self._db.execute(f"DELETE FROM main.{table}")
+
+                    # 分批读取并写入
+                    batch_size = 1000
+                    total_count = 0
+
+                    # 获取列名
+                    async with source_db.execute(f"PRAGMA table_info({table})") as cursor:
+                        columns_info = await cursor.fetchall()
+                        columns = [row[1] for row in columns_info]
+
+                    # 检查是否有id列（用于基于主键的分页）
+                    has_id_column = any(col[1] == 'id' for col in columns_info)
+
+                    if has_id_column:
+                        # 使用基于主键的分页（性能更好）
+                        last_id = 0
+                        while True:
+                            async with source_db.execute(
+                                f"SELECT * FROM {table} WHERE id > ? ORDER BY id LIMIT ?",
+                                (last_id, batch_size)
+                            ) as cursor:
+                                rows = await cursor.fetchall()
+
+                                if not rows:
+                                    break
+
+                                # 构建INSERT语句
+                                placeholders = ','.join(['?' for _ in columns])
+                                await self._db.executemany(
+                                    f"INSERT INTO main.{table} VALUES ({placeholders})",
+                                    rows
+                                )
+
+                                total_count += len(rows)
+                                last_id = rows[-1][0]  # 更新last_id为最后一条记录的id
+                    else:
+                        # 回退到LIMIT OFFSET方式（兼容没有id列的表）
+                        offset = 0
+                        async with source_db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
+                            total_records = (await cursor.fetchone())[0]
+
+                        while offset < total_records:
+                            async with source_db.execute(
+                                f"SELECT * FROM {table} LIMIT ? OFFSET ?",
+                                (batch_size, offset)
+                            ) as cursor:
+                                rows = await cursor.fetchall()
+
+                                if not rows:
+                                    break
+
+                                # 构建INSERT语句
+                                placeholders = ','.join(['?' for _ in columns])
+                                await self._db.executemany(
+                                    f"INSERT INTO main.{table} VALUES ({placeholders})",
+                                    rows
+                                )
+
+                                total_count += len(rows)
+                                offset += batch_size
                     
-                    # 导入数据
-                    await self._db.execute(
-                        f"INSERT INTO main.{table} SELECT * FROM config_source.{table}"
-                    )
+                    stats["tables"] += 1
+                    stats["records"] += total_count
+                    stats["table_details"][table] = total_count
                     
-                    # 统计记录数
-                    async with self._db.execute(f"SELECT COUNT(*) FROM {table}") as cursor:
-                        count = (await cursor.fetchone())[0]
-                        stats["tables"] += 1
-                        stats["records"] += count
-                        stats["table_details"][table] = count
+                    logger.debug(f"Imported table {table}: {total_count} records")
                         
                 except Exception as e:
                     logger.error(f"Failed to import table {table}: {e}")
@@ -923,8 +1031,6 @@ class SQLiteStorage(StorageInterface):
             # 提交事务
             await self._db.commit()
             
-            await self._db.execute("DETACH DATABASE config_source")
-            
             logger.info(f"Config tables imported: {stats}")
             return stats
             
@@ -933,11 +1039,13 @@ class SQLiteStorage(StorageInterface):
             # 回滚事务
             try:
                 await self._db.rollback()
-            except:
-                pass
-            # 分离数据库
-            try:
-                await self._db.execute("DETACH DATABASE config_source")
-            except:
-                pass
+            except Exception as rollback_error:
+                logger.warning(f"Failed to rollback: {rollback_error}")
             raise
+        finally:
+            # 关闭源数据库
+            if source_db:
+                try:
+                    await source_db.close()
+                except Exception as e:
+                    logger.warning(f"Failed to close source database: {e}")

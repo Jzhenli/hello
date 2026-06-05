@@ -3,10 +3,10 @@
 import os
 import re
 import logging
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 
@@ -53,6 +53,31 @@ def verify_api_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             detail="Invalid API token"
         )
     
+    return token
+
+
+def verify_api_token_from_query(token: str = None) -> str:
+    """Verify API Token from query parameter (for file downloads)"""
+    if token is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API token"
+        )
+
+    expected_token = os.environ.get("XAGENT_API_TOKEN", DEFAULT_API_TOKEN)
+
+    if token != expected_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API token"
+        )
+
     return token
 
 
@@ -349,8 +374,36 @@ async def export_config(token: str = Depends(verify_api_token)):
 
 
 @router.get("/export/download/{filename}")
-async def download_export(filename: str, token: str = Depends(verify_api_token)):
-    """下载导出的配置文件"""
+async def download_export(
+    filename: str, 
+    token: str = None,
+    authorization: Optional[str] = Header(None)
+):
+    """下载导出的配置文件
+    
+    Args:
+        filename: 文件名
+        token: API token (通过URL参数传递)
+        authorization: Authorization header (Bearer token)
+    """
+    # 优先从Authorization header获取token
+    if authorization:
+        if authorization.startswith('Bearer '):
+            token = authorization[7:]
+            if not token:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid Authorization header format"
+                )
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid Authorization header format"
+            )
+
+    # 验证token
+    verify_api_token_from_query(token)
+    
     # 验证文件名（防止路径遍历）
     filename = validate_backup_filename(filename)
     
