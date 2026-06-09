@@ -39,7 +39,6 @@ logger = logging.getLogger(__name__)
 
 MQTT_AVAILABLE = None
 _aiomqtt = None
-_MQTTClientAdapter = None
 _DownlinkHandler = None
 
 _SENSITIVE_KEYS = {"password", "secret", "token", "api_key"}
@@ -60,18 +59,16 @@ def _sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def _check_mqtt_available():
     """Check if aiomqtt is available"""
-    global MQTT_AVAILABLE, _aiomqtt, _MQTTClientAdapter, _DownlinkHandler
+    global MQTT_AVAILABLE, _aiomqtt, _DownlinkHandler
 
     if MQTT_AVAILABLE is not None:
         return MQTT_AVAILABLE
 
     try:
         import aiomqtt
-        from .adapter import MQTTClientAdapter
         from .downlink import DownlinkHandler
 
         _aiomqtt = aiomqtt
-        _MQTTClientAdapter = MQTTClientAdapter
         _DownlinkHandler = DownlinkHandler
         MQTT_AVAILABLE = True
     except ImportError:
@@ -124,6 +121,19 @@ class MQTTClientPlugin(NorthPluginBase):
                 "qos": {"type": "integer", "default": DEFAULT_QOS, "enum": [0, 1, 2], "title": "QoS Level"},
                 "keepalive": {"type": "integer", "default": DEFAULT_KEEPALIVE, "title": "Keepalive (seconds)"},
                 "publish_mode": {"type": "string", "default": DEFAULT_PUBLISH_MODE, "enum": ["single", "batch"], "title": "Publish Mode"},
+                # 新增字段
+                "adapter": {
+                    "type": "string",
+                    "default": "standard",
+                    "title": "Adapter Name",
+                    "description": "数据适配器名称，对应 adapters/ 目录下的客户适配器"
+                },
+                "adapter_config": {
+                    "type": "object",
+                    "default": {},
+                    "title": "Adapter Config",
+                    "description": "适配器专属配置，不同适配器支持不同参数"
+                },
             },
         }
     
@@ -161,8 +171,17 @@ class MQTTClientPlugin(NorthPluginBase):
     # ===== Implement hook methods =====
     
     def _create_data_adapter(self) -> Any:
+        """创建数据适配器 - 使用注册表"""
+        from .adapters import get_adapter
+
+        adapter_name = self.config.get("adapter", "standard")
         adapter_config = self.config.get("adapter_config", {})
-        return _MQTTClientAdapter(adapter_config)
+
+        try:
+            return get_adapter(adapter_name, adapter_config)
+        except ValueError as e:
+            logger.warning(f"{e}. Falling back to standard adapter")
+            return get_adapter("standard", adapter_config)
     
     async def _do_connect(self) -> bool:
         client_kwargs = {
