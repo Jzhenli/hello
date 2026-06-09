@@ -90,6 +90,8 @@ const channelForm = ref({
   qos: 0 as 0 | 1 | 2,
   keepalive: 60,
   clean_session: true,
+  adapter: 'standard',
+  adapter_config: '{}',
   local_port: 8888,
   remote_host: '127.0.0.1',
   remote_port: 9000,
@@ -146,6 +148,11 @@ const protocolOptions = [
   }
 ]
 
+const mqttAdapterOptions = [
+  { label: '标准适配器', value: 'standard', description: '默认数据格式' },
+  { label: '客户A (C001)', value: 'C001', description: '客户A私有云协议' },
+]
+
 const channelFormRules = {
   id: [{ required: true, message: '请输入通道ID', trigger: 'blur' }],
   name: [{ required: true, message: '请输入通道名称', trigger: 'blur' }],
@@ -180,6 +187,8 @@ const handleAddChannel = () => {
     qos: 1,
     keepalive: 60,
     clean_session: true,
+    adapter: 'standard',
+    adapter_config: '{}',
     local_port: 8888,
     remote_host: '127.0.0.1',
     remote_port: 9000,
@@ -220,6 +229,8 @@ const handleEditChannel = (channel: ChannelListItem) => {
     qos: fullChannel.connection.qos || 0,
     keepalive: fullChannel.connection.keepalive || 60,
     clean_session: fullChannel.connection.clean_session ?? true,
+    adapter: fullChannel.adapter.adapter || 'standard',
+    adapter_config: JSON.stringify(fullChannel.adapter.adapter_config || {}, null, 2),
     local_port: fullChannel.connection.local_port || 8888,
     remote_host: fullChannel.connection.remote_host || '127.0.0.1',
     remote_port: fullChannel.connection.remote_port || 9000,
@@ -258,6 +269,19 @@ const buildChannelConfig = (): NorthChannelConfig => {
     connection.clean_session = channelForm.value.clean_session
     
     adapterType = 'mqtt'
+    
+    // 适配器配置
+    if (channelForm.value.adapter) {
+      adapterConfig.adapter = channelForm.value.adapter
+    }
+    try {
+      const adapterConfigObj = JSON.parse(channelForm.value.adapter_config)
+      if (Object.keys(adapterConfigObj).length > 0) {
+        adapterConfig.adapter_config = adapterConfigObj
+      }
+    } catch (e) {
+      console.error('Invalid adapter config JSON:', e)
+    }
   } else if (channelForm.value.protocol === 'xnc') {
     connection.local_port = channelForm.value.local_port
     connection.remote_host = channelForm.value.remote_host
@@ -716,6 +740,13 @@ onMounted(async () => {
                   <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
                   <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
                   <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
+                  <el-descriptions-item label="适配器">
+                    <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
+                    <span v-else style="color: #909399">标准</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="selectedChannel.adapter.adapter_config && Object.keys(selectedChannel.adapter.adapter_config).length > 0" label="适配器配置" :span="2">
+                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.adapter_config, null, 2) }}</pre>
+                  </el-descriptions-item>
                 </template>
                 
                 <template v-if="selectedChannel.protocol === 'xnc'">
@@ -916,6 +947,13 @@ onMounted(async () => {
                   <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
                   <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
                   <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
+                  <el-descriptions-item label="适配器">
+                    <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
+                    <span v-else style="color: #909399">标准</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item v-if="selectedChannel.adapter.adapter_config && Object.keys(selectedChannel.adapter.adapter_config).length > 0" label="适配器配置" :span="2">
+                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.adapter_config, null, 2) }}</pre>
+                  </el-descriptions-item>
                 </template>
                 
                 <template v-if="selectedChannel.protocol === 'xnc'">
@@ -1032,6 +1070,33 @@ onMounted(async () => {
         <template v-if="channelForm.protocol === 'mqtt'">
           <el-divider content-position="left">MQTT 配置</el-divider>
           
+          <el-form-item label="适配器">
+            <el-select v-model="channelForm.adapter" placeholder="选择适配器或客户编号" filterable allow-create>
+              <el-option 
+                v-for="opt in mqttAdapterOptions" 
+                :key="opt.value" 
+                :label="opt.label" 
+                :value="opt.value"
+              >
+                <span>{{ opt.label }}</span>
+                <span style="float: right; color: #8492a6; font-size: 12px">{{ opt.description }}</span>
+              </el-option>
+            </el-select>
+            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+              可选择预置适配器，也可直接输入客户编号
+            </div>
+          </el-form-item>
+          <el-form-item v-if="channelForm.adapter !== 'standard'" label="适配器配置">
+            <el-input 
+              v-model="channelForm.adapter_config" 
+              type="textarea" 
+              :rows="5" 
+              placeholder='JSON格式，如 {"productKey": "al12345", "topic_templates": {...}}'
+            />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+              适配器专属配置，不同适配器支持不同参数
+            </div>
+          </el-form-item>
           <el-form-item label="客户端ID">
             <el-input v-model="channelForm.client_id" placeholder="客户端标识符" />
           </el-form-item>

@@ -265,6 +265,8 @@ export interface NorthChannelConnection {
 
 export interface NorthChannelAdapter {
   type: string
+  adapter?: string
+  adapter_config?: Record<string, unknown>
   mapping_config?: Record<string, unknown>
   headers?: Record<string, string>
   config?: Record<string, unknown>
