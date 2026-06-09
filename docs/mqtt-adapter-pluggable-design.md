@@ -47,13 +47,15 @@
 
 | 目标 | 说明 |
 |------|------|
-| **加客户零侵入** | 新增客户格式只需在 `adapters/` 下加一个文件，不改任何已有代码 |
+| **加客户低侵入** | 新增客户格式只需在 `adapters/` 下加一个文件，并在注册列表加一行 |
 | **配置驱动** | 部署时通过 `adapter: customer_a` 一行配置切换 |
 | **格式隔离** | 每个客户的格式逻辑独立，互不干扰 |
 | **协议复用** | MQTT 连接/重连/订阅/发布逻辑完全复用，只换数据格式 |
 | **向后兼容** | 现有部署无需任何改动，默认行为不变 |
 | **低门槛** | 客户适配器只需覆盖与默认格式不同的方法 |
 | **接口隔离** | MQTT 专有方法不污染全局 `DataAdapter` Protocol |
+| **启动零开销** | 按需导入，不使用 MQTT 插件时不加载适配器模块 |
+| **类型安全** | 使用 Protocol 进行静态类型检查，IDE 可追踪依赖 |
 
 ## 三、目标架构
 
@@ -78,7 +80,7 @@
 │  "customer_a"  → CustomerAAdapter      (客户A)               │
 │  "customer_b"  → CustomerBAdapter      (客户B)               │
 │  "customer_c"  → CustomerCAdapter      (客户C)               │
-│  自动发现 adapters/ 目录下所有模块                              │
+│  显式注册 + 按需导入（启动零开销）                            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,8 +93,10 @@ mqtt_client/
 ├── __init__.py              # 不变
 ├── adapter.py               # 重构：MQTTClientAdapter 继承基类，注册为 "standard"
 ├── adapters/                # 新增：客户适配器包
-│   ├── __init__.py          #   注册表 + 自动发现
-│   ├── base.py              #   基类（提供默认实现 + MQTT 扩展接口）
+│   ├── __init__.py          #   注册表 + 显式注册 + 按需导入
+│   ├── base.py              #   基类（提供默认实现 + MQTT 扩展接口 + 配置验证）
+│   ├── protocol.py          #   协议定义（类型安全）
+│   ├── exceptions.py        #   异常定义
 │   └── customer_a.py        #   客户A适配器（示例）
 ├── constants.py             # 不变
 ├── downlink.py              # 微调：格式逻辑委托给适配器
@@ -125,7 +129,7 @@ MQTT 专有扩展接口定义在 `MQTTAdapterBase` 中（见 4.3 节），`Downl
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, ClassVar
 
 from xagent.xcore.storage.interface import Reading
 
@@ -142,8 +146,40 @@ class MQTTAdapterBase:
     客户适配器只需覆盖与默认格式不同的方法。
     """
 
+    # ===== 类级元信息（子类可覆盖） =====
+    __adapter_name__: ClassVar[str] = ""
+    __adapter_description__: ClassVar[str] = ""
+    __adapter_config_schema__: ClassVar[Dict[str, Any]] = {}
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
+        errors = self.validate_config(self.config)
+        if errors:
+            raise ValueError(f"Invalid config for {self.__class__.__name__}: {errors}")
+
+    @classmethod
+    def validate_config(cls, config: Dict[str, Any]) -> List[str]:
+        """
+        验证配置
+
+        子类可覆盖以添加自定义验证逻辑。
+        返回错误列表，空列表表示验证通过。
+        """
+        errors = []
+
+        # 如果定义了 schema，进行基础验证
+        schema = cls.__adapter_config_schema__
+        if schema:
+            for key, spec in schema.items():
+                if spec.get("required", False) and key not in config:
+                    errors.append(f"'{key}' is required")
+
+        return errors
+
+    @classmethod
+    def get_description(cls) -> str:
+        """获取适配器描述"""
+        return cls.__adapter_description__ or f"MQTT adapter: {cls.__name__}"
 
     # ===== DataAdapter Protocol 核心方法 =====
 
@@ -278,6 +314,8 @@ class MQTTAdapterBase:
 2. `_format_timestamp` 提取为可覆盖的方法，`_adapt_batch_readings` 也会调用它，避免子类遗漏批量模式的时间戳格式化
 3. `parse_command` / `format_result` / `to_json` 作为 MQTT 专有扩展，不污染全局 `DataAdapter` Protocol
 4. `format_result` 参数类型为 `DownlinkResult`（定义在 `types.py`，见 4.4 节），避免层级依赖
+5. `__adapter_description__` / `__adapter_config_schema__` 提供适配器元信息，支持自描述
+6. `validate_config` 提供配置验证，子类可覆盖以添加自定义验证逻辑
 
 ### 4.4 共享类型定义 — `types.py`
 
@@ -305,23 +343,96 @@ class DownlinkResult:
 - `raw_command` 字段保留原始客户命令，使 `format_result` 可以访问原始命令中的额外信息（如命令类型、消息ID等），而不仅限于解析后的 `{asset, data}`
 - 独立模块避免 `base.py` → `downlink.py` 的层级依赖
 
-### 4.5 适配器注册表 — `adapters/__init__.py`
+### 4.5 异常定义 — `adapters/exceptions.py`
+
+定义适配器相关的异常类型，提供友好的错误信息。
 
 ```python
-"""MQTT Adapter Registry - 自动发现并注册客户适配器"""
+"""MQTT Adapter Exceptions - 适配器相关异常"""
 
-import importlib
+from typing import List
+
+
+class AdapterError(Exception):
+    """适配器基础异常"""
+    pass
+
+
+class AdapterNotFoundError(AdapterError):
+    """适配器未找到"""
+    def __init__(self, name: str, available: List[str]):
+        self.name = name
+        self.available = available
+        super().__init__(f"Adapter '{name}' not found. Available: {available}")
+
+
+class AdapterLoadError(AdapterError):
+    """适配器加载失败"""
+    def __init__(self, name: str, reason: str):
+        self.name = name
+        self.reason = reason
+        super().__init__(f"Failed to load adapter '{name}': {reason}")
+
+
+class AdapterConfigError(AdapterError):
+    """适配器配置错误"""
+    def __init__(self, name: str, errors: List[str]):
+        self.name = name
+        self.errors = errors
+        super().__init__(f"Invalid config for adapter '{name}': {errors}")
+```
+
+### 4.6 协议定义 — `adapters/protocol.py`
+
+定义 MQTT 适配器协议，提供类型安全检查。
+
+```python
+"""MQTT Adapter Protocol - 类型定义"""
+
+from typing import Any, Dict, List, Protocol, runtime_checkable
+
+from xagent.xcore.storage.interface import Reading
+
+
+@runtime_checkable
+class MQTTAdapterProtocol(Protocol):
+    """
+    MQTT 适配器协议 - 定义必须实现的方法
+
+    使用 @runtime_checkable 装饰器，支持 isinstance() 检查。
+    静态类型检查器（如 mypy）会验证实现类是否满足协议。
+    """
+
+    def adapt_upload(self, readings: List[Reading], context: Dict[str, Any]) -> Any: ...
+    def adapt_command(self, command_data: Dict[str, Any], context: Dict[str, Any]) -> Any: ...
+    def parse_response(self, response: Any, context: Dict[str, Any]) -> Dict[str, Any]: ...
+    def parse_command(self, raw: Dict[str, Any]) -> Dict[str, Any]: ...
+    def format_result(self, result: "DownlinkResult") -> Dict[str, Any]: ...
+    def to_json(self, payload: Any) -> str: ...
+```
+
+### 4.7 适配器注册表 — `adapters/__init__.py`
+
+采用**显式注册 + 按需导入**方案，避免启动时自动发现带来的性能开销。
+
+```python
+"""MQTT Adapter Registry - 显式注册 + 按需导入 + 类型安全"""
+
 import logging
-import os
-from typing import Any, Dict, Type
+from typing import Any, Dict, Type, Callable, Optional, List, Tuple
+
+from .exceptions import AdapterNotFoundError, AdapterLoadError, AdapterConfigError
 
 logger = logging.getLogger(__name__)
 
+# 注册表
 _REGISTRY: Dict[str, Type] = {}
+_IMPORTERS: Dict[str, Callable[[], None]] = {}
 
 
 def register(name: str):
-    """装饰器：注册适配器
+    """
+    装饰器：注册适配器类
 
     用法:
         @register("customer_a")
@@ -330,61 +441,110 @@ def register(name: str):
     """
     def decorator(cls):
         if name in _REGISTRY:
-            logger.warning(f"Overwriting existing adapter: {name}")
+            logger.warning(f"Overwriting adapter: {name}")
         _REGISTRY[name] = cls
-        logger.debug(f"Registered MQTT adapter: {name} -> {cls.__name__}")
+        logger.debug(f"Registered adapter: {name} -> {cls.__name__}")
         return cls
     return decorator
 
 
-def get_adapter(name: str, config: Dict[str, Any] = None) -> Any:
-    """获取适配器实例
+def get_adapter(name: str, config: Optional[Dict[str, Any]] = None) -> Any:
+    """
+    获取适配器实例
+
+    首次调用时自动按需导入对应模块。
 
     Args:
         name: 适配器名称
         config: 适配器配置
 
+    Returns:
+        适配器实例
+
     Raises:
-        ValueError: 适配器名称未注册
+        AdapterNotFoundError: 适配器未找到
+        AdapterLoadError: 适配器加载失败
+        AdapterConfigError: 配置验证失败
     """
+    # 按需导入
+    if name not in _REGISTRY and name in _IMPORTERS:
+        try:
+            logger.debug(f"Lazy importing adapter: {name}")
+            _IMPORTERS[name]()
+        except Exception as e:
+            raise AdapterLoadError(name, str(e))
+
+    # 检查是否注册
     if name not in _REGISTRY:
-        available = ", ".join(sorted(_REGISTRY.keys())) or "(none)"
-        raise ValueError(f"Unknown adapter '{name}', available: [{available}]")
-    return _REGISTRY[name](config or {})
+        raise AdapterNotFoundError(name, list_available())
+
+    # 实例化
+    try:
+        return _REGISTRY[name](config or {})
+    except ValueError as e:
+        raise AdapterConfigError(name, [str(e)])
 
 
-def list_adapters() -> list:
-    """列出所有已注册的适配器名称"""
+def list_adapters() -> List[str]:
+    """列出已加载的适配器"""
     return sorted(_REGISTRY.keys())
 
 
-def auto_discover():
-    """自动发现 adapters/ 目录下的所有 .py 模块并导入
+def list_available() -> List[str]:
+    """列出所有可用的适配器（包括未加载的）"""
+    return sorted(set(_REGISTRY.keys()) | set(_IMPORTERS.keys()))
 
-    跳过 __init__.py 和 base.py，其余模块被导入后
-    其中的 @register 装饰器会自动完成注册。
+
+def get_adapter_info(name: str) -> Optional[Dict[str, Any]]:
     """
-    adapters_dir = os.path.dirname(__file__)
-    skip = {"__init__", "base"}
+    获取适配器详细信息
 
-    for fname in sorted(os.listdir(adapters_dir)):
-        if not fname.endswith(".py"):
-            continue
-        module_name = fname[:-3]
-        if module_name in skip:
-            continue
-        try:
-            importlib.import_module(f".{module_name}", package=__name__)
-            logger.debug(f"Discovered adapter module: {module_name}")
-        except Exception as e:
-            logger.warning(f"Failed to load adapter module '{module_name}': {e}")
+    Returns:
+        {
+            "name": str,
+            "class": str,
+            "description": str,
+            "config_schema": dict,
+            "loaded": bool
+        }
+    """
+    if name in _REGISTRY:
+        cls = _REGISTRY[name]
+        return {
+            "name": name,
+            "class": cls.__name__,
+            "description": getattr(cls, "__adapter_description__", ""),
+            "config_schema": getattr(cls, "__adapter_config_schema__", {}),
+            "loaded": True,
+        }
+    elif name in _IMPORTERS:
+        return {"name": name, "loaded": False}
+    return None
 
 
-# 包导入时自动发现
-auto_discover()
+# ===== 适配器导入注册 =====
+# 新增客户只需在列表中添加一行元组 (name, module_path)
+
+_ADAPTER_IMPORTS: List[Tuple[str, str]] = [
+    ("standard", ".adapter"),           # 标准适配器
+    ("customer_a", ".customer_a"),      # 客户A
+    ("customer_b", ".customer_b"),      # 客户B
+    # 新增客户只需在这里加一行: ("customer_c", ".customer_c"),
+]
+
+for _name, _module in _ADAPTER_IMPORTS:
+    _IMPORTERS[_name] = lambda m=_module: __import__(m, package=__name__)
 ```
 
-### 4.6 现有 adapter.py 重构
+**设计要点**：
+
+1. **显式注册**：在 `_ADAPTER_IMPORTS` 列表中显式声明所有适配器，新增客户只需加一行元组
+2. **按需导入**：`get_adapter()` 首次调用时才导入对应模块，启动零开销
+3. **类型安全**：配合 `MQTTAdapterProtocol` 进行静态类型检查
+4. **友好错误**：自定义异常类提供清晰的错误信息
+5. **可观测性**：`get_adapter_info()` 和 `list_available()` 支持调试和监控
+
+### 4.8 现有 adapter.py 重构
 
 将 `MQTTClientAdapter` 改为继承 `MQTTAdapterBase`，并注册为 `"standard"`。保留原有的 mapping / timestamp / metadata 增强功能。
 
@@ -494,7 +654,7 @@ class MQTTClientAdapter(MQTTAdapterBase):
 2. **`_adapt_batch_readings` 不需要覆盖**：基类已调用 `self._format_timestamp()`，子类覆盖 `_format_timestamp` 即可同时生效于单条和批量模式。
 3. **`adapt_upload` 不需要覆盖**：基类已包含 try/except 异常处理。
 
-### 4.7 客户适配器示例 — `adapters/customer_a.py`
+### 4.9 客户适配器示例 — `adapters/customer_a.py`
 
 ```python
 """客户A私有云适配器
@@ -533,6 +693,18 @@ from .base import MQTTAdapterBase
 @register("customer_a")
 class CustomerAAdapter(MQTTAdapterBase):
     """客户A适配器 - 只需覆盖与默认格式不同的方法"""
+
+    # ===== 元信息 =====
+    __adapter_name__ = "customer_a"
+    __adapter_description__ = "客户A私有云适配器 - 使用 SN/TS/Metrics 格式"
+    __adapter_config_schema__ = {
+        "sn_prefix": {
+            "type": "string",
+            "required": False,
+            "default": "",
+            "description": "设备SN前缀"
+        },
+    }
 
     def __init__(self, config=None):
         super().__init__(config)
@@ -590,10 +762,12 @@ class CustomerAAdapter(MQTTAdapterBase):
 
 **设计要点**：
 
+- `__adapter_description__` 提供适配器描述，用于调试和文档
+- `__adapter_config_schema__` 定义配置 schema，支持配置验证
 - `format_result` 通过 `result.raw_command` 获取原始命令信息（如 `cmd` 字段），动态构造响应的命令类型（如 `set` → `set_reply`），无需硬编码
 - `adapt_upload` 自行实现，不调用基类，因此自行包含 try/except
 
-### 4.8 DownlinkHandler 微调
+### 4.10 DownlinkHandler 微调
 
 `downlink.py` 改动要点：
 
@@ -730,7 +904,7 @@ class DownlinkHandler:
 2. **`DownlinkResult` 保留 `raw_command`**：使 `format_result` 可以访问原始命令中的额外信息
 3. **EventBus 直接使用 `parse_command` 结果**：不再经过 `adapt_command` 二次转换
 
-### 4.9 Plugin 微调
+### 4.11 Plugin 微调
 
 `plugin.py` 改两处：`_create_data_adapter` 和 `config_schema`。
 
@@ -855,8 +1029,10 @@ mqtt:
 |------|---------|------|
 | `xcore/transform/adapter.py` | **不变** | DataAdapter Protocol 保持原样，不新增 MQTT 专有方法 |
 | `mqtt_client/types.py` | 新增 | `DownlinkResult` 等共享类型定义，含 `raw_command` 字段 |
-| `mqtt_client/adapters/__init__.py` | 新增 | 适配器注册表 + 自动发现 |
-| `mqtt_client/adapters/base.py` | 新增 | 适配器基类，提供默认实现 + MQTT 扩展接口 |
+| `mqtt_client/adapters/__init__.py` | 新增 | 适配器注册表 + 显式注册 + 按需导入 |
+| `mqtt_client/adapters/base.py` | 新增 | 适配器基类，提供默认实现 + MQTT 扩展接口 + 配置验证 |
+| `mqtt_client/adapters/protocol.py` | 新增 | MQTT 适配器协议定义（类型安全） |
+| `mqtt_client/adapters/exceptions.py` | 新增 | 适配器相关异常定义 |
 | `mqtt_client/adapters/customer_a.py` | 新增 | 客户适配器示例 |
 | `mqtt_client/adapter.py` | 修改 | `MQTTClientAdapter` 继承 `MQTTAdapterBase`，注册为 `"standard"` |
 | `mqtt_client/downlink.py` | 修改 | 委托适配器 + 移除 `adapt_command` 调用 + `DownlinkResult` 保留原始命令 |
@@ -864,17 +1040,19 @@ mqtt:
 
 ## 八、新增客户适配器的步骤
 
-1. 在 `adapters/` 下新建文件，如 `adapters/customer_d.py`
-2. 继承 `MQTTAdapterBase`，用 `@register("customer_d")` 装饰
-3. 覆盖与默认格式不同的方法（通常只需覆盖 `adapt_upload`、`parse_command`、`format_result`）
-4. 部署配置中设置 `adapter: customer_d`
+1. 在 `adapters/` 下新建文件，如 `adapters/customer_c.py`
+2. 继承 `MQTTAdapterBase`，用 `@register("customer_c")` 装饰
+3. 定义元信息（`__adapter_description__`、`__adapter_config_schema__`）
+4. 覆盖与默认格式不同的方法（通常只需覆盖 `adapt_upload`、`parse_command`、`format_result`）
+5. 在 `adapters/__init__.py` 的 `_ADAPTER_IMPORTS` 列表中添加一行：`("customer_c", ".customer_c")`
+6. 部署配置中设置 `adapter: customer_c`
 
-**无需修改任何已有代码。**
+**改动量**：新增 1 个文件 + 修改 1 行代码。
 
 ### 最小客户适配器模板
 
 ```python
-"""客户D私有云适配器"""
+"""客户C私有云适配器"""
 
 from typing import Any, Dict, List
 from xagent.xcore.storage.interface import Reading
@@ -882,20 +1060,28 @@ from . import register
 from .base import MQTTAdapterBase
 
 
-@register("customer_d")
-class CustomerDAdapter(MQTTAdapterBase):
-    """客户D适配器"""
+@register("customer_c")
+class CustomerCAdapter(MQTTAdapterBase):
+    """客户C适配器"""
+
+    # ===== 元信息 =====
+    __adapter_name__ = "customer_c"
+    __adapter_description__ = "客户C私有云适配器"
+    __adapter_config_schema__ = {
+        # 定义配置 schema
+        # "site_id": {"type": "string", "required": True, "description": "站点ID"},
+    }
 
     def adapt_upload(self, readings: List[Reading], context: Dict[str, Any]) -> Any:
-        # TODO: 实现客户D的上行格式
+        # TODO: 实现客户C的上行格式
         return super().adapt_upload(readings, context)
 
     def parse_command(self, raw: Dict[str, Any]) -> Dict[str, Any]:
-        # TODO: 实现客户D的下行命令解析
+        # TODO: 实现客户C的下行命令解析
         return super().parse_command(raw)
 
     def format_result(self, result) -> Dict[str, Any]:
-        # TODO: 实现客户D的响应格式，可通过 result.raw_command 访问原始命令
+        # TODO: 实现客户C的响应格式，可通过 result.raw_command 访问原始命令
         return super().format_result(result)
 ```
 
@@ -916,8 +1102,10 @@ class CustomerDAdapter(MQTTAdapterBase):
 | **协议层** | `downlink.py` | MQTT 消息接收、EventBus 分发、错误处理 | 否 |
 | **格式层** | `adapters/customer_x.py` | `adapt_upload` 上行格式<br>`parse_command` 下行命令解析<br>`format_result` 下行响应格式 | 是 |
 | **插件层** | `plugin.py` | 生命周期、连接管理、选择适配器 | 否 |
-| **注册层** | `adapters/__init__.py` | 适配器注册、自动发现、实例化 | 否 |
+| **注册层** | `adapters/__init__.py` | 适配器注册、按需导入、实例化 | 否（新增客户加一行） |
 | **类型层** | `types.py` | `DownlinkResult` 等共享类型定义 | 否 |
+| **异常层** | `adapters/exceptions.py` | 适配器相关异常定义 | 否 |
+| **协议层** | `adapters/protocol.py` | MQTT 适配器协议定义（类型安全） | 否 |
 
 ## 十一、关键设计决策记录
 
@@ -929,3 +1117,7 @@ class CustomerDAdapter(MQTTAdapterBase):
 | `parse_command` 是否做 mapping？ | 否 | `_map_device_name`/`_map_properties` 是正向映射（内部→客户），反向使用语义错误 |
 | `_format_timestamp` 如何复用？ | 提取为基类可覆盖方法 | 子类覆盖一处即可同时生效于单条和批量模式 |
 | `DownlinkResult` 是否保留原始命令？ | 是，增加 `raw_command` 字段 | `format_result` 可能需要原始命令中的额外信息（如命令类型、消息ID） |
+| 适配器发现方式？ | 显式注册 + 按需导入 | 避免启动时自动发现的性能开销，支持静态分析，无安全风险 |
+| 类型安全如何保证？ | `@runtime_checkable` Protocol | 支持静态类型检查，IDE 可追踪依赖 |
+| 配置验证如何实现？ | `validate_config` + `__adapter_config_schema__` | 适配器自描述配置需求，提前发现配置错误 |
+| 错误处理如何设计？ | 自定义异常类 | 提供友好的错误信息，便于问题定位 |

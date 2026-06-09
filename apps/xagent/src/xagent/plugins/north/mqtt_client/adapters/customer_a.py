@@ -137,95 +137,51 @@ class CustomerAAdapter(MQTTAdapterBase):
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
         # 客户A专属配置
-        self._product_key = self.config.get("productKey", "")
-        self._device_sn = self.config.get("deviceSN", "")
         self._sn_prefix = self.config.get("sn_prefix", "")
         # 用于生成递增的msgid（可选，也可以用随机数）
         self._msgid_counter = 0
 
-    # ===== Topic管理 =====
+    # ===== Topic管理（覆盖基类以提供客户A特定的topic） =====
 
-    def get_subscribe_topics(self, context: Dict[str, Any]) -> List[str]:
+    def get_subscribe_topic_types(self) -> List[str]:
         """
-        获取客户A需要订阅的topic列表
-
-        需要订阅的topic：
-        1. $v1/{productKey}/{deviceSN}/sys/property/down - 设置设备属性
-        2. $v1/{productKey}/{deviceSN}/sys/subdevice/connect_reply - 设备上线回复
-        3. $v1/{productKey}/{deviceSN}/sys/subdevice/disconnect_reply - 设备下线回复
-
-        Args:
-            context: 上下文信息
+        客户A需要订阅的Topic类型
 
         Returns:
-            需要订阅的topic列表
+            ["property_down", "connect_reply", "disconnect_reply"]
         """
-        product_key = context.get("productKey", self._product_key)
-        device_sn = context.get("deviceSN", self._device_sn)
+        # 优先从配置中读取
+        if "subscribe_topic_types" in self.config:
+            return self.config["subscribe_topic_types"]
+        
+        # 客户A默认订阅三种类型
+        return ["property_down", "connect_reply", "disconnect_reply"]
 
-        if not product_key or not device_sn:
-            logger.warning("productKey or deviceSN not provided, cannot generate subscribe topics")
-            return []
-
-        base_topic = f"$v1/{product_key}/{device_sn}/sys"
-
-        return [
-            f"{base_topic}/property/down",                    # 设置设备属性
-            f"{base_topic}/subdevice/connect_reply",          # 设备上线回复
-            f"{base_topic}/subdevice/disconnect_reply",       # 设备下线回复
-        ]
-
-    def get_publish_topic(self, context: Dict[str, Any]) -> str:
+    def get_reply_topic(self, command_topic: str) -> str:
         """
-        获取上报数据的topic
-
-        根据上报类型返回不同的topic：
-        - 设备上线：$v1/.../sys/subdevice/connect
-        - 设备下线：$v1/.../sys/subdevice/disconnect
-        - 普通数据：$v1/.../sys/property/up
+        客户A的回复Topic规则：在命令topic后加"_reply"
 
         Args:
-            context: 上下文信息
+            command_topic: 命令Topic
 
         Returns:
-            上报topic
+            回复Topic
         """
-        product_key = context.get("productKey", self._product_key)
-        device_sn = context.get("deviceSN", self._device_sn)
-        publish_type = context.get("publish_type", "property")  # property, connect, disconnect
-
-        if not product_key or not device_sn:
-            return context.get("topic", "")
-
-        base_topic = f"$v1/{product_key}/{device_sn}/sys"
-
-        if publish_type == "connect":
-            return f"{base_topic}/subdevice/connect"
-        elif publish_type == "disconnect":
-            return f"{base_topic}/subdevice/disconnect"
-        else:
-            return f"{base_topic}/property/up"
-
-    def get_reply_topic(self, command_topic: str, context: Dict[str, Any]) -> str:
-        """
-        根据命令topic生成回复topic
-
-        例如：
-        - $v1/.../sys/property/down → $v1/.../sys/property/down_reply
-
-        Args:
-            command_topic: 命令topic
-            context: 上下文信息
-
-        Returns:
-            回复topic
-        """
-        # 客户A的回复topic规则：在命令topic后加"_reply"
+        # 优先从配置中读取规则
+        if "reply_topic_rule" in self.config:
+            rule = self.config["reply_topic_rule"]
+            if rule == "suffix_reply":
+                return command_topic + "_reply"
+            elif rule == "suffix_result":
+                return f"{command_topic}/result"
+            elif rule == "replace_down_with_reply":
+                return command_topic.replace("/down", "/reply")
+        
+        # 客户A默认规则：/down → /down_reply
         if command_topic.endswith("/down"):
             return command_topic + "_reply"
         else:
-            # 默认规则
-            return command_topic + "_reply"
+            return f"{command_topic}/result"
 
     def _generate_msgid(self) -> str:
         """
@@ -328,92 +284,19 @@ class CustomerAAdapter(MQTTAdapterBase):
 
     # ===== 下行：覆盖 =====
 
-    def parse_command(self, raw: Dict[str, Any], topic: Optional[str] = None) -> Dict[str, Any]:
+    def parse_command(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """
-        客户A下行命令解析：根据topic区分不同类型的命令
-
-        支持的topic：
-        - $v1/{productKey}/{deviceSN}/sys/property/down - 设置设备属性
-        - $v1/{productKey}/{deviceSN}/sys/subdevice/connect_reply - 设备上线回复
-        - $v1/{productKey}/{deviceSN}/sys/subdevice/disconnect_reply - 设备下线回复
+        客户A下行命令解析：{msgid, params} → {asset, data}
 
         Args:
-            raw: 客户A的命令格式
-            topic: MQTT topic
+            raw: 客户A的写属性格式 {"msgid": "123456", "params": {"Temperature": "37.0"}}
 
         Returns:
-            统一内部格式 {"asset": str, "data": Dict[str, Any]}
-        """
-        # 根据topic判断命令类型
-        if topic:
-            if "/sys/property/down" in topic:
-                # 设置设备属性命令
-                return self._parse_property_down(raw, topic)
-            elif "/sys/subdevice/connect_reply" in topic:
-                # 设备上线回复
-                return self._parse_connect_reply(raw, topic)
-            elif "/sys/subdevice/disconnect_reply" in topic:
-                # 设备下线回复
-                return self._parse_disconnect_reply(raw, topic)
-
-        # 默认：设置设备属性（向后兼容）
-        return self._parse_property_down(raw, topic)
-
-    def _parse_property_down(self, raw: Dict[str, Any], topic: Optional[str]) -> Dict[str, Any]:
-        """
-        解析设置设备属性命令
-
-        Args:
-            raw: {"msgid": "123456", "params": {"Temperature": "37.0"}}
-            topic: $v1/{productKey}/{deviceSN}/sys/property/down
-
-        Returns:
-            {"asset": "", "data": {"Temperature": "37.0"}, "command_type": "property_down"}
+            统一内部格式 {"asset": "", "data": {"Temperature": "37.0"}}
         """
         return {
             "asset": "",
             "data": raw.get("params", {}),
-            "command_type": "property_down",
-        }
-
-    def _parse_connect_reply(self, raw: Dict[str, Any], topic: Optional[str]) -> Dict[str, Any]:
-        """
-        解析设备上线回复
-
-        Args:
-            raw: {"msgid": "123456", "code": 0, "message": "success", "data": {...}}
-            topic: $v1/{productKey}/{deviceSN}/sys/subdevice/connect_reply
-
-        Returns:
-            {"asset": "device1234", "data": {...}, "command_type": "connect_reply"}
-        """
-        data = raw.get("data", {})
-        return {
-            "asset": data.get("deviceSN", ""),
-            "data": data,
-            "command_type": "connect_reply",
-            "code": raw.get("code", 0),
-            "message": raw.get("message", ""),
-        }
-
-    def _parse_disconnect_reply(self, raw: Dict[str, Any], topic: Optional[str]) -> Dict[str, Any]:
-        """
-        解析设备下线回复
-
-        Args:
-            raw: {"msgid": "123456", "code": 0, "message": "success", "data": {...}}
-            topic: $v1/{productKey}/{deviceSN}/sys/subdevice/disconnect_reply
-
-        Returns:
-            {"asset": "device1234", "data": {...}, "command_type": "disconnect_reply"}
-        """
-        data = raw.get("data", {})
-        return {
-            "asset": data.get("deviceSN", ""),
-            "data": data,
-            "command_type": "disconnect_reply",
-            "code": raw.get("code", 0),
-            "message": raw.get("message", ""),
         }
 
     def format_result(self, result: DownlinkResult) -> Dict[str, Any]:

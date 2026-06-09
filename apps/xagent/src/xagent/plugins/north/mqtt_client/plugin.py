@@ -132,7 +132,7 @@ class MQTTClientPlugin(NorthPluginBase):
                     "type": "object",
                     "default": {},
                     "title": "Adapter Config",
-                    "description": "适配器专属配置，不同适配器支持不同参数"
+                    "description": "适配器专属配置，不同适配器支持不同参数。例如客户A需要productKey和deviceSN"
                 },
             },
         }
@@ -162,7 +162,8 @@ class MQTTClientPlugin(NorthPluginBase):
         
         self._downlink_handler = _DownlinkHandler(
             event_bus=event_bus,
-            adapter=self._data_adapter
+            adapter=self._data_adapter,
+            plugin=self  # 传递plugin引用，用于topic解析
         )
         
         logger.info(f"MQTT plugin initialized: broker={self._broker}:{self._port}, topic={self._topic}")
@@ -182,6 +183,61 @@ class MQTTClientPlugin(NorthPluginBase):
         except ValueError as e:
             logger.warning(f"{e}. Falling back to standard adapter")
             return get_adapter("standard", adapter_config)
+    
+    # ===== Topic管理（Plugin层：委托给适配器） =====
+
+    def get_subscribe_topics(self) -> List[str]:
+        """
+        获取需要订阅的Topic列表（委托给适配器）
+
+        Returns:
+            需要订阅的Topic列表
+        """
+        # 从适配器获取订阅topic列表（适配器自己使用config构建context）
+        topics = self._data_adapter.get_subscribe_topics()
+        
+        # 如果适配器没有返回topic，使用默认的command_topic
+        return topics if topics else [self._command_topic]
+    
+    def get_publish_topic(self, publish_type: str = "property") -> str:
+        """
+        获取发布Topic（委托给适配器）
+
+        Args:
+            publish_type: 发布类型（property, connect, disconnect）
+        
+        Returns:
+            发布Topic
+        """
+        # 从适配器获取发布topic（适配器自己使用config构建context）
+        topic = self._data_adapter.get_publish_topic(publish_type)
+        
+        # 如果适配器没有返回topic，使用默认的topic
+        return topic if topic else self._topic
+    
+    def get_reply_topic(self, command_topic: str) -> str:
+        """
+        根据命令Topic生成回复Topic（委托给适配器）
+
+        Args:
+            command_topic: 命令Topic
+        
+        Returns:
+            回复Topic
+        """
+        return self._data_adapter.get_reply_topic(command_topic)
+    
+    def parse_topic_type(self, topic: str) -> str:
+        """
+        解析Topic类型（委托给适配器）
+
+        Args:
+            topic: MQTT Topic
+        
+        Returns:
+            Topic类型
+        """
+        return self._data_adapter.parse_topic_type(topic)
     
     async def _do_connect(self) -> bool:
         client_kwargs = {
