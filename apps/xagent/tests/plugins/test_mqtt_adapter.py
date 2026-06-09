@@ -6,18 +6,27 @@ from typing import Any, Dict
 from unittest.mock import Mock, AsyncMock
 
 from xagent.xcore.storage.interface import Reading
-from xagent.plugins.north.mqtt_client.adapter import (
-    MQTTAdapterBase,
-    MQTTAdapterProtocol,
-    DownlinkResult,
-    _handle_adapter_errors,
+
+from xagent.plugins.north.mqtt_client.types import (
+    PublishPacket,
+    CommandData,
+    CommandResult,
+    CommandContext,
+    ResponsePacket,
 )
+from xagent.plugins.north.mqtt_client.exceptions import (
+    MQTTAdapterError,
+    DataConversionError,
+    TopicError,
+    CommandParseError,
+)
+from xagent.plugins.north.mqtt_client.adapters.base import BaseAdapter
 from xagent.plugins.north.mqtt_client.adapters import (
     register,
     get_adapter,
     list_adapters,
 )
-from xagent.plugins.north.mqtt_client.adapters.standard import MQTTClientAdapter
+from xagent.plugins.north.mqtt_client.adapters.standard import StandardAdapter
 from xagent.plugins.north.mqtt_client.adapters.customer_a import CustomerAAdapter
 
 
@@ -69,8 +78,7 @@ class TestAdapterRegistry:
     def test_get_standard_adapter(self):
         """测试获取标准适配器"""
         adapter = get_adapter("standard")
-        assert isinstance(adapter, MQTTClientAdapter)
-        assert adapter.config == {}
+        assert isinstance(adapter, StandardAdapter)
 
     def test_get_standard_adapter_with_config(self):
         """测试获取标准适配器（带配置）"""
@@ -79,7 +87,7 @@ class TestAdapterRegistry:
             "property_mapping": {"temperature": "temp"},
         }
         adapter = get_adapter("standard", config)
-        assert isinstance(adapter, MQTTClientAdapter)
+        assert isinstance(adapter, StandardAdapter)
         assert adapter._timestamp_format == "iso8601"
         assert adapter._property_mapping == {"temperature": "temp"}
 
@@ -90,10 +98,10 @@ class TestAdapterRegistry:
 
     def test_get_customer_a_adapter_with_config(self):
         """测试获取客户A适配器（带配置）"""
-        config = {"sn_prefix": "SN-"}
+        config = {"productKey": "al12345****"}
         adapter = get_adapter("customer_a", config)
         assert isinstance(adapter, CustomerAAdapter)
-        assert adapter._sn_prefix == "SN-"
+        assert adapter._config.get("productKey") == "al12345****"
 
     def test_get_nonexistent_adapter(self):
         """测试获取不存在的适配器"""
@@ -103,14 +111,14 @@ class TestAdapterRegistry:
 
     def test_register_decorator(self):
         """测试注册装饰器"""
-        @register("test_adapter")
-        class TestAdapter(MQTTAdapterBase):
+        @register("test_adapter_v2")
+        class TestAdapter(BaseAdapter):
             pass
 
         adapters = list_adapters()
-        assert "test_adapter" in adapters
+        assert "test_adapter_v2" in adapters
 
-        adapter = get_adapter("test_adapter")
+        adapter = get_adapter("test_adapter_v2")
         assert isinstance(adapter, TestAdapter)
 
 
@@ -121,129 +129,149 @@ class TestStandardAdapter:
 
     def test_adapt_upload_single(self, sample_reading):
         """测试单条数据上传"""
-        adapter = get_adapter("standard")
-        context = {"timestamp": 1704067200.0}
+        config = {
+            "topic_templates": {"property_up": "xagent/data"},
+        }
+        adapter = get_adapter("standard", config)
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
-        assert result is not None
-        assert result["asset"] == "device_01"
-        assert result["timestamp"] == 1704067200.0
-        assert result["service_name"] == "temperature_service"
-        assert result["data"] == {"temperature": 25.5, "humidity": 60.0}
-        assert result["device_status"] == "online"
-        assert result["tags"] == {"location": "factory"}
-        assert "standard_points" in result
+        assert len(packets) == 1
+        packet = packets[0]
+        assert isinstance(packet, PublishPacket)
+        assert packet.topic == "xagent/data"
+        assert packet.payload["asset"] == "device_01"
+        assert packet.payload["timestamp"] == 1704067200.0
+        assert packet.payload["service_name"] == "temperature_service"
+        assert packet.payload["data"] == {"temperature": 25.5, "humidity": 60.0}
+        assert packet.payload["device_status"] == "online"
+        assert packet.payload["tags"] == {"location": "factory"}
+        assert "standard_points" in packet.payload
 
     def test_adapt_upload_batch(self, sample_readings):
         """测试批量数据上传"""
-        adapter = get_adapter("standard")
-        context = {"timestamp": 1704067200.0}
+        config = {
+            "topic_templates": {"property_up": "xagent/data"},
+        }
+        adapter = get_adapter("standard", config)
 
-        result = adapter.adapt_upload(sample_readings, context)
+        packets = adapter.adapt_upload(sample_readings)
 
-        assert result is not None
-        assert result["count"] == 2
-        assert len(result["readings"]) == 2
-        assert result["readings"][0]["asset"] == "device_01"
-        assert result["readings"][1]["asset"] == "device_02"
+        assert len(packets) == 1
+        packet = packets[0]
+        assert packet.payload["count"] == 2
+        assert len(packet.payload["readings"]) == 2
+        assert packet.payload["readings"][0]["asset"] == "device_01"
+        assert packet.payload["readings"][1]["asset"] == "device_02"
 
     def test_adapt_upload_empty(self):
         """测试空数据上传"""
         adapter = get_adapter("standard")
-        result = adapter.adapt_upload([], {})
-        assert result is None
+
+        with pytest.raises(DataConversionError):
+            adapter.adapt_upload([])
 
     def test_timestamp_format_iso8601(self, sample_reading):
         """测试ISO8601时间戳格式"""
-        config = {"timestamp_format": "iso8601"}
+        config = {
+            "timestamp_format": "iso8601",
+            "topic_templates": {"property_up": "xagent/data"},
+        }
         adapter = get_adapter("standard", config)
-        context = {}
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
         expected_ts = datetime.fromtimestamp(1704067200.0, tz=timezone.utc).isoformat()
-        assert result["timestamp"] == expected_ts
+        assert packets[0].payload["timestamp"] == expected_ts
 
     def test_timestamp_format_milliseconds(self, sample_reading):
         """测试毫秒时间戳格式"""
-        config = {"timestamp_format": "milliseconds"}
+        config = {
+            "timestamp_format": "milliseconds",
+            "topic_templates": {"property_up": "xagent/data"},
+        }
         adapter = get_adapter("standard", config)
-        context = {}
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
-        assert result["timestamp"] == 1704067200000
+        assert packets[0].payload["timestamp"] == 1704067200000
 
     def test_property_mapping(self, sample_reading):
         """测试属性映射"""
         config = {
-            "property_mapping": {
-                "temperature": "temp",
-                "humidity": "humi",
-            }
+            "property_mapping": {"temperature": "temp", "humidity": "humi"},
+            "topic_templates": {"property_up": "xagent/data"},
         }
         adapter = get_adapter("standard", config)
-        context = {}
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
-        assert result["data"] == {"temp": 25.5, "humi": 60.0}
+        assert packets[0].payload["data"] == {"temp": 25.5, "humi": 60.0}
 
     def test_device_name_mapping(self, sample_reading):
         """测试设备名映射"""
         config = {
-            "device_name_mapping": {
-                "device_01": "SENSOR-001",
-            }
+            "device_name_mapping": {"device_01": "SENSOR-001"},
+            "topic_templates": {"property_up": "xagent/data"},
         }
         adapter = get_adapter("standard", config)
-        context = {}
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
-        assert result["asset"] == "SENSOR-001"
+        assert packets[0].payload["asset"] == "SENSOR-001"
 
     def test_parse_command(self):
         """测试命令解析"""
         adapter = get_adapter("standard")
 
         raw = {"asset": "device_01", "data": {"temperature": 30}}
-        result = adapter.parse_command(raw)
+        context = CommandContext(raw_command=raw, topic="xagent/command", topic_type="command")
 
-        assert result["asset"] == "device_01"
-        assert result["data"] == {"temperature": 30}
+        result = adapter.parse_command(raw, context)
+
+        assert isinstance(result, CommandData)
+        assert result.asset == "device_01"
+        assert result.data == {"temperature": 30}
+        assert result.requires_reply is True
 
     def test_format_result_success(self):
         """测试成功结果格式化"""
         adapter = get_adapter("standard")
 
-        result = DownlinkResult(
+        result = CommandResult(
             success=True,
             asset="device_01",
             data={"temperature": 30},
-            raw_command={"asset": "device_01", "data": {"temperature": 30}},
         )
-        response = adapter.format_result(result)
+        context = CommandContext(
+            raw_command={"asset": "device_01", "data": {"temperature": 30}},
+            topic="xagent/command",
+            topic_type="command",
+        )
+        response = adapter.format_result(result, context)
 
-        assert response["status"] == "success"
-        assert response["asset"] == "device_01"
-        assert response["data"] == {"temperature": 30}
-        assert "timestamp" in response
+        assert isinstance(response, ResponsePacket)
+        assert response.payload["status"] == "success"
+        assert response.payload["asset"] == "device_01"
+        assert response.payload["data"] == {"temperature": 30}
 
     def test_format_result_error(self):
         """测试错误结果格式化"""
         adapter = get_adapter("standard")
 
-        result = DownlinkResult(
+        result = CommandResult(
             success=False,
             error="Command failed",
-            raw_command={},
         )
-        response = adapter.format_result(result)
+        context = CommandContext(
+            raw_command={},
+            topic="xagent/command",
+            topic_type="command",
+        )
+        response = adapter.format_result(result, context)
 
-        assert response["status"] == "error"
-        assert response["error"] == "Command failed"
+        assert response.payload["status"] == "error"
+        assert response.payload["error"] == "Command failed"
 
     def test_to_json(self):
         """测试JSON序列化"""
@@ -261,420 +289,407 @@ class TestStandardAdapter:
 class TestCustomerAAdapter:
     """测试客户A适配器"""
 
-    def test_adapt_upload_single(self, sample_reading):
-        """测试单条数据上报 - 普通数据"""
-        adapter = get_adapter("customer_a")
-        context = {}
+    def _make_customer_a_adapter(self, **extra_config):
+        config = {
+            "productKey": "al12345****",
+            "deviceSN": "gateway01",
+            "topic_templates": {
+                "property_up": "$v1/{productKey}/{deviceSN}/sys/property/up",
+                "connect": "$v1/{productKey}/{deviceSN}/sys/subdevice/connect",
+                "disconnect": "$v1/{productKey}/{deviceSN}/sys/subdevice/disconnect",
+            },
+            "upload_type_map": {
+                "property": "property_up",
+                "connect": "connect",
+                "disconnect": "disconnect",
+            },
+            **extra_config,
+        }
+        return get_adapter("customer_a", config)
 
-        # 修改device_status为normal，表示普通数据上报
+    def test_adapt_upload_normal_data(self, sample_reading):
+        """测试普通数据上报"""
+        adapter = self._make_customer_a_adapter()
+
+        # device_status不是online/offline → property
         reading = Reading(
             asset=sample_reading.asset,
             timestamp=sample_reading.timestamp,
             service_name=sample_reading.service_name,
             data=sample_reading.data,
-            device_status="normal",  # 不是online/offline
-            tags=sample_reading.tags,
-            standard_points=sample_reading.standard_points,
+            device_status="normal",
         )
 
-        result = adapter.adapt_upload([reading], context)
+        packets = adapter.adapt_upload([reading])
 
-        # 验证普通数据格式
-        assert result is not None
-        assert "msgid" in result
-        assert "params" in result
-
-        # 验证msgid是字符串类型的数字
-        assert isinstance(result["msgid"], str)
-        msgid_int = int(result["msgid"])
-        assert 0 <= msgid_int <= 4294967295
-
-        # 验证params格式
-        params = result["params"]
-        assert "temperature" in params
-        assert "humidity" in params
+        assert len(packets) == 1
+        packet = packets[0]
+        assert isinstance(packet, PublishPacket)
+        assert "$v1/al12345****/gateway01/sys/property/up" == packet.topic
+        assert "msgid" in packet.payload
+        assert "params" in packet.payload
 
         # 验证点位数据格式
+        params = packet.payload["params"]
+        assert "temperature" in params
         temp_data = params["temperature"]
         assert "value" in temp_data
         assert "ts" in temp_data
         assert temp_data["value"] == 25.5
-        assert temp_data["ts"] == 1704067200000  # 毫秒时间戳
+        assert temp_data["ts"] == 1704067200000
 
     def test_adapt_upload_device_online(self):
         """测试设备上线上报"""
-        adapter = get_adapter("customer_a")
-        context = {"productKey": "al12345****"}
+        adapter = self._make_customer_a_adapter()
 
-        # 创建设备上线的Reading
         reading = Reading(
             asset="device1234",
             timestamp=1524448722.0,
             service_name="device_service",
             data={},
-            device_status="online",  # 设备上线
+            device_status="online",
         )
 
-        result = adapter.adapt_upload([reading], context)
+        packets = adapter.adapt_upload([reading])
 
-        # 验证设备上线格式
-        assert result is not None
-        assert "msgid" in result
-        assert "params" in result
-
-        # 验证params包含productKey和deviceSN
-        params = result["params"]
-        assert "productKey" in params
-        assert "deviceSN" in params
-        assert params["productKey"] == "al12345****"
-        assert params["deviceSN"] == "device1234"
+        assert len(packets) == 1
+        packet = packets[0]
+        assert "connect" in packet.topic
+        assert packet.payload["params"]["productKey"] == "al12345****"
+        assert packet.payload["params"]["deviceSN"] == "device1234"
 
     def test_adapt_upload_device_offline(self):
         """测试设备下线上报"""
-        adapter = get_adapter("customer_a")
-        context = {"productKey": "al12345****"}
+        adapter = self._make_customer_a_adapter()
 
-        # 创建设备下线的Reading
         reading = Reading(
             asset="device1234",
             timestamp=1524448722.0,
             service_name="device_service",
             data={},
-            device_status="offline",  # 设备下线
+            device_status="offline",
         )
 
-        result = adapter.adapt_upload([reading], context)
+        packets = adapter.adapt_upload([reading])
 
-        # 验证设备下线格式
-        assert result is not None
-        assert "msgid" in result
-        assert "params" in result
+        assert len(packets) == 1
+        packet = packets[0]
+        assert "disconnect" in packet.topic
+        assert packet.payload["params"]["productKey"] == "al12345****"
+        assert packet.payload["params"]["deviceSN"] == "device1234"
 
-        # 验证params包含productKey和deviceSN
-        params = result["params"]
-        assert "productKey" in params
-        assert "deviceSN" in params
-        assert params["productKey"] == "al12345****"
-        assert params["deviceSN"] == "device1234"
+    def test_adapt_upload_mixed_types(self):
+        """测试批量混合类型上报"""
+        adapter = self._make_customer_a_adapter()
 
-    def test_adapt_upload_batch(self, sample_readings):
-        """测试批量数据上传 - 合并到同一个params"""
-        adapter = get_adapter("customer_a")
-        context = {}
-
-        # 修改device_status为normal，表示普通数据上报
         readings = [
-            Reading(
-                asset=r.asset,
-                timestamp=r.timestamp,
-                service_name=r.service_name,
-                data=r.data,
-                device_status="normal",  # 不是online/offline
-                tags=r.tags,
-                standard_points=r.standard_points,
-            )
-            for r in sample_readings
+            Reading(asset="sensor_01", timestamp=1704067200.0, service_name="s1", data={"Temp": 37.0}),
+            Reading(asset="sub_dev_01", timestamp=1704067200.0, service_name="s1", data={}, device_status="online"),
+            Reading(asset="sensor_02", timestamp=1704067200.0, service_name="s1", data={"Humidity": 65.0}),
         ]
 
-        result = adapter.adapt_upload(readings, context)
+        packets = adapter.adapt_upload(readings)
 
-        # 验证返回单个对象（不是数组）
-        assert isinstance(result, dict)
-        assert "msgid" in result
-        assert "params" in result
+        # 应该有2个packet：property组 + connect组
+        assert len(packets) == 2
 
-        # 验证所有点位都被合并
-        params = result["params"]
-        assert "temperature" in params
-        assert "humidity" in params
+        # 找到property和connect的packet
+        topics = [p.topic for p in packets]
+        assert any("property/up" in t for t in topics)
+        assert any("connect" in t for t in topics)
 
     def test_msgid_increment(self, sample_reading):
         """测试msgid递增"""
-        adapter = get_adapter("customer_a")
-        context = {}
+        adapter = self._make_customer_a_adapter()
 
-        result1 = adapter.adapt_upload([sample_reading], context)
-        result2 = adapter.adapt_upload([sample_reading], context)
+        reading = Reading(
+            asset=sample_reading.asset,
+            timestamp=sample_reading.timestamp,
+            service_name=sample_reading.service_name,
+            data=sample_reading.data,
+        )
 
-        msgid1 = int(result1["msgid"])
-        msgid2 = int(result2["msgid"])
+        packets1 = adapter.adapt_upload([reading])
+        packets2 = adapter.adapt_upload([reading])
 
-        # 验证msgid递增
+        msgid1 = int(packets1[0].payload["msgid"])
+        msgid2 = int(packets2[0].payload["msgid"])
+
         assert msgid2 == msgid1 + 1
 
     def test_msgid_range(self, sample_reading):
         """测试msgid范围限制"""
-        adapter = get_adapter("customer_a")
-        adapter._msgid_counter = 4294967295  # 设置为最大值
-        context = {}
+        adapter = self._make_customer_a_adapter()
+        adapter._msgid_counter = 4294967295
 
-        result = adapter.adapt_upload([sample_reading], context)
+        reading = Reading(
+            asset=sample_reading.asset,
+            timestamp=sample_reading.timestamp,
+            service_name=sample_reading.service_name,
+            data=sample_reading.data,
+        )
 
-        # 验证msgid回到0（循环）
-        assert result["msgid"] == "0"
+        packets = adapter.adapt_upload([reading])
 
-    def test_parse_command(self):
+        assert packets[0].payload["msgid"] == "0"
+
+    def test_parse_command_property_down(self):
         """测试命令解析 - 写属性"""
-        adapter = get_adapter("customer_a")
+        adapter = self._make_customer_a_adapter()
 
         raw = {"msgid": "123456", "params": {"Temperature": "37.0"}}
-        result = adapter.parse_command(raw)
+        context = CommandContext(raw_command=raw, topic=".../property/down", topic_type="property_down")
 
-        # 验证解析结果
-        assert result["asset"] == ""
-        assert result["data"] == {"Temperature": "37.0"}
+        result = adapter.parse_command(raw, context)
 
-    def test_format_result_success(self):
-        """测试成功结果格式化 - 写属性"""
-        adapter = get_adapter("customer_a")
+        assert isinstance(result, CommandData)
+        assert result.asset == ""
+        assert result.data == {"Temperature": "37.0"}
+        assert result.requires_reply is True
 
-        result = DownlinkResult(
-            success=True,
-            asset="",
-            data={"Temperature": "37.0"},
-            raw_command={"msgid": "123456", "params": {"Temperature": "37.0"}},
-        )
-        response = adapter.format_result(result)
+    def test_parse_command_connect_reply(self):
+        """测试命令解析 - 设备上线回复（不需要回复）"""
+        adapter = self._make_customer_a_adapter()
 
-        # 验证回复格式
-        assert response["msgid"] == "123456"
-        assert response["code"] == 0
-        assert response["data"] == {}
-
-    def test_format_result_error(self):
-        """测试错误结果格式化 - 写属性"""
-        adapter = get_adapter("customer_a")
-
-        result = DownlinkResult(
-            success=False,
-            asset="",
-            error="Write failed",
-            raw_command={"msgid": "123456", "params": {"Temperature": "37.0"}},
-        )
-        response = adapter.format_result(result)
-
-        # 验证回复格式
-        assert response["msgid"] == "123456"
-        assert response["code"] == -1
-        assert response["data"] == {}
-
-    def test_parse_response_device_status(self):
-        """测试解析云平台回复 - 设备上线/下线"""
-        adapter = get_adapter("customer_a")
-
-        response = {
+        raw = {
             "msgid": "123456",
             "code": 0,
             "message": "success",
-            "data": {
-                "productKey": "al12345****",
-                "deviceSN": "device1234"
-            }
+            "data": {"productKey": "al12345****", "deviceSN": "device1234"},
         }
-        parsed = adapter.parse_response(response, {})
+        context = CommandContext(raw_command=raw, topic=".../connect_reply", topic_type="connect_reply")
 
-        # 验证解析结果
-        assert parsed["msgid"] == "123456"
-        assert parsed["code"] == 0
-        assert parsed["message"] == "success"
-        assert parsed["data"]["productKey"] == "al12345****"
-        assert parsed["data"]["deviceSN"] == "device1234"
+        result = adapter.parse_command(raw, context)
 
-    def test_parse_response_write_property(self):
-        """测试解析云平台回复 - 写属性"""
-        adapter = get_adapter("customer_a")
+        assert isinstance(result, CommandData)
+        assert result.asset == "device1234"
+        assert result.command_type == "device_status"
+        assert result.requires_reply is False
 
-        response = {
-            "msgid": "123456",
-            "code": 0,
-            "data": {}
-        }
-        parsed = adapter.parse_response(response, {})
+    def test_format_result_success(self):
+        """测试成功结果格式化 - 写属性"""
+        adapter = self._make_customer_a_adapter()
 
-        # 验证解析结果
-        assert parsed["msgid"] == "123456"
-        assert parsed["code"] == 0
-        assert parsed["data"] == {}
+        result = CommandResult(
+            success=True,
+            asset="",
+            data={"Temperature": "37.0"},
+        )
+        context = CommandContext(
+            raw_command={"msgid": "123456", "params": {"Temperature": "37.0"}},
+            topic=".../property/down",
+            topic_type="property_down",
+        )
+        response = adapter.format_result(result, context)
+
+        assert isinstance(response, ResponsePacket)
+        assert response.payload["msgid"] == "123456"
+        assert response.payload["code"] == 0
+        assert response.payload["data"] == {}
+
+    def test_format_result_error(self):
+        """测试错误结果格式化 - 写属性"""
+        adapter = self._make_customer_a_adapter()
+
+        result = CommandResult(
+            success=False,
+            error="Write failed",
+        )
+        context = CommandContext(
+            raw_command={"msgid": "123456", "params": {"Temperature": "37.0"}},
+            topic=".../property/down",
+            topic_type="property_down",
+        )
+        response = adapter.format_result(result, context)
+
+        assert response.payload["msgid"] == "123456"
+        assert response.payload["code"] == -1
 
 
 # ===== 测试基类 =====
 
-class TestMQTTAdapterBase:
+class TestBaseAdapter:
     """测试适配器基类"""
 
-    def test_adapt_upload_single(self, sample_reading):
-        """测试单条数据上传"""
-        adapter = MQTTAdapterBase()
-        context = {}
+    def test_adapt_upload_returns_list(self, sample_reading):
+        """测试adapt_upload返回List[PublishPacket]"""
+        config = {"topic_templates": {"property_up": "xagent/data"}}
+        adapter = BaseAdapter(config)
 
-        result = adapter.adapt_upload([sample_reading], context)
+        packets = adapter.adapt_upload([sample_reading])
 
-        assert result is not None
-        assert result["asset"] == "device_01"
-        assert result["timestamp"] == 1704067200.0
-        assert result["service_name"] == "temperature_service"
-        assert result["data"] == {"temperature": 25.5, "humidity": 60.0}
+        assert isinstance(packets, list)
+        assert len(packets) == 1
+        assert isinstance(packets[0], PublishPacket)
 
-    def test_adapt_upload_batch(self, sample_readings):
-        """测试批量数据上传"""
-        adapter = MQTTAdapterBase()
-        context = {}
+    def test_adapt_upload_empty_raises(self):
+        """测试空数据上传抛出异常"""
+        adapter = BaseAdapter({})
 
-        result = adapter.adapt_upload(sample_readings, context)
+        with pytest.raises(DataConversionError):
+            adapter.adapt_upload([])
 
-        assert result is not None
-        assert result["count"] == 2
-        assert len(result["readings"]) == 2
-
-    def test_adapt_upload_empty(self):
-        """测试空数据上传"""
-        adapter = MQTTAdapterBase()
-        result = adapter.adapt_upload([], {})
-        assert result is None
-
-    def test_parse_command(self):
-        """测试命令解析"""
-        adapter = MQTTAdapterBase()
+    def test_parse_command_default(self):
+        """测试默认命令解析"""
+        adapter = BaseAdapter({})
 
         raw = {"asset": "device_01", "data": {"temperature": 30}}
-        result = adapter.parse_command(raw)
+        context = CommandContext(raw_command=raw, topic="test/topic", topic_type="command")
 
-        assert result["asset"] == "device_01"
-        assert result["data"] == {"temperature": 30}
+        result = adapter.parse_command(raw, context)
 
-    def test_format_result(self):
-        """测试结果格式化"""
-        adapter = MQTTAdapterBase()
+        assert isinstance(result, CommandData)
+        assert result.asset == "device_01"
+        assert result.data == {"temperature": 30}
+        assert result.requires_reply is True
 
-        result = DownlinkResult(
-            success=True,
-            asset="device_01",
-            data={"temperature": 30},
+    def test_format_result_default(self):
+        """测试默认结果格式化"""
+        adapter = BaseAdapter({})
+
+        result = CommandResult(success=True, asset="device_01", data={"temperature": 30})
+        context = CommandContext(
+            raw_command={"asset": "device_01"},
+            topic="test/command",
+            topic_type="command",
         )
-        response = adapter.format_result(result)
+        response = adapter.format_result(result, context)
 
-        assert response["status"] == "success"
-        assert response["asset"] == "device_01"
-        assert "timestamp" in response
+        assert isinstance(response, ResponsePacket)
+        assert response.payload["status"] == "success"
+        assert response.payload["asset"] == "device_01"
 
     def test_to_json(self):
         """测试JSON序列化"""
-        adapter = MQTTAdapterBase()
+        adapter = BaseAdapter({})
 
         data = {"asset": "device_01", "temperature": 25.5}
         json_str = adapter.to_json(data)
 
         assert '"asset": "device_01"' in json_str
 
-    def test_parse_response_dict(self):
-        """测试解析字典响应"""
-        adapter = MQTTAdapterBase()
+    def test_get_subscribe_topics_config_driven(self):
+        """测试配置驱动的订阅topic"""
+        config = {
+            "topic_templates": {
+                "property_down": "$v1/{productKey}/{deviceSN}/sys/property/down",
+            },
+            "subscribe_types": ["property_down"],
+            "productKey": "al12345",
+            "deviceSN": "gw01",
+        }
+        adapter = BaseAdapter(config)
 
-        response = {"status": "success", "data": {"temperature": 30}}
-        result = adapter.parse_response(response, {})
+        topics = adapter.get_subscribe_topics()
 
-        assert result == response
+        assert len(topics) == 1
+        assert topics[0] == "$v1/al12345/gw01/sys/property/down"
 
-    def test_parse_response_bytes(self):
-        """测试解析字节响应"""
-        adapter = MQTTAdapterBase()
+    def test_parse_topic_type_config_driven(self):
+        """测试配置驱动的topic类型解析"""
+        config = {
+            "topic_type_rules": {
+                "/sys/property/down": "property_down",
+                "/sys/subdevice/connect_reply": "connect_reply",
+            }
+        }
+        adapter = BaseAdapter(config)
 
-        response = b'{"status": "success"}'
-        result = adapter.parse_response(response, {})
+        assert adapter.parse_topic_type("$v1/pk/sn/sys/property/down") == "property_down"
+        assert adapter.parse_topic_type("$v1/pk/sn/sys/subdevice/connect_reply") == "connect_reply"
+        assert adapter.parse_topic_type("unknown/topic") == "unknown"
 
-        assert result["status"] == "success"
+    def test_upload_type_map_config_driven(self):
+        """测试配置驱动的upload_type映射"""
+        config = {
+            "upload_type_map": {"property": "data"},
+            "topic_templates": {"data": "device/{deviceSN}/data"},
+            "deviceSN": "sn123",
+        }
+        adapter = BaseAdapter(config)
 
-    def test_parse_response_string(self):
-        """测试解析字符串响应"""
-        adapter = MQTTAdapterBase()
+        topic = adapter._get_publish_topic("property")
+        assert topic == "device/sn123/data"
 
-        response = '{"status": "success"}'
-        result = adapter.parse_response(response, {})
+    def test_topic_context_filters_basic_types(self):
+        """测试_topic_context只返回基本类型值"""
+        config = {
+            "productKey": "al12345",
+            "deviceSN": "gw01",
+            "topic_templates": {"some": "template"},
+            "subscribe_types": ["property_down"],
+        }
+        adapter = BaseAdapter(config)
 
-        assert result["status"] == "success"
+        ctx = adapter._topic_context("property")
 
-
-# ===== 测试异常处理装饰器 =====
-
-class TestHandleAdapterErrors:
-    """测试异常处理装饰器"""
-
-    def test_success(self):
-        """测试正常执行"""
-        class TestAdapter(MQTTAdapterBase):
-            @_handle_adapter_errors
-            def test_method(self, value):
-                return value * 2
-
-        adapter = TestAdapter()
-        result = adapter.test_method(5)
-
-        assert result == 10
-
-    def test_exception(self):
-        """测试异常处理"""
-        class TestAdapter(MQTTAdapterBase):
-            @_handle_adapter_errors
-            def test_method(self, value):
-                raise ValueError("Test error")
-
-        adapter = TestAdapter()
-        result = adapter.test_method(5)
-
-        assert result is None
-
-
-# ===== 测试类型协议 =====
-
-class TestMQTTAdapterProtocol:
-    """测试类型协议"""
-
-    def test_protocol_check(self):
-        """测试协议检查"""
-        adapter = get_adapter("standard")
-
-        # 运行时检查
-        assert isinstance(adapter, MQTTAdapterProtocol)
-
-    def test_customer_a_protocol_check(self):
-        """测试客户A适配器协议检查"""
-        adapter = get_adapter("customer_a")
-
-        # 运行时检查
-        assert isinstance(adapter, MQTTAdapterProtocol)
+        assert "productKey" in ctx
+        assert "deviceSN" in ctx
+        assert "topic_templates" not in ctx
+        assert "subscribe_types" not in ctx
 
 
-# ===== 测试向后兼容性 =====
+# ===== 测试异常层次 =====
 
-class TestBackwardCompatibility:
-    """测试向后兼容性"""
+class TestExceptions:
+    """测试异常层次"""
 
-    def test_standard_adapter_default_behavior(self, sample_reading):
-        """测试标准适配器默认行为与重构前一致"""
-        adapter = get_adapter("standard")
-        context = {}
+    def test_exception_hierarchy(self):
+        """测试异常继承关系"""
+        assert issubclass(DataConversionError, MQTTAdapterError)
+        assert issubclass(TopicError, MQTTAdapterError)
+        assert issubclass(CommandParseError, MQTTAdapterError)
 
-        result = adapter.adapt_upload([sample_reading], context)
+    def test_topic_error_on_missing_template(self):
+        """测试缺少topic模板时抛出TopicError"""
+        adapter = BaseAdapter({})
 
-        # 验证默认行为
-        assert result["asset"] == sample_reading.asset
-        assert result["timestamp"] == sample_reading.timestamp
-        assert result["service_name"] == sample_reading.service_name
-        assert result["data"] == sample_reading.data
-        assert result["device_status"] == sample_reading.device_status
+        with pytest.raises(TopicError):
+            adapter._get_publish_topic("property")
 
-    def test_downlink_result_structure(self):
-        """测试DownlinkResult结构"""
-        result = DownlinkResult(
-            success=True,
-            asset="device_01",
-            data={"temperature": 30},
-            error=None,
-            raw_command={"asset": "device_01"},
+
+# ===== 测试类型定义 =====
+
+class TestTypes:
+    """测试核心类型定义"""
+
+    def test_publish_packet(self):
+        """测试PublishPacket"""
+        packet = PublishPacket(topic="test/topic", payload={"key": "value"})
+        assert packet.topic == "test/topic"
+        assert packet.payload == {"key": "value"}
+
+    def test_command_data_defaults(self):
+        """测试CommandData默认值"""
+        cmd = CommandData(asset="device_01", data={"temp": 30})
+        assert cmd.command_type == "write_property"
+        assert cmd.requires_reply is True
+
+    def test_command_data_no_reply(self):
+        """测试CommandData不需要回复"""
+        cmd = CommandData(asset="device_01", data={}, requires_reply=False)
+        assert cmd.requires_reply is False
+
+    def test_command_context(self):
+        """测试CommandContext"""
+        ctx = CommandContext(
+            raw_command={"msgid": "123"},
+            topic="test/topic",
+            topic_type="property_down",
         )
+        assert ctx.raw_command == {"msgid": "123"}
+        assert ctx.topic == "test/topic"
+        assert ctx.topic_type == "property_down"
 
+    def test_command_result(self):
+        """测试CommandResult"""
+        result = CommandResult(success=True, asset="device_01", data={"temp": 30})
         assert result.success is True
         assert result.asset == "device_01"
-        assert result.data == {"temperature": 30}
         assert result.error is None
-        assert result.raw_command == {"asset": "device_01"}
+
+    def test_response_packet(self):
+        """测试ResponsePacket"""
+        packet = ResponsePacket(topic="test/reply", payload={"code": 0})
+        assert packet.topic == "test/reply"
+        assert packet.payload == {"code": 0}

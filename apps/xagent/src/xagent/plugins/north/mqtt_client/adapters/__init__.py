@@ -67,7 +67,7 @@ def list_adapters() -> list:
 # 导入适配器模块以触发装饰器注册
 # 新增客户只需在这里添加一行导入
 
-from .standard import MQTTClientAdapter  # noqa: F401 - 标准适配器
+from .standard import StandardAdapter  # noqa: F401 - 标准适配器
 from .customer_a import CustomerAAdapter  # noqa: F401 - 客户A
 # from .customer_b import CustomerBAdapter  # noqa: F401 - 客户B
 # from .customer_c import CustomerCAdapter  # noqa: F401 - 客户C
