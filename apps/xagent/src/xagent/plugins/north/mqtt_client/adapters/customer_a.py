@@ -16,7 +16,7 @@ from . import register
 logger = logging.getLogger(__name__)
 
 
-@register("customer_a")
+@register("customer_a", customer_code="C001")
 class CustomerAAdapter(BaseAdapter):
     """客户A协议 - 数据格式与Topic结构作为整体"""
 

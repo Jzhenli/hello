@@ -25,6 +25,7 @@ from xagent.plugins.north.mqtt_client.adapters import (
     register,
     get_adapter,
     list_adapters,
+    list_customer_codes,
 )
 from xagent.plugins.north.mqtt_client.adapters.standard import StandardAdapter
 from xagent.plugins.north.mqtt_client.adapters.customer_a import CustomerAAdapter
@@ -108,6 +109,42 @@ class TestAdapterRegistry:
         with pytest.raises(ValueError) as exc_info:
             get_adapter("nonexistent")
         assert "Adapter 'nonexistent' not found" in str(exc_info.value)
+
+    def test_get_adapter_by_customer_code(self):
+        """测试通过客户编号获取适配器"""
+        adapter = get_adapter("C001")
+        assert isinstance(adapter, CustomerAAdapter)
+
+    def test_get_adapter_by_customer_code_with_config(self):
+        """测试通过客户编号获取适配器（带配置）"""
+        config = {"productKey": "al12345****"}
+        adapter = get_adapter("C001", config)
+        assert isinstance(adapter, CustomerAAdapter)
+        assert adapter._config.get("productKey") == "al12345****"
+
+    def test_list_customer_codes(self):
+        """测试列出客户编号映射"""
+        codes = list_customer_codes()
+        assert "C001" in codes
+        assert codes["C001"] == "customer_a"
+
+    def test_register_with_customer_code(self):
+        """测试注册带客户编号的适配器"""
+        @register("test_with_code", customer_code="T999")
+        class TestCodeAdapter(BaseAdapter):
+            pass
+
+        # 通过编号查找
+        adapter = get_adapter("T999")
+        assert isinstance(adapter, TestCodeAdapter)
+
+        # 通过名称也能查找
+        adapter = get_adapter("test_with_code")
+        assert isinstance(adapter, TestCodeAdapter)
+
+        # 编号映射正确
+        codes = list_customer_codes()
+        assert codes["T999"] == "test_with_code"
 
     def test_register_decorator(self):
         """测试注册装饰器"""

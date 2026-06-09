@@ -127,8 +127,8 @@ class MQTTClientPlugin(NorthPluginBase):
                 "adapter": {
                     "type": "string",
                     "default": "standard",
-                    "title": "Adapter Name",
-                    "description": "数据适配器名称，对应 adapters/ 目录下的客户适配器"
+                    "title": "Adapter",
+                    "description": "适配器名称或客户编号（如 C001），对应 adapters/ 目录下的客户适配器"
                 },
                 "adapter_config": {
                     "type": "object",
