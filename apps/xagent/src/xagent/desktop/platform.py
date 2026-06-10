@@ -7,9 +7,8 @@ from typing import Optional
 
 def setup_platform() -> None:
     """Setup platform-specific configurations."""
-    if platform.system() == "Windows":
-        from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
-        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    # Event loop policy 已在 main.py 入口点设置
+    pass
 
 
 def get_platform_name() -> str:

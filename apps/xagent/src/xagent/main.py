@@ -80,18 +80,34 @@ def main():
         for key, value in paths.get_all_paths_info().items():
             logger.info(f"  {key}: {value}")
     
+    # 确定运行模式
     force_cli = args.cli
     force_desktop = args.desktop
     
     if force_cli:
+        use_cli_mode = True
+    elif force_desktop:
+        use_cli_mode = False
+    else:
+        # 根据平台自动选择模式
+        from .xcore.utils.platform_utils import get_os_platform
+        os_platform = get_os_platform()
+        
+        # Android 使用 desktop 模式（toga 移动端）
+        # 其他平台使用 CLI 模式（支持 aiomqtt）
+        use_cli_mode = (os_platform != "Android")
+        
+        if args.debug:
+            logger.info(f"Auto-detected platform: {os_platform}, using {'CLI' if use_cli_mode else 'Desktop'} mode")
+    
+    # CLI 模式需要设置 SelectorEventLoop 以支持 aiomqtt
+    if use_cli_mode and platform.system() == "Windows":
+        from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
+        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    
+    if use_cli_mode:
         from .xcore.run import main as cli_main
         cli_main()
-    elif force_desktop:
-        from .desktop import main as desktop_main
-        desktop_main()
-    # elif platform.system() == "Windows":
-    #     from .xcore.run import main as cli_main
-    #     cli_main()
     else:
         from .desktop import main as desktop_main
         desktop_main()

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 # ============================================================================
 # Local Imports
@@ -180,6 +181,7 @@ async def lifespan(app: FastAPI):
         await gateway.initialize()
         await gateway.start_core()
         state._gateway_owned = True
+        # Gateway.initialize() 已经设置了依赖注入，无需重复调用
     else:
         state._gateway_owned = False
 
@@ -218,6 +220,15 @@ app = FastAPI(
     description="Lightweight Python IoT Gateway",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有来源
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有方法
+    allow_headers=["*"],  # 允许所有头部
 )
 
 

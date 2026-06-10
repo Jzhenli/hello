@@ -2,12 +2,9 @@
 
 import asyncio
 import logging
-import platform
-import signal
-
-if platform.system() == "Windows":
-    from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
-    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+import os
+import sys
+import threading
 
 from .core import ConfigManager, setup_logging
 from .gateway import Gateway
@@ -46,31 +43,11 @@ async def async_main():
     await gateway.initialize()
     await gateway.start_core()
 
-    from .storage import SQLiteStorage, WriteBehindBuffer
-    from .core.metadata import MetadataManager
-    from .api.services.command_executor import CommandExecutor
-
-    set_gateway_storage(
-        storage=gateway.container.resolve(SQLiteStorage),
-        buffer=gateway.container.resolve(WriteBehindBuffer),
-        metadata_manager=gateway.container.resolve(MetadataManager),
-        command_executor=gateway.container.resolve(CommandExecutor),
-        gateway=gateway,
-        cleanup_task=gateway.cleanup_task
-    )
+    # Gateway.initialize() 已经设置了依赖注入，无需重复调用
 
     shutdown_event = asyncio.Event()
 
-    def signal_handler():
-        logger.info("Received shutdown signal")
-        shutdown_event.set()
-
-    if platform.system() != "Windows":
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            asyncio.get_event_loop().add_signal_handler(sig, signal_handler)
-
-    plugins_task = asyncio.create_task(run_plugins(gateway, shutdown_event))
-
+    # 创建 uvicorn server
     uvicorn_config = uvicorn.Config(
         app=app,
         host=config.server.host,
@@ -81,6 +58,8 @@ async def async_main():
         log_config=None
     )
     server = uvicorn.Server(uvicorn_config)
+
+    plugins_task = asyncio.create_task(run_plugins(gateway, shutdown_event))
 
     try:
         await server.serve()
@@ -103,15 +82,35 @@ async def async_main():
 
 
 def main():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
+    """主入口函数
+    
+    退出策略：
+    1. 正常情况：使用 sys.exit(0) 优雅退出
+    2. 有非 daemon 线程阻塞：使用 os._exit(0) 强制退出
+    """
     try:
-        loop.run_until_complete(async_main())
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     finally:
-        loop.close()
+        logger.info("Event loop closed")
+
+    # 检查是否有非 daemon 线程阻止退出
+    non_daemon_threads = [
+        t for t in threading.enumerate() 
+        if t.is_alive() and t != threading.current_thread() and not t.daemon
+    ]
+    
+    if non_daemon_threads:
+        # 有非 daemon 线程，需要强制退出
+        logger.warning(
+            f"Non-daemon threads preventing clean exit: {[t.name for t in non_daemon_threads]}. "
+            f"Using os._exit() for immediate termination."
+        )
+        os._exit(0)
+    else:
+        # 正常退出
+        sys.exit(0)
 
 
 if __name__ == "__main__":

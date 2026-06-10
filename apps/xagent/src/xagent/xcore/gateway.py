@@ -52,6 +52,8 @@ class Gateway(ILifecycle):
         self._orchestrator: Optional[PluginOrchestrator] = None
         self._health_monitor: Optional[HealthMonitor] = None
         self._device_loader: Optional[DeviceLoader] = None
+        self._user_permission_service = None
+        self._north_channel_service = None
         
         # 组件引用（从容器获取）
         self.config_manager: Optional[ConfigManager] = None
@@ -231,14 +233,18 @@ class Gateway(ILifecycle):
     async def _initialize_user_permission_service(self) -> None:
         """初始化用户权限服务"""
         from .services.user_permission_service import UserPermissionService
-        
+
         config = self.config_manager.config
         db_path = config.storage.database if hasattr(config.storage, 'database') else "./data/xagent.db"
-        
-        self._user_permission_service = UserPermissionService(db_path=db_path)
-        await self._user_permission_service.initialize()
-        
-        logger.info("User Permission Service initialized")
+
+        logger.info(f"Initializing UserPermissionService with db_path: {db_path}")
+
+        try:
+            self._user_permission_service = UserPermissionService(db_path=db_path)
+            await self._user_permission_service.initialize()
+            logger.info("User Permission Service initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize UserPermissionService: {e}")
     
     async def _initialize_north_channel_service(self) -> None:
         """初始化北向通道服务"""

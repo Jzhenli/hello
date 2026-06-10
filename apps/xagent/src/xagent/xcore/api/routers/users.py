@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 def _get_service(request: Request) -> UserPermissionService:
     state = get_app_state()
     if not hasattr(state, "user_permission_service") or state.user_permission_service is None:
+        logger.error("User permission service not initialized")
         raise HTTPException(status_code=500, detail="用户权限服务未初始化")
     return state.user_permission_service
 
