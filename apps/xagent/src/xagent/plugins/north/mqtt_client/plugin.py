@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -12,7 +11,7 @@ from xagent.xcore.plugins.north import NorthPluginBase
 from xagent.xcore.storage.interface import Reading
 from xagent.xcore.core.plugin_loader import PluginType
 
-from .types import CommandContext, CommandResult, ResponsePacket
+from .types import ResponsePacket
 from .exceptions import MQTTAdapterError, DataConversionError
 from .constants import (
     DEFAULT_BROKER,
@@ -136,6 +135,12 @@ class MQTTClientPlugin(NorthPluginBase):
                     "title": "Adapter Config",
                     "description": "适配器专属配置，不同适配器支持不同参数"
                 },
+                "command_timeout": {
+                    "type": "number",
+                    "default": 30.0,
+                    "title": "Command Timeout",
+                    "description": "命令执行超时时间（秒）"
+                },
             },
         }
 
@@ -157,6 +162,7 @@ class MQTTClientPlugin(NorthPluginBase):
         self._client_id = config.get("client_id", DEFAULT_CLIENT_ID)
         self._keepalive = config.get("keepalive", DEFAULT_KEEPALIVE)
         self._publish_mode = config.get("publish_mode", DEFAULT_PUBLISH_MODE)
+        self._command_timeout = config.get("command_timeout", 30.0)
 
         self._client: Optional["aiomqtt.Client"] = None
 
@@ -165,6 +171,7 @@ class MQTTClientPlugin(NorthPluginBase):
         self._downlink_handler = _DownlinkHandler(
             event_bus=event_bus,
             adapter=self._data_adapter,
+            command_timeout=self._command_timeout,
         )
 
         logger.info(f"MQTT plugin initialized: broker={self._broker}:{self._port}, topic={self._topic}")
@@ -224,14 +231,17 @@ class MQTTClientPlugin(NorthPluginBase):
                 self._client = None
 
     async def _do_send(self, payload: Any) -> bool:
-        """基类 _send_with_retry 的底层发送实现
+        """基类抽象方法实现
 
-        注意：当前 send 方法已完全覆盖，不经过 _send_with_retry。
-        保留此方法仅为满足基类抽象接口，不应被直接调用。
+        注意：MQTTClientPlugin 完全覆盖了 send() 方法，使用 PublishPacket 模式
+        直接调用 _send_single() / _send_batch()，不经过 _send_with_retry。
+
+        此方法仅为满足抽象基类要求，不应被调用。
+        如果被调用，说明调用路径错误。
         """
         raise NotImplementedError(
-            "MQTTClientPlugin uses PublishPacket-based sending. "
-            "Use send() / _send_single() / _send_batch() instead."
+            "MQTTClientPlugin uses custom send() with PublishPacket mode. "
+            "This method should not be called."
         )
 
     async def _do_subscribe(self) -> None:
@@ -252,10 +262,10 @@ class MQTTClientPlugin(NorthPluginBase):
             try:
                 await asyncio.wait_for(
                     self._handle_mqtt_message(message),
-                    timeout=30.0
+                    timeout=self._command_timeout
                 )
             except asyncio.TimeoutError:
-                logger.warning("Command handling timed out")
+                logger.warning(f"Command handling timed out after {self._command_timeout}s")
             except Exception as e:
                 logger.error(f"Error handling MQTT message: {e}")
 
@@ -327,12 +337,11 @@ class MQTTClientPlugin(NorthPluginBase):
             sent = await self._send_single(readings)
 
         success = sent > 0
-        sent_count = sent if success else 0
 
         if self._stats_manager:
             await self._stats_manager.record_channel_stats(
                 self._service_name,
-                sent_count,
+                sent,
                 success=success
             )
 

@@ -4,9 +4,10 @@ Downlink: External system → XAgent (commands, write requests)
 Uplink: XAgent → External system (data upload, status updates)
 """
 
+import asyncio
 import json
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from xagent.xcore.core.event_bus import EventBus, Event, EventType
 
@@ -114,11 +115,42 @@ class DownlinkHandler:
     async def _wait_for_result(self, command: CommandData) -> CommandResult:
         """等待命令执行结果
 
-        当前简化实现：直接返回成功。
-        未来应通过 EventBus 订阅 WRITE_COMPLETED 事件等待实际执行结果。
+        通过 EventBus 订阅 WRITE_COMPLETED 事件等待结果。
+        如果超时未收到结果，返回失败。
+
+        Args:
+            command: 命令数据
+
+        Returns:
+            CommandResult: 命令执行结果
         """
-        return CommandResult(
-            success=True,
-            asset=command.asset,
-            data=command.data,
-        )
+        result_event = asyncio.Event()
+        result: Dict[str, Any] = {"success": False, "data": None}
+
+        async def on_write_completed(event: Event) -> None:
+            """处理 WRITE_COMPLETED 事件"""
+            reading_dict = event.data.get("reading", {})
+            if reading_dict.get("asset") == command.asset:
+                result["success"] = True
+                result["data"] = reading_dict.get("data", {})
+                result_event.set()
+
+        self._event_bus.subscribe(EventType.WRITE_COMPLETED, on_write_completed)
+
+        try:
+            await asyncio.wait_for(result_event.wait(), timeout=self._command_timeout)
+            return CommandResult(
+                success=True,
+                asset=command.asset,
+                data=result["data"] or command.data,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Command timeout for asset={command.asset} after {self._command_timeout}s")
+            return CommandResult(
+                success=False,
+                asset=command.asset,
+                data=command.data,
+                error=f"Command timeout after {self._command_timeout} seconds",
+            )
+        finally:
+            self._event_bus.unsubscribe(EventType.WRITE_COMPLETED, on_write_completed)

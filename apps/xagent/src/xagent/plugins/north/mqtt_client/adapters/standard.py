@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from xagent.xcore.storage.interface import Reading
 
 from .base import BaseAdapter
-from . import register
+from .registry import register
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,22 @@ class StandardAdapter(BaseAdapter):
 
         return payload
 
-    def _format_timestamp(self, timestamp: float) -> Any:
+    def _format_timestamp(self, timestamp: float) -> float:
+        """格式化时间戳
+
+        根据配置返回不同格式：
+        - "iso"/"iso8601": ISO 8601 字符串格式
+        - "milliseconds": 毫秒级整数
+        - 其他: 原始 Unix 时间戳（浮点数，秒）
+
+        注意：返回类型根据配置不同而不同，消费者需根据 timestamp_format 配置处理。
+
+        Args:
+            timestamp: Unix 时间戳（秒）
+
+        Returns:
+            格式化后的时间戳（类型取决于配置）
+        """
         if self._timestamp_format in ("iso", "iso8601"):
             return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
         elif self._timestamp_format == "milliseconds":

@@ -11,7 +11,7 @@ from xagent.xcore.storage.interface import Reading
 from ..types import CommandContext, CommandData, CommandResult, ResponsePacket
 from ..exceptions import CommandParseError
 from .base import BaseAdapter
-from . import register
+from .registry import register
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +97,16 @@ class CustomerAAdapter(BaseAdapter):
     # ===== 下行命令解析 =====
 
     def parse_command(self, raw: Dict[str, Any], context: CommandContext) -> CommandData:
-        """解析下行命令 - 根据topic_type分派"""
+        """解析下行命令 - 根据topic_type分派
+
+        注意：客户A协议中，property_down 类型的命令不包含 asset 字段，
+        asset 信息通常从 topic 路径中提取。此处返回空字符串，
+        下游处理时应从 context.topic 中解析 asset。
+        """
         try:
             if context.topic_type == "property_down":
+                # 客户A协议：property_down 命令的 asset 从 topic 中提取
+                # 命令体只包含 params，不包含 asset
                 return CommandData(
                     asset="",
                     data=raw.get("params", {}),

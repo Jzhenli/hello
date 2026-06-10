@@ -6,7 +6,7 @@
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from xagent.xcore.storage.interface import Reading
 
@@ -37,7 +37,11 @@ class BaseAdapter:
 
     # ===== 上行：一步到位 =====
 
-    def adapt_upload(self, readings: List[Reading]) -> List[PublishPacket]:
+    def adapt_upload(
+        self,
+        readings: List[Reading],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> List[PublishPacket]:
         """转换上行数据 → 返回发布包列表
 
         适配器内部通过 _infer_upload_type 推断每条 reading 的上行类型，
@@ -48,6 +52,7 @@ class BaseAdapter:
 
         Args:
             readings: 数据列表
+            context: 上下文信息（可选，包含 timestamp、device_status_map 等）
 
         Returns:
             List[PublishPacket]: 发布包列表，每个包的 topic+payload 已绑定
@@ -152,8 +157,13 @@ class BaseAdapter:
         Raises:
             CommandParseError: 命令解析失败
         """
+        asset = raw.get("asset")
+        if asset is None:
+            logger.warning("Command missing 'asset' field, using empty string")
+            asset = ""
+
         return CommandData(
-            asset=raw.get("asset", ""),
+            asset=asset,
             data=raw.get("data", {}),
         )
 
