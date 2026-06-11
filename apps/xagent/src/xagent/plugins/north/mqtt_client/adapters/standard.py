@@ -28,6 +28,20 @@ class StandardAdapter(BaseAdapter):
         self._property_mapping = self._config.get("property_mapping", {})
         self._device_name_mapping = self._config.get("device_name_mapping", {})
 
+    # ===== Topic 上下文（协议特有变量） =====
+
+    def _topic_context(
+        self,
+        upload_type: str,
+        readings: Optional[List[Reading]] = None,
+    ) -> Dict[str, str]:
+        """标准适配器：添加 service_name, asset 等运行时变量"""
+        context = super()._topic_context(upload_type, readings)
+        if readings:
+            context["service_name"] = readings[0].service_name or ""
+            context["asset"] = readings[0].asset
+        return context
+
     def _build_upload_payload(self, readings: List[Reading], upload_type: str) -> Dict[str, Any]:
         """构建标准格式payload"""
         if len(readings) == 1:

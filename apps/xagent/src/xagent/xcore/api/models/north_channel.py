@@ -25,6 +25,9 @@ class NorthChannelConnection(BaseModel):
     broker: Optional[str] = Field(None, description="MQTT Broker地址")
     client_id: Optional[str] = Field(None, description="MQTT客户端ID")
     topic: Optional[str] = Field(None, description="发布主题")
+    command_topic: Optional[str] = Field(None, description="命令订阅主题")
+    publish_mode: Optional[str] = Field(None, description="发布模式 single/batch")
+    command_timeout: Optional[float] = Field(None, description="命令超时时间(秒)")
     qos: Optional[int] = Field(None, ge=0, le=2, description="QoS级别")
     keepalive: Optional[int] = Field(None, description="保活时间(秒)")
     clean_session: Optional[bool] = Field(None, description="清除会话")
@@ -54,14 +57,15 @@ class NorthChannelConnection(BaseModel):
 class NorthChannelAdapter(BaseModel):
     """适配器配置"""
     type: str = Field(default="default", description="适配器类型")
-    
+    adapter: Optional[str] = Field(None, description="适配器名称(如 standard/C001)")
+
     # XNC适配器配置
     mapping_config: Optional[Dict[str, Any]] = Field(None, description="设备映射配置")
-    
+
     # HTTP适配器配置
     headers: Optional[Dict[str, str]] = Field(None, description="HTTP请求头")
-    
-    # 其他适配器配置（向后兼容）
+
+    # 其他适配器配置
     config: Optional[Dict[str, Any]] = Field(None, description="其他适配器配置")
 
 

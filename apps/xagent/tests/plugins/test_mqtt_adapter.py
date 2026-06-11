@@ -542,6 +542,51 @@ class TestCustomerAAdapter:
         assert response.payload["msgid"] == "123456"
         assert response.payload["code"] == -1
 
+    def test_extract_device_sn_from_topic_new_format(self):
+        """测试从topic提取deviceSN - 新格式 $v1/..."""
+        adapter = self._make_customer_a_adapter()
+
+        # 新格式: $v1/{productKey}/{deviceSN}/sys/...
+        assert adapter._extract_device_sn_from_topic("$v1/xnc/m_001/sys/property/down") == "m_001"
+        assert adapter._extract_device_sn_from_topic("$v1/prod/device123/sys/subdevice/connect") == "device123"
+        assert adapter._extract_device_sn_from_topic("$v1/al12345/gateway01/sys/property/up") == "gateway01"
+
+    def test_extract_device_sn_from_topic_old_format(self):
+        """测试从topic提取deviceSN - 旧格式 /sys/..."""
+        adapter = self._make_customer_a_adapter()
+
+        # 旧格式: /sys/{productKey}/{deviceSN}/...
+        assert adapter._extract_device_sn_from_topic("/sys/xnc/m_001/thing/service/property/set") == "m_001"
+        assert adapter._extract_device_sn_from_topic("/sys/prod/device123/thing/...") == "device123"
+
+    def test_extract_device_sn_from_topic_edge_cases(self):
+        """测试从topic提取deviceSN - 边界情况"""
+        adapter = self._make_customer_a_adapter()
+
+        # 边界情况
+        assert adapter._extract_device_sn_from_topic("invalid/topic") == ""
+        assert adapter._extract_device_sn_from_topic("$v1/xnc") == ""
+        assert adapter._extract_device_sn_from_topic("$v1/xnc/") == ""
+        assert adapter._extract_device_sn_from_topic("") == ""
+
+    def test_parse_command_property_down_with_topic_extraction(self):
+        """测试命令解析 - 从topic提取asset"""
+        adapter = self._make_customer_a_adapter()
+
+        raw = {"msgid": "123456", "params": {"Temperature": "37.0"}}
+        context = CommandContext(
+            raw_command=raw,
+            topic="$v1/xnc/m_001/sys/property/down",
+            topic_type="property_down",
+        )
+
+        result = adapter.parse_command(raw, context)
+
+        assert isinstance(result, CommandData)
+        assert result.asset == "m_001"  # 从topic提取
+        assert result.data == {"Temperature": "37.0"}
+        assert result.requires_reply is True
+
 
 # ===== 测试基类 =====
 

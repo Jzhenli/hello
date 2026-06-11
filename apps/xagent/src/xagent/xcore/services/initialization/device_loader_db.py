@@ -185,14 +185,15 @@ class DeviceLoader:
             service: 服务配置
         """
         try:
-            # 数据库中已经是扁平结构，直接构建插件配置
+            # 构建嵌套结构传递给插件
             plugin_config = {
                 'channel_id': service.name,
-                **service.connection_config,
-                **service.upload_config,
-                'adapter_config': service.adapter_config,
-                **service.command_config
+                'connection': service.connection_config,
+                'adapter': service.adapter_config,
+                'upload_strategy': service.upload_config,
             }
+            
+            logger.debug(f"Loading service '{service.name}' with nested config: {plugin_config}")
             
             plugin_info = await self.plugin_loader.load_plugin(
                 PluginType.NORTH,

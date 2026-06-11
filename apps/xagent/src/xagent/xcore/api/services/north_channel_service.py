@@ -69,7 +69,9 @@ class NorthChannelService:
         self._cache.clear()
         for service in services:
             try:
+                logger.debug(f"Loading service from DB: name={service.name}, connection_config={service.connection_config}, adapter_config={service.adapter_config}")
                 channel = self._service_to_channel(service)
+                logger.debug(f"Converted to channel: id={channel.id}, connection={channel.connection.model_dump()}, adapter={channel.adapter.model_dump()}")
                 self._cache[channel.id] = channel
             except Exception as e:
                 logger.error(f"Failed to load service {service.name}: {e}")
@@ -95,6 +97,7 @@ class NorthChannelService:
         
         adapter = NorthChannelAdapter(
             type=adapter_config.get("type", "default"),
+            adapter=adapter_config.get("adapter"),
             mapping_config=adapter_config.get("mapping_config"),
             headers=adapter_config.get("headers"),
             config=adapter_config.get("config")
@@ -159,7 +162,11 @@ class NorthChannelService:
         adapter_config = {
             "type": channel.adapter.type
         }
-        
+
+        # 添加适配器名称（如果存在）
+        if channel.adapter.adapter:
+            adapter_config["adapter"] = channel.adapter.adapter
+
         # 添加 mapping_config（如果存在）
         if channel.adapter.mapping_config:
             adapter_config["mapping_config"] = channel.adapter.mapping_config
@@ -594,27 +601,22 @@ class NorthChannelService:
     
     async def _load_channel_plugin(self, channel: NorthChannelConfig) -> None:
         """加载通道插件实例
-        
+
         Args:
             channel: 通道配置
         """
         if not self._plugin_loader:
             return
-        
+
         try:
-            upload_dict = channel.upload_strategy.model_dump(exclude_none=True)
-            adapter_dict = channel.adapter.model_dump(exclude_none=True)
-            
-            # 直接使用扁平的连接配置
-            connection_dict = channel.connection.model_dump(exclude_none=True)
-            
-            # 构建插件配置（已经是扁平结构，不需要展平）
             plugin_config = {
                 "channel_id": channel.id,
-                **connection_dict,
-                **upload_dict,
-                "adapter_config": adapter_dict
+                "connection": channel.connection.model_dump(exclude_none=True),
+                "adapter": channel.adapter.model_dump(exclude_none=True),
+                "upload_strategy": channel.upload_strategy.model_dump(exclude_none=True),
             }
+
+            logger.debug(f"Loading channel plugin '{channel.id}' with config: {plugin_config}")
 
             plugin_info = await self._plugin_loader.load_plugin(
                 plugin_type="north",

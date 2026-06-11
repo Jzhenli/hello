@@ -152,17 +152,22 @@ class MQTTClientPlugin(NorthPluginBase):
         if not _check_mqtt_available():
             raise RuntimeError("MQTT dependencies not available. Install with: pip install aiomqtt")
 
-        self._broker = config.get("broker", DEFAULT_BROKER)
-        self._port = config.get("port", DEFAULT_PORT)
-        self._topic = config.get("topic", DEFAULT_TOPIC)
-        self._command_topic = config.get("command_topic", DEFAULT_COMMAND_TOPIC)
-        self._qos = config.get("qos", DEFAULT_QOS)
-        self._username = config.get("username")
-        self._password = config.get("password")
-        self._client_id = config.get("client_id", DEFAULT_CLIENT_ID)
-        self._keepalive = config.get("keepalive", DEFAULT_KEEPALIVE)
-        self._publish_mode = config.get("publish_mode", DEFAULT_PUBLISH_MODE)
-        self._command_timeout = config.get("command_timeout", 30.0)
+        conn = config.get("connection", {})
+        logger.debug(f"MQTT connection config: {conn}")
+
+        self._broker = conn.get("broker", DEFAULT_BROKER)
+        self._port = conn.get("port", DEFAULT_PORT)
+        self._topic = conn.get("topic", DEFAULT_TOPIC)
+        self._command_topic = conn.get("command_topic", DEFAULT_COMMAND_TOPIC)
+        self._qos = conn.get("qos", DEFAULT_QOS)
+        self._username = conn.get("username")
+        self._password = conn.get("password")
+        self._client_id = conn.get("client_id", DEFAULT_CLIENT_ID)
+        self._keepalive = conn.get("keepalive", DEFAULT_KEEPALIVE)
+        self._publish_mode = conn.get("publish_mode", DEFAULT_PUBLISH_MODE)
+        self._command_timeout = conn.get("command_timeout", 30.0)
+
+        logger.debug(f"MQTT parsed config: broker={self._broker}, port={self._port}, client_id={self._client_id}, username={self._username}")
 
         self._client: Optional["aiomqtt.Client"] = None
 
@@ -183,14 +188,27 @@ class MQTTClientPlugin(NorthPluginBase):
         """创建数据适配器 - 使用注册表"""
         from .adapters import get_adapter
 
-        adapter_name = self.config.get("adapter", "standard")
-        adapter_config = self.config.get("adapter_config", {})
+        adapter_cfg = self.config.get("adapter", {})
+        adapter_name = adapter_cfg.get("adapter") or adapter_cfg.get("type", "standard")
+        adapter_config = adapter_cfg.get("config", {})
+
+        logger.debug(f"Creating MQTT adapter: name={adapter_name}, config_keys={list(adapter_config.keys())}")
 
         try:
-            return get_adapter(adapter_name, adapter_config)
+            adapter = get_adapter(adapter_name, adapter_config)
+            logger.debug(f"MQTT adapter created: {type(adapter).__name__}")
+
+            # 调试：打印订阅 topic
+            subscribe_topics = adapter.get_subscribe_topics()
+            logger.debug(f"MQTT subscribe topics: {subscribe_topics}")
+
+            return adapter
         except ValueError as e:
             logger.warning(f"{e}. Falling back to standard adapter")
             return get_adapter("standard", adapter_config)
+        except Exception as e:
+            logger.error(f"Failed to create adapter: {e}")
+            raise
 
     # ===== Topic管理（委托给适配器） =====
 
@@ -206,6 +224,8 @@ class MQTTClientPlugin(NorthPluginBase):
     # ===== 连接管理 =====
 
     async def _do_connect(self) -> bool:
+        logger.debug(f"MQTT connecting to {self._broker}:{self._port} (client_id={self._client_id})")
+
         client_kwargs = {
             "hostname": self._broker,
             "port": self._port,
@@ -216,10 +236,18 @@ class MQTTClientPlugin(NorthPluginBase):
         if self._username:
             client_kwargs["username"] = self._username
             client_kwargs["password"] = self._password
+            logger.debug(f"MQTT auth enabled: username={self._username}")
 
-        self._client = _aiomqtt.Client(**client_kwargs)
-        await self._client.__aenter__()
-        return True
+        logger.debug(f"MQTT client kwargs: {client_kwargs}")
+
+        try:
+            self._client = _aiomqtt.Client(**client_kwargs)
+            await self._client.__aenter__()
+            logger.debug(f"MQTT connected successfully to {self._broker}:{self._port}")
+            return True
+        except Exception as e:
+            logger.error(f"MQTT connection failed: {type(e).__name__}: {e}")
+            raise
 
     async def _do_disconnect(self) -> None:
         if self._client:
@@ -297,6 +325,9 @@ class MQTTClientPlugin(NorthPluginBase):
         topic = str(message.topic)
         topic_type = self.parse_topic_type(topic)
 
+        logger.debug(f"Received MQTT message: topic={topic}, topic_type={topic_type}")
+        logger.debug(f"Message payload: {message.payload[:500] if message.payload else 'empty'}")
+
         response_packet = await self._downlink_handler.handle_message(
             message=message,
             topic=topic,
@@ -356,6 +387,7 @@ class MQTTClientPlugin(NorthPluginBase):
                 packets = self._data_adapter.adapt_upload([reading])
                 for packet in packets:
                     payload_str = self._data_adapter.to_json(packet.payload)
+                    logger.debug(f"Publishing to topic={packet.topic}, payload={payload_str[:200]}...")
                     await self._client.publish(
                         topic=packet.topic, payload=payload_str, qos=self._qos
                     )

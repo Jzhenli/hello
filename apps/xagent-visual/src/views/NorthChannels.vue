@@ -92,6 +92,9 @@ const channelForm = ref({
   clean_session: true,
   adapter: 'standard',
   adapter_config: '{}',
+  command_topic: '',
+  publish_mode: 'single' as 'single' | 'batch',
+  command_timeout: 30,
   local_port: 8888,
   remote_host: '127.0.0.1',
   remote_port: 9000,
@@ -118,12 +121,15 @@ const protocolOptions = [
     label: 'MQTT', 
     value: 'mqtt', 
     defaultPort: 1883,
-    defaultConfig: { 
+    defaultConfig: {
       client_id: `xagent_${Date.now()}`,
       topic: 'data/upload',
       qos: 1,
       keepalive: 60,
-      clean_session: true
+      clean_session: true,
+      command_topic: 'xagent/command',
+      publish_mode: 'single',
+      command_timeout: 30
     }
   },
   { 
@@ -189,6 +195,9 @@ const handleAddChannel = () => {
     clean_session: true,
     adapter: 'standard',
     adapter_config: '{}',
+    command_topic: '',
+    publish_mode: 'single',
+    command_timeout: 30,
     local_port: 8888,
     remote_host: '127.0.0.1',
     remote_port: 9000,
@@ -230,7 +239,10 @@ const handleEditChannel = (channel: ChannelListItem) => {
     keepalive: fullChannel.connection.keepalive || 60,
     clean_session: fullChannel.connection.clean_session ?? true,
     adapter: fullChannel.adapter.adapter || 'standard',
-    adapter_config: JSON.stringify(fullChannel.adapter.adapter_config || {}, null, 2),
+    adapter_config: JSON.stringify(fullChannel.adapter.config || {}, null, 2),
+    command_topic: fullChannel.connection.command_topic || '',
+    publish_mode: fullChannel.connection.publish_mode || 'single',
+    command_timeout: fullChannel.connection.command_timeout || 30,
     local_port: fullChannel.connection.local_port || 8888,
     remote_host: fullChannel.connection.remote_host || '127.0.0.1',
     remote_port: fullChannel.connection.remote_port || 9000,
@@ -267,6 +279,9 @@ const buildChannelConfig = (): NorthChannelConfig => {
     connection.qos = channelForm.value.qos
     connection.keepalive = channelForm.value.keepalive
     connection.clean_session = channelForm.value.clean_session
+    if (channelForm.value.command_topic) connection.command_topic = channelForm.value.command_topic
+    if (channelForm.value.publish_mode) connection.publish_mode = channelForm.value.publish_mode
+    if (channelForm.value.command_timeout) connection.command_timeout = channelForm.value.command_timeout
     
     adapterType = 'mqtt'
     
@@ -277,7 +292,7 @@ const buildChannelConfig = (): NorthChannelConfig => {
     try {
       const adapterConfigObj = JSON.parse(channelForm.value.adapter_config)
       if (Object.keys(adapterConfigObj).length > 0) {
-        adapterConfig.adapter_config = adapterConfigObj
+        adapterConfig.config = adapterConfigObj
       }
     } catch (e) {
       console.error('Invalid adapter config JSON:', e)
@@ -744,8 +759,8 @@ onMounted(async () => {
                     <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
                     <span v-else style="color: #909399">标准</span>
                   </el-descriptions-item>
-                  <el-descriptions-item v-if="selectedChannel.adapter.adapter_config && Object.keys(selectedChannel.adapter.adapter_config).length > 0" label="适配器配置" :span="2">
-                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.adapter_config, null, 2) }}</pre>
+                  <el-descriptions-item v-if="selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" label="适配器配置" :span="2">
+                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
                   </el-descriptions-item>
                 </template>
                 
@@ -951,8 +966,8 @@ onMounted(async () => {
                     <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
                     <span v-else style="color: #909399">标准</span>
                   </el-descriptions-item>
-                  <el-descriptions-item v-if="selectedChannel.adapter.adapter_config && Object.keys(selectedChannel.adapter.adapter_config).length > 0" label="适配器配置" :span="2">
-                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.adapter_config, null, 2) }}</pre>
+                  <el-descriptions-item v-if="selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" label="适配器配置" :span="2">
+                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
                   </el-descriptions-item>
                 </template>
                 
@@ -1102,6 +1117,22 @@ onMounted(async () => {
           </el-form-item>
           <el-form-item label="主题">
             <el-input v-model="channelForm.topic" placeholder="数据上传主题，如 data/upload" />
+          </el-form-item>
+          <el-form-item label="命令主题">
+            <el-input v-model="channelForm.command_topic" placeholder="命令订阅主题，如 xagent/command" />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+              留空则使用默认值 xagent/command
+            </div>
+          </el-form-item>
+          <el-form-item label="发布模式">
+            <el-radio-group v-model="channelForm.publish_mode">
+              <el-radio value="single">单条发送</el-radio>
+              <el-radio value="batch">批量发送</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="命令超时">
+            <el-input-number v-model="channelForm.command_timeout" :min="5" :max="300" />
+            <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
           </el-form-item>
           <el-form-item label="QoS">
             <el-radio-group v-model="channelForm.qos">

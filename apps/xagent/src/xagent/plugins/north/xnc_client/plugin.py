@@ -86,9 +86,10 @@ class XNCClientPlugin(NorthPluginBase):
     DEFAULT_RECONNECT_INTERVAL = XNC_DEFAULT_RECONNECT_INTERVAL
     
     def __init__(self, config: Dict[str, Any], storage: Any, event_bus: EventBus):
-        self._remote_host = config.get("remote_host", DEFAULT_REMOTE_HOST)
-        self._remote_port = config.get("remote_port", DEFAULT_REMOTE_PORT)
-        self._local_port = config.get("local_port", DEFAULT_LOCAL_PORT)
+        conn = config.get("connection", {})
+        self._remote_host = conn.get("remote_host", DEFAULT_REMOTE_HOST)
+        self._remote_port = conn.get("remote_port", DEFAULT_REMOTE_PORT)
+        self._local_port = conn.get("local_port", DEFAULT_LOCAL_PORT)
         
         self._send_transport = None
         self._command_transport = None
@@ -111,18 +112,11 @@ class XNCClientPlugin(NorthPluginBase):
     # ===== Override properties to use XNC-specific mapper =====
     
     def _resolve_mapping_config(self) -> Dict[str, Any]:
-        """Resolve mapping_config from supported config locations."""
-        mapping_config = self.config.get("mapping_config")
+        """Resolve mapping_config from adapter config."""
+        adapter_cfg = self.config.get("adapter", {})
+        mapping_config = adapter_cfg.get("mapping_config")
         if isinstance(mapping_config, dict) and mapping_config:
             return mapping_config
-
-        for parent_key in ("xnc", "adapter_config"):
-            parent = self.config.get(parent_key)
-            if isinstance(parent, dict):
-                parent_mapping = parent.get("mapping_config")
-                if isinstance(parent_mapping, dict) and parent_mapping:
-                    return parent_mapping
-
         return {}
 
     @property
@@ -136,8 +130,8 @@ class XNCClientPlugin(NorthPluginBase):
     # ===== Implement hook methods =====
     
     def _create_data_adapter(self) -> Any:
-        adapter_config = self.config.get("adapter_config", {})
-        return XNCProtobufAdapter(mapper=self._mapper, config=adapter_config)
+        adapter_cfg = self.config.get("adapter", {})
+        return XNCProtobufAdapter(mapper=self._mapper, config=adapter_cfg.get("config", {}))
     
     async def _do_connect(self) -> bool:
         loop = asyncio.get_event_loop()

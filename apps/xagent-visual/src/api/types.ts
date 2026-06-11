@@ -204,6 +204,9 @@ export interface MQTTConnectionConfig {
   password?: string
   client_id: string
   topic: string
+  command_topic?: string
+  publish_mode?: 'single' | 'batch'
+  command_timeout?: number
   qos: 0 | 1 | 2
   keepalive: number
   clean_session?: boolean
@@ -236,6 +239,9 @@ export interface NorthChannelConnection {
   broker?: string
   client_id?: string
   topic?: string
+  command_topic?: string
+  publish_mode?: 'single' | 'batch'
+  command_timeout?: number
   qos?: 0 | 1 | 2
   keepalive?: number
   clean_session?: boolean

@@ -74,7 +74,7 @@ class BaseAdapter:
             packets = []
             for upload_type, group_readings in groups.items():
                 payload = self._build_upload_payload(group_readings, upload_type)
-                topic = self._get_publish_topic(upload_type)
+                topic = self._get_publish_topic(upload_type, readings=group_readings)
                 packets.append(PublishPacket(topic=topic, payload=payload))
 
             return packets
@@ -108,8 +108,20 @@ class BaseAdapter:
             "data": params,
         }
 
-    def _get_publish_topic(self, upload_type: str) -> str:
-        """获取发布topic - 配置驱动，子类可覆盖"""
+    def _get_publish_topic(
+        self,
+        upload_type: str,
+        readings: Optional[List[Reading]] = None,
+    ) -> str:
+        """获取发布topic - 配置驱动，子类可覆盖
+
+        Args:
+            upload_type: 上行类型（property, connect, disconnect 等）
+            readings: 当前要发送的数据（用于提取运行时变量）
+
+        Returns:
+            格式化后的 topic 字符串
+        """
         templates = self._config.get("topic_templates", {})
         template_key = self._upload_type_to_template_key(upload_type)
 
@@ -117,7 +129,7 @@ class BaseAdapter:
             raise TopicError(f"No topic template for upload_type '{upload_type}' (key: '{template_key}')")
 
         try:
-            return templates[template_key].format(**self._topic_context(upload_type))
+            return templates[template_key].format(**self._topic_context(upload_type, readings))
         except KeyError as e:
             raise TopicError(f"Topic template '{template_key}' has missing placeholder: {e}") from e
 
@@ -130,12 +142,31 @@ class BaseAdapter:
         mapping = self._config.get("upload_type_map", {})
         return mapping.get(upload_type, f"{upload_type}_up")
 
-    def _topic_context(self, upload_type: str) -> Dict[str, str]:
+    def _topic_context(
+        self,
+        upload_type: str,
+        readings: Optional[List[Reading]] = None,
+    ) -> Dict[str, str]:
         """生成topic模板的填充上下文
 
-        只返回基本类型值（str/int/float），过滤掉嵌套dict和list，
-        避免非标识符key导致format报错。
-        子类可覆盖以添加运行时变量。
+        Args:
+            upload_type: 上行类型
+            readings: 当前要发送的数据（子类可从中提取运行时变量）
+
+        Returns:
+            包含配置值的上下文字典
+
+        注意：
+            基类只返回配置中的静态值。
+            子类应覆盖此方法添加协议特有的运行时变量。
+
+        Example:
+            # 客户A子类覆盖:
+            def _topic_context(self, upload_type, readings):
+                context = super()._topic_context(upload_type, readings)
+                if readings:
+                    context["deviceSN"] = readings[0].asset
+                return context
         """
         return {
             k: str(v) for k, v in self._config.items()
@@ -213,7 +244,10 @@ class BaseAdapter:
     # ===== Topic管理 =====
 
     def get_subscribe_topics(self) -> List[str]:
-        """获取需要订阅的Topic列表 - 配置驱动"""
+        """获取需要订阅的Topic列表 - 配置驱动
+
+        注意：订阅 topic 通常使用通配符，子类应在 _topic_context 中处理。
+        """
         templates = self._config.get("topic_templates", {})
         subscribe_types = self._config.get("subscribe_types", [])
 
@@ -221,7 +255,7 @@ class BaseAdapter:
         for topic_type in subscribe_types:
             if topic_type in templates:
                 try:
-                    topic = templates[topic_type].format(**self._topic_context(topic_type))
+                    topic = templates[topic_type].format(**self._topic_context(topic_type, readings=None))
                     topics.append(topic)
                 except KeyError as e:
                     logger.warning(f"Topic template '{topic_type}' has missing placeholders: {e}")
