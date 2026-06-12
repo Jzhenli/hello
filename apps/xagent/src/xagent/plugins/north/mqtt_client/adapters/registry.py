@@ -1,7 +1,7 @@
 """MQTT Adapter Registry - 适配器注册机制"""
 
 import logging
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 
@@ -90,3 +90,58 @@ def list_adapters() -> list:
 def list_customer_codes() -> Dict[str, str]:
     """列出所有客户编号映射 {code: adapter_name}"""
     return dict(_CODE_REGISTRY)
+
+
+def get_adapter_class(name_or_code: str) -> Optional[Type]:
+    """
+    获取适配器类（不实例化）
+
+    支持通过适配器名称或客户编号查找。
+
+    Args:
+        name_or_code: 适配器名称或客户编号
+
+    Returns:
+        适配器类，未找到返回 None
+    """
+    # 先按客户编号查找，再按适配器名称查找
+    if name_or_code in _CODE_REGISTRY:
+        adapter_name = _CODE_REGISTRY[name_or_code]
+    elif name_or_code in _REGISTRY:
+        adapter_name = name_or_code
+    else:
+        return None
+
+    return _REGISTRY.get(adapter_name)
+
+
+def get_adapter_info() -> List[Dict[str, Any]]:
+    """
+    获取所有适配器信息
+
+    Returns:
+        适配器信息列表，每项包含:
+        - name: 适配器名称
+        - customer_code: 客户编号（可能为None）
+        - has_defaults: 是否有默认配置
+    """
+    result = []
+
+    for name, cls in _REGISTRY.items():
+        # 查找对应的客户编号
+        customer_code = None
+        for code, adapter_name in _CODE_REGISTRY.items():
+            if adapter_name == name:
+                customer_code = code
+                break
+
+        # 检查是否有默认配置
+        has_defaults = hasattr(cls, "DEFAULT_CONFIG") and cls.DEFAULT_CONFIG is not None
+
+        result.append({
+            "name": name,
+            "customer_code": customer_code,
+            "has_defaults": has_defaults
+        })
+
+    return result

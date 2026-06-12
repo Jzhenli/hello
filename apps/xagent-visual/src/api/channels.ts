@@ -94,5 +94,26 @@ export const channelApi = {
   }> {
     const res = await api.post('/api/channels/import', data, { params: { overwrite } })
     return res.data
+  },
+
+  async listAdapters(): Promise<{
+    adapters: Array<{
+      name: string
+      customer_code: string | null
+      description: string
+      has_defaults: boolean
+    }>
+  }> {
+    const res = await api.get('/api/channels/adapters/list')
+    return res.data
+  },
+
+  async getAdapterDefaults(adapterCode: string): Promise<{
+    adapter_code: string
+    adapter_name: string
+    defaults: Record<string, any>
+  }> {
+    const res = await api.get(`/api/channels/adapters/${adapterCode}/defaults`)
+    return res.data
   }
 }

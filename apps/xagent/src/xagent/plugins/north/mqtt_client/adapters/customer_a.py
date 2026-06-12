@@ -128,7 +128,32 @@ class CustomerAAdapter(BaseAdapter):
 
     MSGID_MAX = 4294967295
 
+    # 默认配置（符合客户A协议规范）
+    DEFAULT_CONFIG = {
+        "productKey": "",
+        "topic_templates": {
+            "property_up": "$v1/{productKey}/{deviceSN}/sys/property/up",
+            "property_down": "$v1/{productKey}/{deviceSN}/sys/property/down",
+            "property_down_reply": "$v1/{productKey}/{deviceSN}/sys/property/down_reply",
+            "connect_up": "$v1/{productKey}/{deviceSN}/sys/subdevice/connect",
+            "connect_reply": "$v1/{productKey}/{deviceSN}/sys/subdevice/connect_reply",
+            "disconnect_up": "$v1/{productKey}/{deviceSN}/sys/subdevice/disconnect",
+            "disconnect_reply": "$v1/{productKey}/{deviceSN}/sys/subdevice/disconnect_reply",
+        },
+        "subscribe_types": ["property_down", "connect_reply", "disconnect_reply"],
+        "topic_type_rules": {
+            "/sys/property/down": "property_down",
+            "/sys/subdevice/connect_reply": "connect_reply",
+            "/sys/subdevice/disconnect_reply": "disconnect_reply",
+        },
+        "reply_topic_rule": "suffix_reply",
+    }
+
     def __init__(self, config: Dict[str, Any]):
+        # 验证必填字段
+        if not config.get("productKey"):
+            raise ValueError("productKey 不能为空")
+
         super().__init__(config)
         self._msgid_counter = 0
         # 设备状态缓存：{asset: last_status}

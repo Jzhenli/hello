@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Query, status, Body
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from ..models.north_channel import (
     NorthChannelConfig,
@@ -15,6 +15,12 @@ from ..models.north_channel import (
 from ..services.north_channel_service import NorthChannelService
 from ..dependencies import get_app_state, AppState
 from .config import verify_api_token
+
+# 导入适配器注册表的公开函数
+from xagent.plugins.north.mqtt_client.adapters.registry import (
+    get_adapter_class,
+    get_adapter_info
+)
 
 logger = logging.getLogger(__name__)
 
@@ -426,3 +432,68 @@ async def import_channels(
     
     result = await service.batch_create_channels(channels)
     return result
+
+
+@router.get("/adapters/list")
+async def list_adapters() -> Dict[str, Any]:
+    """列出所有可用的适配器
+
+    Returns:
+        适配器列表，包含名称、客户编号和描述
+    """
+    # 通过注册表公开函数获取适配器信息
+    adapter_info_list = get_adapter_info()
+
+    adapters = []
+    for info in adapter_info_list:
+        name = info["name"]
+        customer_code = info["customer_code"]
+        has_defaults = info["has_defaults"]
+
+        adapters.append({
+            "name": name,
+            "customer_code": customer_code,
+            "description": f"客户编号: {customer_code}" if customer_code else name,
+            "has_defaults": has_defaults
+        })
+
+    return {"adapters": adapters}
+
+
+@router.get("/adapters/{adapter_code}/defaults")
+async def get_adapter_defaults(adapter_code: str) -> Dict[str, Any]:
+    """获取适配器默认配置
+
+    Args:
+        adapter_code: 适配器名称或客户编号（如 C001 或 customer_a）
+
+    Returns:
+        适配器默认配置
+
+    Raises:
+        HTTPException: 404 - 适配器不存在或没有默认配置
+    """
+    # 通过注册表公开函数获取适配器类
+    adapter_cls = get_adapter_class(adapter_code)
+    if not adapter_cls:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Adapter '{adapter_code}' not found"
+        )
+
+    # 获取默认配置
+    defaults = getattr(adapter_cls, "DEFAULT_CONFIG", None)
+    if defaults is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Adapter '{adapter_code}' has no default configuration"
+        )
+
+    # 获取适配器名称
+    adapter_name = adapter_cls.__name__.replace("Adapter", "").lower() if adapter_cls.__name__.endswith("Adapter") else adapter_cls.__name__
+
+    return {
+        "adapter_code": adapter_code,
+        "adapter_name": adapter_name,
+        "defaults": defaults
+    }

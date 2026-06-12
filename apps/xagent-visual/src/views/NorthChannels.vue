@@ -159,6 +159,56 @@ const mqttAdapterOptions = [
   { label: '客户A (C001)', value: 'C001', description: '客户A私有云协议' },
 ]
 
+// 适配器默认配置缓存（从后端API获取）
+const adapterDefaultsCache = ref<Record<string, any>>({})
+
+// 获取适配器默认配置
+const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
+  // 如果已缓存，直接返回
+  if (adapterDefaultsCache.value[adapterCode]) {
+    return adapterDefaultsCache.value[adapterCode]
+  }
+
+  try {
+    const result = await channelApi.getAdapterDefaults(adapterCode)
+    adapterDefaultsCache.value[adapterCode] = result.defaults
+    return result.defaults
+  } catch (e) {
+    console.error('Failed to load adapter defaults:', e)
+    return null
+  }
+}
+
+// 解析适配器配置
+const parsedAdapterConfig = computed({
+  get: () => {
+    try {
+      return JSON.parse(channelForm.value.adapter_config || '{}')
+    } catch {
+      return {}
+    }
+  },
+  set: (val) => {
+    channelForm.value.adapter_config = JSON.stringify(val, null, 2)
+  }
+})
+
+// 适配器变更处理
+const handleAdapterChange = async (adapter: string) => {
+  if (adapter === 'standard') {
+    channelForm.value.adapter_config = '{}'
+  } else {
+    // 仅在新增或配置为空时预填充，避免编辑时覆盖已有配置
+    if (!isEditing.value || !channelForm.value.adapter_config || channelForm.value.adapter_config === '{}') {
+      // 从后端API获取默认配置
+      const defaults = await loadAdapterDefaults(adapter)
+      if (defaults) {
+        channelForm.value.adapter_config = JSON.stringify(defaults, null, 2)
+      }
+    }
+  }
+}
+
 const channelFormRules = {
   id: [{ required: true, message: '请输入通道ID', trigger: 'blur' }],
   name: [{ required: true, message: '请输入通道名称', trigger: 'blur' }],
@@ -1034,212 +1084,359 @@ onMounted(async () => {
       </div>
     </div>
     
-    <el-dialog 
-      v-model="showChannelDialog" 
+    <el-dialog
+      v-model="showChannelDialog"
       :title="isEditing ? '编辑通道' : '新增通道'"
-      width="min(800px, 90vw)"
+      width="min(900px, 90vw)"
       :close-on-click-modal="false"
     >
-      <el-form ref="channelFormRef" :model="channelForm" :rules="channelFormRules" label-width="120px">
-        <el-form-item label="通道ID" prop="id">
-          <el-input 
-            v-model="channelForm.id" 
-            placeholder="仅允许字母、数字、下划线、连字符"
-            :disabled="isEditing"
-          />
-        </el-form-item>
-        <el-form-item label="通道名称" prop="name">
-          <el-input v-model="channelForm.name" placeholder="请输入通道名称" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="请输入通道描述" />
-        </el-form-item>
-        <el-form-item label="协议类型" prop="protocol">
-          <el-select v-model="channelForm.protocol" placeholder="请选择协议" @change="handleProtocolChange">
-            <el-option 
-              v-for="opt in protocolOptions" 
-              :key="opt.value" 
-              :label="opt.label" 
-              :value="opt.value" 
-            />
-          </el-select>
-        </el-form-item>
-        
-        <template v-if="channelForm.protocol !== 'xnc'">
-          <el-divider content-position="left">连接配置</el-divider>
-          
-          <el-form-item label="主机地址" prop="host">
-            <el-input v-model="channelForm.host" placeholder="请输入主机地址，如 mqtt.example.com" />
-          </el-form-item>
-          <el-form-item label="端口">
-            <el-input-number v-model="channelForm.port" :min="1" :max="65535" />
-          </el-form-item>
-          <el-form-item label="用户名">
-            <el-input v-model="channelForm.username" placeholder="可选" />
-          </el-form-item>
-          <el-form-item label="密码">
-            <el-input v-model="channelForm.password" type="password" placeholder="可选" show-password />
-          </el-form-item>
-        </template>
-        
-        <template v-if="channelForm.protocol === 'mqtt'">
-          <el-divider content-position="left">MQTT 配置</el-divider>
-          
-          <el-form-item label="适配器">
-            <el-select v-model="channelForm.adapter" placeholder="选择适配器或客户编号" filterable allow-create>
-              <el-option 
-                v-for="opt in mqttAdapterOptions" 
-                :key="opt.value" 
-                :label="opt.label" 
-                :value="opt.value"
-              >
-                <span>{{ opt.label }}</span>
-                <span style="float: right; color: #8492a6; font-size: 12px">{{ opt.description }}</span>
-              </el-option>
-            </el-select>
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-              可选择预置适配器，也可直接输入客户编号
+      <el-form ref="channelFormRef" :model="channelForm" :rules="channelFormRules" label-width="100px">
+
+        <!-- 卡片1: 基本信息 -->
+        <el-card class="config-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">基本信息</span>
+              <el-tag type="danger" size="small">必填</el-tag>
             </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="通道ID" prop="id">
+                <el-input
+                  v-model="channelForm.id"
+                  placeholder="仅允许字母、数字、下划线、连字符"
+                  :disabled="isEditing"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="通道名称" prop="name">
+                <el-input v-model="channelForm.name" placeholder="请输入通道名称" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="协议类型" prop="protocol">
+                <el-select v-model="channelForm.protocol" placeholder="请选择协议" @change="handleProtocolChange">
+                  <el-option
+                    v-for="opt in protocolOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="启用">
+                <el-switch v-model="channelForm.enabled" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item label="描述">
+            <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="请输入通道描述" />
           </el-form-item>
-          <el-form-item v-if="channelForm.adapter !== 'standard'" label="适配器配置">
-            <el-input 
-              v-model="channelForm.adapter_config" 
-              type="textarea" 
-              :rows="5" 
+        </el-card>
+
+        <!-- 卡片2: 连接配置 -->
+        <el-card class="config-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">连接配置</span>
+              <el-tag type="danger" size="small">必填</el-tag>
+            </div>
+          </template>
+
+          <!-- MQTT/HTTP 连接配置 -->
+          <template v-if="channelForm.protocol !== 'xnc'">
+            <el-row :gutter="20">
+              <el-col :span="16">
+                <el-form-item label="主机地址" prop="host">
+                  <el-input v-model="channelForm.host" placeholder="请输入主机地址，如 mqtt.example.com" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="端口">
+                  <el-input-number v-model="channelForm.port" :min="1" :max="65535" style="width: 100%;" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="用户名">
+                  <el-input v-model="channelForm.username" placeholder="可选" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="密码">
+                  <el-input v-model="channelForm.password" type="password" placeholder="可选" show-password />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </template>
+
+          <!-- XNC 连接配置 -->
+          <template v-if="channelForm.protocol === 'xnc'">
+            <el-row :gutter="20">
+              <el-col :span="8">
+                <el-form-item label="本地端口">
+                  <el-input-number v-model="channelForm.local_port" :min="1024" :max="65535" style="width: 100%;" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="10">
+                <el-form-item label="远程主机">
+                  <el-input v-model="channelForm.remote_host" placeholder="XNC服务器地址" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="远程端口">
+                  <el-input-number v-model="channelForm.remote_port" :min="1" :max="65535" style="width: 100%;" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </template>
+        </el-card>
+
+        <!-- 卡片3: MQTT适配器配置 -->
+        <el-card v-if="channelForm.protocol === 'mqtt'" class="config-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">适配器配置</span>
+              <el-tag v-if="channelForm.adapter === 'C001'" type="danger" size="small">必填</el-tag>
+              <el-tag v-else type="info" size="small">可选</el-tag>
+            </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="适配器">
+                <el-select v-model="channelForm.adapter" placeholder="选择适配器或客户编号" filterable allow-create @change="handleAdapterChange">
+                  <el-option
+                    v-for="opt in mqttAdapterOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  >
+                    <span>{{ opt.label }}</span>
+                    <span style="float: right; color: #8492a6; font-size: 12px">{{ opt.description }}</span>
+                  </el-option>
+                </el-select>
+                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+                  可选择预置适配器，也可直接输入客户编号
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12" v-if="channelForm.adapter === 'C001'">
+              <el-form-item label="产品Key" required>
+                <el-input
+                  v-model="parsedAdapterConfig.productKey"
+                  placeholder="请输入产品Key，如: al12345"
+                />
+                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+                  客户A平台的产品标识
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 客户A模板配置 -->
+          <el-form-item v-if="channelForm.adapter === 'C001'" label=" ">
+            <el-collapse style="width: 100%;">
+              <el-collapse-item title="模板配置（通常无需修改）">
+                <el-alert type="info" :closable="false" style="margin-bottom: 12px;">
+                  Topic模板已使用客户A协议默认值，通常无需修改
+                </el-alert>
+                <el-input
+                  v-model="channelForm.adapter_config"
+                  type="textarea"
+                  :rows="15"
+                  placeholder="JSON格式配置"
+                />
+              </el-collapse-item>
+            </el-collapse>
+          </el-form-item>
+
+          <!-- 其他适配器JSON配置 -->
+          <el-form-item v-else-if="channelForm.adapter !== 'standard'" label="适配器配置">
+            <el-input
+              v-model="channelForm.adapter_config"
+              type="textarea"
+              :rows="5"
               placeholder='JSON格式，如 {"productKey": "al12345", "topic_templates": {...}}'
             />
             <div style="font-size: 12px; color: #909399; margin-top: 4px;">
               适配器专属配置，不同适配器支持不同参数
             </div>
           </el-form-item>
-          <el-form-item label="客户端ID">
-            <el-input v-model="channelForm.client_id" placeholder="客户端标识符" />
-          </el-form-item>
-          <el-form-item label="主题">
-            <el-input v-model="channelForm.topic" placeholder="数据上传主题，如 data/upload" />
-          </el-form-item>
-          <el-form-item label="命令主题">
-            <el-input v-model="channelForm.command_topic" placeholder="命令订阅主题，如 xagent/command" />
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-              留空则使用默认值 xagent/command
+        </el-card>
+
+        <!-- 卡片4: 高级配置（默认折叠） -->
+        <el-card class="config-card optional" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">高级配置</span>
+              <el-tag type="info" size="small">可选</el-tag>
             </div>
-          </el-form-item>
-          <el-form-item label="发布模式">
-            <el-radio-group v-model="channelForm.publish_mode">
-              <el-radio value="single">单条发送</el-radio>
-              <el-radio value="batch">批量发送</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="命令超时">
-            <el-input-number v-model="channelForm.command_timeout" :min="5" :max="300" />
-            <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-          </el-form-item>
-          <el-form-item label="QoS">
-            <el-radio-group v-model="channelForm.qos">
-              <el-radio :value="0">0 - 最多一次</el-radio>
-              <el-radio :value="1">1 - 至少一次</el-radio>
-              <el-radio :value="2">2 - 恰好一次</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="保活时间">
-            <el-input-number v-model="channelForm.keepalive" :min="10" :max="3600" />
-            <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-          </el-form-item>
-          <el-form-item label="清除会话">
-            <el-switch v-model="channelForm.clean_session" />
-          </el-form-item>
-        </template>
-        
-        <template v-if="channelForm.protocol === 'xnc'">
-          <el-divider content-position="left">XNC 配置</el-divider>
-          
-          <el-form-item label="本地端口">
-            <el-input-number v-model="channelForm.local_port" :min="1024" :max="65535" />
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-              UDP监听端口，用于接收下行命令
-            </div>
-          </el-form-item>
-          <el-form-item label="远程主机">
-            <el-input v-model="channelForm.remote_host" placeholder="XNC服务器地址" />
-          </el-form-item>
-          <el-form-item label="远程端口">
-            <el-input-number v-model="channelForm.remote_port" :min="1" :max="65535" />
-          </el-form-item>
-          <el-form-item label="重连间隔">
-            <el-input-number v-model="channelForm.reconnect_interval" :min="1" :max="300" />
-            <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-          </el-form-item>
-          <el-form-item label="映射配置">
-            <el-input 
-              v-model="channelForm.mapping_config" 
-              type="textarea" 
-              :rows="4" 
-              placeholder='JSON格式的设备映射配置'
-            />
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-              用于Protobuf格式的设备ID和点位映射
-            </div>
-          </el-form-item>
-        </template>
-        
-        <template v-if="channelForm.protocol === 'http'">
-          <el-divider content-position="left">HTTP 配置</el-divider>
-          
-          <el-form-item label="端点URL">
-            <el-input v-model="channelForm.endpoint" placeholder="如 https://api.example.com/data" />
-          </el-form-item>
-          <el-form-item label="请求方法">
-            <el-radio-group v-model="channelForm.method">
-              <el-radio value="GET">GET</el-radio>
-              <el-radio value="POST">POST</el-radio>
-              <el-radio value="PUT">PUT</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="请求头">
-            <el-input 
-              v-model="channelForm.headers" 
-              type="textarea" 
-              :rows="3" 
-              placeholder='JSON格式，如 {"Content-Type": "application/json"}'
-            />
-          </el-form-item>
-          <el-form-item label="超时时间">
-            <el-input-number v-model="channelForm.timeout" :min="1" :max="300" />
-            <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-          </el-form-item>
-        </template>
-        
-        <el-divider content-position="left">上传策略</el-divider>
-        
-        <el-form-item label="立即上传">
-          <el-switch v-model="channelForm.immediate_upload" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-            开启后数据会立即上传，关闭则按间隔批量上传
-          </div>
-        </el-form-item>
-        <el-form-item label="批量大小">
-          <el-input-number v-model="channelForm.batch_size" :min="1" :max="10000" />
-        </el-form-item>
-        <el-form-item label="上传间隔">
-          <el-input-number v-model="channelForm.interval" :min="1" :max="3600" />
-          <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-        </el-form-item>
-        <el-form-item label="重试次数">
-          <el-input-number v-model="channelForm.retry_times" :min="0" :max="10" />
-        </el-form-item>
-        <el-form-item label="重试间隔">
-          <el-input-number v-model="channelForm.retry_interval" :min="1" :max="300" />
-          <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
-        </el-form-item>
-        
-        <el-divider content-position="left">其他配置</el-divider>
-        
-        <el-form-item label="启用">
-          <el-switch v-model="channelForm.enabled" />
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-input v-model="channelForm.tags" placeholder="多个标签用逗号分隔，如: 生产环境,重要" />
-        </el-form-item>
+          </template>
+          <el-collapse>
+            <!-- MQTT高级参数 -->
+            <el-collapse-item v-if="channelForm.protocol === 'mqtt'" title="MQTT参数">
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="客户端ID">
+                    <el-input v-model="channelForm.client_id" placeholder="客户端标识符" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="QoS">
+                    <el-radio-group v-model="channelForm.qos">
+                      <el-radio :value="0">0 - 最多一次</el-radio>
+                      <el-radio :value="1">1 - 至少一次</el-radio>
+                      <el-radio :value="2">2 - 恰好一次</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="保活时间">
+                    <el-input-number v-model="channelForm.keepalive" :min="10" :max="3600" />
+                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="清除会话">
+                    <el-switch v-model="channelForm.clean_session" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="发布模式">
+                    <el-radio-group v-model="channelForm.publish_mode">
+                      <el-radio value="single">单条发送</el-radio>
+                      <el-radio value="batch">批量发送</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="命令超时">
+                    <el-input-number v-model="channelForm.command_timeout" :min="5" :max="300" />
+                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <!-- 客户A适配器不需要设置主题和命令主题 -->
+              <template v-if="channelForm.adapter !== 'C001'">
+                <el-row :gutter="20">
+                  <el-col :span="12">
+                    <el-form-item label="主题">
+                      <el-input v-model="channelForm.topic" placeholder="数据上传主题，如 data/upload" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="命令主题">
+                      <el-input v-model="channelForm.command_topic" placeholder="命令订阅主题，如 xagent/command" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </template>
+            </el-collapse-item>
+
+            <!-- XNC高级参数 -->
+            <el-collapse-item v-if="channelForm.protocol === 'xnc'" title="XNC参数">
+              <el-form-item label="重连间隔">
+                <el-input-number v-model="channelForm.reconnect_interval" :min="1" :max="300" />
+                <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+              </el-form-item>
+              <el-form-item label="映射配置">
+                <el-input
+                  v-model="channelForm.mapping_config"
+                  type="textarea"
+                  :rows="4"
+                  placeholder='JSON格式的设备映射配置'
+                />
+                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+                  用于Protobuf格式的设备ID和点位映射
+                </div>
+              </el-form-item>
+            </el-collapse-item>
+
+            <!-- HTTP高级参数 -->
+            <el-collapse-item v-if="channelForm.protocol === 'http'" title="HTTP参数">
+              <el-form-item label="端点URL">
+                <el-input v-model="channelForm.endpoint" placeholder="如 https://api.example.com/data" />
+              </el-form-item>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="请求方法">
+                    <el-radio-group v-model="channelForm.method">
+                      <el-radio value="GET">GET</el-radio>
+                      <el-radio value="POST">POST</el-radio>
+                      <el-radio value="PUT">PUT</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="超时时间">
+                    <el-input-number v-model="channelForm.timeout" :min="1" :max="300" />
+                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="请求头">
+                <el-input
+                  v-model="channelForm.headers"
+                  type="textarea"
+                  :rows="3"
+                  placeholder='JSON格式，如 {"Content-Type": "application/json"}'
+                />
+              </el-form-item>
+            </el-collapse-item>
+
+            <!-- 上传策略 -->
+            <el-collapse-item title="上传策略">
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="立即上传">
+                    <el-switch v-model="channelForm.immediate_upload" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="批量大小">
+                    <el-input-number v-model="channelForm.batch_size" :min="1" :max="10000" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="上传间隔">
+                    <el-input-number v-model="channelForm.interval" :min="1" :max="3600" />
+                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="重试次数">
+                    <el-input-number v-model="channelForm.retry_times" :min="0" :max="10" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="重试间隔">
+                <el-input-number v-model="channelForm.retry_interval" :min="1" :max="300" />
+                <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+              </el-form-item>
+            </el-collapse-item>
+
+            <!-- 其他配置 -->
+            <el-collapse-item title="其他配置">
+              <el-form-item label="标签">
+                <el-input v-model="channelForm.tags" placeholder="多个标签用逗号分隔，如: 生产环境,重要" />
+              </el-form-item>
+            </el-collapse-item>
+          </el-collapse>
+        </el-card>
+
       </el-form>
       <template #footer>
         <el-button @click="showChannelDialog = false">取消</el-button>
@@ -1263,6 +1460,66 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* 配置卡片样式 */
+.config-card {
+  margin-bottom: 16px;
+  border: 1px solid #e4e7ed;
+}
+
+.config-card.optional {
+  border-color: #e4e7ed;
+  background: #fafafa;
+}
+
+.config-card :deep(.el-card__header) {
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.config-card :deep(.el-card__body) {
+  padding: 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+/* 折叠面板样式 */
+.config-card :deep(.el-collapse) {
+  border: none;
+}
+
+.config-card :deep(.el-collapse-item__header) {
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 0 12px;
+  height: 40px;
+  line-height: 40px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.config-card :deep(.el-collapse-item__wrap) {
+  border: 1px solid #e4e7ed;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+
+.config-card :deep(.el-collapse-item__content) {
+  padding: 16px;
 }
 
 .toolbar {
