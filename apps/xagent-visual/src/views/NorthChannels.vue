@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useChannelStore } from '@/stores/channels'
 import { useUserStore } from '@/stores/users'
 import { channelApi } from '@/api/channels'
@@ -162,6 +162,9 @@ const mqttAdapterOptions = [
 // 适配器默认配置缓存（从后端API获取）
 const adapterDefaultsCache = ref<Record<string, any>>({})
 
+// 产品Key（独立存储，便于表单绑定）
+const productKey = ref('')
+
 // 获取适配器默认配置
 const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
   // 如果已缓存，直接返回
@@ -179,17 +182,16 @@ const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
   }
 }
 
-// 解析适配器配置
-const parsedAdapterConfig = computed({
-  get: () => {
+// 同步 productKey 到 adapter_config
+watch(productKey, (newVal) => {
+  if (channelForm.value.adapter === 'C001') {
     try {
-      return JSON.parse(channelForm.value.adapter_config || '{}')
+      const config = JSON.parse(channelForm.value.adapter_config || '{}')
+      config.productKey = newVal
+      channelForm.value.adapter_config = JSON.stringify(config, null, 2)
     } catch {
-      return {}
+      // ignore
     }
-  },
-  set: (val) => {
-    channelForm.value.adapter_config = JSON.stringify(val, null, 2)
   }
 })
 
@@ -197,6 +199,7 @@ const parsedAdapterConfig = computed({
 const handleAdapterChange = async (adapter: string) => {
   if (adapter === 'standard') {
     channelForm.value.adapter_config = '{}'
+    productKey.value = ''
   } else {
     // 仅在新增或配置为空时预填充，避免编辑时覆盖已有配置
     if (!isEditing.value || !channelForm.value.adapter_config || channelForm.value.adapter_config === '{}') {
@@ -204,6 +207,8 @@ const handleAdapterChange = async (adapter: string) => {
       const defaults = await loadAdapterDefaults(adapter)
       if (defaults) {
         channelForm.value.adapter_config = JSON.stringify(defaults, null, 2)
+        // 同步 productKey
+        productKey.value = defaults.productKey || ''
       }
     }
   }
@@ -228,6 +233,7 @@ const handleProtocolChange = (val: NorthChannelProtocol) => {
 const handleAddChannel = () => {
   isEditing.value = false
   editingId.value = ''
+  productKey.value = ''  // 重置产品Key
   channelForm.value = {
     id: '',
     name: '',
@@ -309,6 +315,15 @@ const handleEditChannel = (channel: ChannelListItem) => {
     retry_interval: fullChannel.upload_strategy.retry_interval || 5,
     tags: (fullChannel.tags || []).join(', ')
   }
+  
+  // 从 adapter_config 中提取 productKey
+  try {
+    const config = JSON.parse(channelForm.value.adapter_config || '{}')
+    productKey.value = config.productKey || ''
+  } catch {
+    productKey.value = ''
+  }
+  
   showChannelDialog.value = true
 }
 
@@ -1230,7 +1245,7 @@ onMounted(async () => {
             <el-col :span="12" v-if="channelForm.adapter === 'C001'">
               <el-form-item label="产品Key" required>
                 <el-input
-                  v-model="parsedAdapterConfig.productKey"
+                  v-model="productKey"
                   placeholder="请输入产品Key，如: al12345"
                 />
                 <div style="font-size: 12px; color: #909399; margin-top: 4px;">
