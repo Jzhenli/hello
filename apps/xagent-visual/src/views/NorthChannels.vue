@@ -23,6 +23,23 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+// XNC映射配置模板
+const XNC_MAPPING_TEMPLATE = {
+  "vdid_mapping": {
+    "device_1": 1,
+    "device_2": 2
+  },
+  "oid_mapping": {
+    "device_1.temperature": 1,
+    "device_1.humidity": 2,
+    "device_2.pressure": 3
+  },
+  "pid": {
+    "point_value": 85,
+    "point_error": 103
+  }
+}
+
 const channelStore = useChannelStore()
 const userStore = useUserStore()
 const { isTouch, isTablet, isMobile, width } = useResponsive()
@@ -212,6 +229,11 @@ const handleAdapterChange = async (adapter: string) => {
       }
     }
   }
+}
+
+// 填充XNC映射配置模板
+const fillMappingTemplate = () => {
+  channelForm.value.mapping_config = JSON.stringify(XNC_MAPPING_TEMPLATE, null, 2)
 }
 
 const channelFormRules = {
@@ -590,6 +612,14 @@ const selectedChannel = computed(() => {
   return channelStore.getChannelById(selectedChannelId.value)
 })
 
+// 格式化数字（添加千分位）
+const formatNumber = (num: number): string => {
+  if (num >= 10000) {
+    return (num / 1000).toFixed(1) + 'k'
+  }
+  return num.toLocaleString()
+}
+
 onMounted(async () => {
   await channelStore.fetchChannels()
 })
@@ -767,126 +797,160 @@ onMounted(async () => {
               </el-button>
             </div>
             <span class="panel-title">{{ selectedChannel?.name }}</span>
-            <div class="panel-header-actions">
-              <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" @click="handleTestConnection(selectedChannelId!)">
-                测试连接
+            <div class="header-info">
+              <span class="status-dot" :class="{ online: selectedChannel?.status === 'online' }"></span>
+              <span class="protocol-tag">{{ selectedChannel?.protocol?.toUpperCase() }}</span>
+            </div>
+            <div class="header-actions">
+              <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" plain @click="handleTestConnection(selectedChannelId!)">
+                测试
               </el-button>
-              <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" @click="handleRestartChannel(selectedChannelId!)">
+              <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" plain @click="handleRestartChannel(selectedChannelId!)">
                 重启
               </el-button>
             </div>
           </div>
-          
+
           <div v-if="selectedChannel" class="channel-details-content">
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>基本信息</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="通道ID">{{ selectedChannel.id }}</el-descriptions-item>
-                <el-descriptions-item label="名称">{{ selectedChannel.name }}</el-descriptions-item>
-                <el-descriptions-item label="协议">{{ selectedChannel.protocol.toUpperCase() }}</el-descriptions-item>
-                <el-descriptions-item label="状态">
-                  <el-tag :type="selectedChannel.status === 'online' ? 'success' : 'danger'">
-                    {{ selectedChannel.status === 'online' ? '在线' : '离线' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="启用">
-                  <el-tag :type="selectedChannel.enabled ? 'success' : 'info'">
-                    {{ selectedChannel.enabled ? '是' : '否' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="描述" :span="2">
-                  {{ selectedChannel.description || '--' }}
-                </el-descriptions-item>
-              </el-descriptions>
-            </el-card>
-
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>连接配置</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <template v-if="selectedChannel.protocol === 'mqtt'">
-                  <el-descriptions-item label="Broker">{{ selectedChannel.connection.broker }}</el-descriptions-item>
-                  <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
-                  <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.client_id }}</el-descriptions-item>
-                  <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
-                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
-                  <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
-                  <el-descriptions-item label="适配器">
-                    <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
-                    <span v-else style="color: #909399">标准</span>
-                  </el-descriptions-item>
-                  <el-descriptions-item v-if="selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" label="适配器配置" :span="2">
-                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
-                  </el-descriptions-item>
-                </template>
-                
-                <template v-if="selectedChannel.protocol === 'xnc'">
-                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.local_port }}</el-descriptions-item>
-                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.remote_host || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.remote_port || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</el-descriptions-item>
-                </template>
-                
-                <template v-if="selectedChannel.protocol === 'http'">
-                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.endpoint }}</el-descriptions-item>
-                  <el-descriptions-item label="方法">{{ selectedChannel.connection.method }}</el-descriptions-item>
-                  <el-descriptions-item label="超时">{{ selectedChannel.connection.timeout }}秒</el-descriptions-item>
-                </template>
-              </el-descriptions>
-            </el-card>
-
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>上传策略</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="立即上传">
-                  <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'">
-                    {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="批量大小">{{ selectedChannel.upload_strategy.batch_size }}</el-descriptions-item>
-                <el-descriptions-item label="上传间隔">{{ selectedChannel.upload_strategy.interval }}秒</el-descriptions-item>
-                <el-descriptions-item label="重试次数">{{ selectedChannel.upload_strategy.retry_times }}</el-descriptions-item>
-              </el-descriptions>
-            </el-card>
-
-            <el-card v-if="selectedChannel.statistics" class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>实时统计</span>
-                </div>
-              </template>
-              <div class="statistics-grid">
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.upload_rate }}</div>
-                  <div class="stat-box-label">上传速率(条/分)</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.success_rate }}%</div>
-                  <div class="stat-box-label">成功率</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.backlog_count }}</div>
-                  <div class="stat-box-label">积压数量</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.total_uploaded }}</div>
-                  <div class="stat-box-label">总上传数</div>
+            <!-- 统计仪表盘 -->
+            <div v-if="selectedChannel.statistics" class="stats-dashboard">
+              <div class="stat-item">
+                <div class="stat-icon upload-icon">↑</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.upload_rate }}</div>
+                  <div class="stat-label">条/分钟</div>
                 </div>
               </div>
-            </el-card>
+              <div class="stat-item">
+                <div class="stat-icon success-icon">✓</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.success_rate }}%</div>
+                  <div class="stat-label">成功率</div>
+                </div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon backlog-icon">⏳</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.backlog_count }}</div>
+                  <div class="stat-label">积压</div>
+                </div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon total-icon">📊</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ formatNumber(selectedChannel.statistics.total_uploaded) }}</div>
+                  <div class="stat-label">总上传</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 连接配置（合并基本信息） -->
+            <div class="config-section">
+              <div class="section-title">连接配置</div>
+              <div class="config-grid">
+                <div class="config-item">
+                  <span class="config-label">通道ID</span>
+                  <span class="config-value">{{ selectedChannel.id }}</span>
+                </div>
+                <div class="config-item">
+                  <span class="config-label">名称</span>
+                  <span class="config-value">{{ selectedChannel.name }}</span>
+                </div>
+                <template v-if="selectedChannel.protocol === 'mqtt'">
+                  <div class="config-item">
+                    <span class="config-label">Broker</span>
+                    <span class="config-value">{{ selectedChannel.connection.broker }}:{{ selectedChannel.connection.port }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">客户端ID</span>
+                    <span class="config-value code">{{ selectedChannel.connection.client_id }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">主题</span>
+                    <span class="config-value code">{{ selectedChannel.connection.topic }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">QoS</span>
+                    <span class="config-value">{{ selectedChannel.connection.qos }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">保活</span>
+                    <span class="config-value">{{ selectedChannel.connection.keepalive }}秒</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">适配器</span>
+                    <span class="config-value">
+                      <el-tag v-if="selectedChannel.adapter.adapter" size="small" type="primary">{{ selectedChannel.adapter.adapter }}</el-tag>
+                      <span v-else class="muted">标准</span>
+                    </span>
+                  </div>
+                </template>
+                <template v-if="selectedChannel.protocol === 'xnc'">
+                  <div class="config-item">
+                    <span class="config-label">本地端口</span>
+                    <span class="config-value">{{ selectedChannel.connection.local_port }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">远程主机</span>
+                    <span class="config-value">{{ selectedChannel.connection.remote_host || '--' }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">远程端口</span>
+                    <span class="config-value">{{ selectedChannel.connection.remote_port || '--' }}</span>
+                  </div>
+                </template>
+                <template v-if="selectedChannel.protocol === 'http'">
+                  <div class="config-item full-width">
+                    <span class="config-label">端点</span>
+                    <span class="config-value code">{{ selectedChannel.connection.endpoint }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">方法</span>
+                    <span class="config-value">{{ selectedChannel.connection.method }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">超时</span>
+                    <span class="config-value">{{ selectedChannel.connection.timeout }}秒</span>
+                  </div>
+                </template>
+              </div>
+              <!-- 适配器配置JSON -->
+              <div v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" class="adapter-config">
+                <div class="adapter-config-title">适配器配置</div>
+                <pre class="json-config">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
+              </div>
+            </div>
+
+            <!-- 上传策略（可折叠） -->
+            <el-collapse class="detail-collapse">
+              <el-collapse-item title="上传策略">
+                <div class="config-grid">
+                  <div class="config-item">
+                    <span class="config-label">立即上传</span>
+                    <span class="config-value">
+                      <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'" size="small">
+                        {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
+                      </el-tag>
+                    </span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">批量大小</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} 条</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">上传间隔</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} 秒</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">重试次数</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} 次</span>
+                  </div>
+                </div>
+              </el-collapse-item>
+              <el-collapse-item v-if="selectedChannel.description" title="描述">
+                <p class="description-text">{{ selectedChannel.description }}</p>
+              </el-collapse-item>
+            </el-collapse>
           </div>
         </template>
       </div>
@@ -955,7 +1019,7 @@ onMounted(async () => {
                     <el-dropdown-item command="test" :icon="Connection">测试连接</el-dropdown-item>
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="restart" :icon="RefreshRight">重启</el-dropdown-item>
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'delete')" command="delete" :icon="Delete" divided>
-                      <span style="color: #f56c6c">删除</span>
+                      <span class="danger-text">删除</span>
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -973,127 +1037,173 @@ onMounted(async () => {
         
         <template v-else>
           <div class="panel-header">
-            <span class="panel-title">{{ selectedChannel?.name }} 详情</span>
-            <div class="details-actions">
-              <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" @click="handleTestConnection(selectedChannelId!)">
+            <span class="panel-title">{{ selectedChannel?.name }}</span>
+            <div class="header-info">
+              <span class="status-dot" :class="{ online: selectedChannel?.status === 'online' }"></span>
+              <span class="protocol-tag">{{ selectedChannel?.protocol?.toUpperCase() }}</span>
+              <el-tag :type="selectedChannel?.enabled ? 'success' : 'info'" size="small">
+                {{ selectedChannel?.enabled ? '已启用' : '已禁用' }}
+              </el-tag>
+            </div>
+            <div class="header-actions">
+              <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" plain @click="handleTestConnection(selectedChannelId!)">
                 测试连接
               </el-button>
-              <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" @click="handleRestartChannel(selectedChannelId!)">
+              <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" plain @click="handleRestartChannel(selectedChannelId!)">
                 重启
               </el-button>
             </div>
           </div>
-          
+
           <div v-if="selectedChannel" class="channel-details-content">
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>基本信息</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="通道ID">{{ selectedChannel.id }}</el-descriptions-item>
-                <el-descriptions-item label="名称">{{ selectedChannel.name }}</el-descriptions-item>
-                <el-descriptions-item label="协议">{{ selectedChannel.protocol.toUpperCase() }}</el-descriptions-item>
-                <el-descriptions-item label="状态">
-                  <el-tag :type="selectedChannel.status === 'online' ? 'success' : 'danger'">
-                    {{ selectedChannel.status === 'online' ? '在线' : '离线' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="启用">
-                  <el-tag :type="selectedChannel.enabled ? 'success' : 'info'">
-                    {{ selectedChannel.enabled ? '是' : '否' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="描述" :span="2">
-                  {{ selectedChannel.description || '--' }}
-                </el-descriptions-item>
-              </el-descriptions>
-            </el-card>
 
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>连接配置</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <template v-if="selectedChannel.protocol === 'mqtt'">
-                  <el-descriptions-item label="Broker">{{ selectedChannel.connection.broker }}</el-descriptions-item>
-                  <el-descriptions-item label="端口">{{ selectedChannel.connection.port }}</el-descriptions-item>
-                  <el-descriptions-item label="用户名">{{ selectedChannel.connection.username || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="密码">{{ selectedChannel.connection.password ? '***' : '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="客户端ID">{{ selectedChannel.connection.client_id }}</el-descriptions-item>
-                  <el-descriptions-item label="主题">{{ selectedChannel.connection.topic }}</el-descriptions-item>
-                  <el-descriptions-item label="QoS">{{ selectedChannel.connection.qos }}</el-descriptions-item>
-                  <el-descriptions-item label="保活">{{ selectedChannel.connection.keepalive }}秒</el-descriptions-item>
-                  <el-descriptions-item label="适配器">
-                    <el-tag v-if="selectedChannel.adapter.adapter" size="small">{{ selectedChannel.adapter.adapter }}</el-tag>
-                    <span v-else style="color: #909399">标准</span>
-                  </el-descriptions-item>
-                  <el-descriptions-item v-if="selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" label="适配器配置" :span="2">
-                    <pre style="margin: 0; font-size: 12px; white-space: pre-wrap; word-break: break-all;">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
-                  </el-descriptions-item>
-                </template>
-                
-                <template v-if="selectedChannel.protocol === 'xnc'">
-                  <el-descriptions-item label="本地端口">{{ selectedChannel.connection.local_port }}</el-descriptions-item>
-                  <el-descriptions-item label="远程主机">{{ selectedChannel.connection.remote_host || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="远程端口">{{ selectedChannel.connection.remote_port || '--' }}</el-descriptions-item>
-                  <el-descriptions-item label="重连间隔">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</el-descriptions-item>
-                </template>
-                
-                <template v-if="selectedChannel.protocol === 'http'">
-                  <el-descriptions-item label="端点" :span="2">{{ selectedChannel.connection.endpoint }}</el-descriptions-item>
-                  <el-descriptions-item label="方法">{{ selectedChannel.connection.method }}</el-descriptions-item>
-                  <el-descriptions-item label="超时">{{ selectedChannel.connection.timeout }}秒</el-descriptions-item>
-                </template>
-              </el-descriptions>
-            </el-card>
-
-            <el-card class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>上传策略</span>
-                </div>
-              </template>
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="立即上传">
-                  <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'">
-                    {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="批量大小">{{ selectedChannel.upload_strategy.batch_size }}</el-descriptions-item>
-                <el-descriptions-item label="上传间隔">{{ selectedChannel.upload_strategy.interval }}秒</el-descriptions-item>
-                <el-descriptions-item label="重试次数">{{ selectedChannel.upload_strategy.retry_times }}</el-descriptions-item>
-              </el-descriptions>
-            </el-card>
-
-            <el-card v-if="selectedChannel.statistics" class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span>实时统计</span>
-                </div>
-              </template>
-              <div class="statistics-grid">
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.upload_rate }}</div>
-                  <div class="stat-box-label">上传速率(条/分)</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.success_rate }}%</div>
-                  <div class="stat-box-label">成功率</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.backlog_count }}</div>
-                  <div class="stat-box-label">积压数量</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-value">{{ selectedChannel.statistics.total_uploaded }}</div>
-                  <div class="stat-box-label">总上传数</div>
+            <!-- 统计仪表盘 -->
+            <div v-if="selectedChannel.statistics" class="stats-dashboard">
+              <div class="stat-item">
+                <div class="stat-icon upload-icon">↑</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.upload_rate }}</div>
+                  <div class="stat-label">条/分钟</div>
                 </div>
               </div>
-            </el-card>
+              <div class="stat-item">
+                <div class="stat-icon success-icon">✓</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.success_rate }}%</div>
+                  <div class="stat-label">成功率</div>
+                </div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon backlog-icon">⏳</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ selectedChannel.statistics.backlog_count }}</div>
+                  <div class="stat-label">积压</div>
+                </div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-icon total-icon">📊</div>
+                <div class="stat-content">
+                  <div class="stat-value">{{ formatNumber(selectedChannel.statistics.total_uploaded) }}</div>
+                  <div class="stat-label">总上传</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 连接配置（合并基本信息） -->
+            <div class="config-section">
+              <div class="section-title">连接配置</div>
+              <div class="config-grid">
+                <div class="config-item">
+                  <span class="config-label">通道ID</span>
+                  <span class="config-value">{{ selectedChannel.id }}</span>
+                </div>
+                <div class="config-item">
+                  <span class="config-label">名称</span>
+                  <span class="config-value">{{ selectedChannel.name }}</span>
+                </div>
+                <template v-if="selectedChannel.protocol === 'mqtt'">
+                  <div class="config-item">
+                    <span class="config-label">Broker</span>
+                    <span class="config-value">{{ selectedChannel.connection.broker }}:{{ selectedChannel.connection.port }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">客户端ID</span>
+                    <span class="config-value code">{{ selectedChannel.connection.client_id }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">主题</span>
+                    <span class="config-value code">{{ selectedChannel.connection.topic }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">QoS</span>
+                    <span class="config-value">{{ selectedChannel.connection.qos }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">保活</span>
+                    <span class="config-value">{{ selectedChannel.connection.keepalive }}秒</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">适配器</span>
+                    <span class="config-value">
+                      <el-tag v-if="selectedChannel.adapter.adapter" size="small" type="primary">{{ selectedChannel.adapter.adapter }}</el-tag>
+                      <span v-else class="muted">标准</span>
+                    </span>
+                  </div>
+                  <div v-if="selectedChannel.connection.username" class="config-item">
+                    <span class="config-label">用户名</span>
+                    <span class="config-value">{{ selectedChannel.connection.username }}</span>
+                  </div>
+                </template>
+                <template v-if="selectedChannel.protocol === 'xnc'">
+                  <div class="config-item">
+                    <span class="config-label">本地端口</span>
+                    <span class="config-value">{{ selectedChannel.connection.local_port }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">远程主机</span>
+                    <span class="config-value">{{ selectedChannel.connection.remote_host || '--' }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">远程端口</span>
+                    <span class="config-value">{{ selectedChannel.connection.remote_port || '--' }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">重连间隔</span>
+                    <span class="config-value">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</span>
+                  </div>
+                </template>
+                <template v-if="selectedChannel.protocol === 'http'">
+                  <div class="config-item full-width">
+                    <span class="config-label">端点</span>
+                    <span class="config-value code">{{ selectedChannel.connection.endpoint }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">方法</span>
+                    <span class="config-value">{{ selectedChannel.connection.method }}</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">超时</span>
+                    <span class="config-value">{{ selectedChannel.connection.timeout }}秒</span>
+                  </div>
+                </template>
+              </div>
+              <!-- 适配器配置JSON -->
+              <div v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" class="adapter-config">
+                <div class="adapter-config-title">适配器配置</div>
+                <pre class="json-config">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
+              </div>
+            </div>
+
+            <!-- 上传策略（可折叠） -->
+            <el-collapse class="detail-collapse">
+              <el-collapse-item title="上传策略">
+                <div class="config-grid">
+                  <div class="config-item">
+                    <span class="config-label">立即上传</span>
+                    <span class="config-value">
+                      <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'" size="small">
+                        {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
+                      </el-tag>
+                    </span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">批量大小</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} 条</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">上传间隔</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} 秒</span>
+                  </div>
+                  <div class="config-item">
+                    <span class="config-label">重试次数</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} 次</span>
+                  </div>
+                </div>
+              </el-collapse-item>
+              <el-collapse-item v-if="selectedChannel.description" title="描述">
+                <p class="description-text">{{ selectedChannel.description }}</p>
+              </el-collapse-item>
+            </el-collapse>
           </div>
         </template>
       </div>
@@ -1174,7 +1284,7 @@ onMounted(async () => {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="端口">
-                  <el-input-number v-model="channelForm.port" :min="1" :max="65535" style="width: 100%;" />
+                  <el-input-number v-model="channelForm.port" :min="1" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -1197,17 +1307,17 @@ onMounted(async () => {
             <el-row :gutter="20">
               <el-col :span="8">
                 <el-form-item label="本地端口">
-                  <el-input-number v-model="channelForm.local_port" :min="1024" :max="65535" style="width: 100%;" />
+                  <el-input-number v-model="channelForm.local_port" :min="1024" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
-              <el-col :span="10">
+              <el-col :span="8">
                 <el-form-item label="远程主机">
                   <el-input v-model="channelForm.remote_host" placeholder="XNC服务器地址" />
                 </el-form-item>
               </el-col>
-              <el-col :span="6">
+              <el-col :span="8">
                 <el-form-item label="远程端口">
-                  <el-input-number v-model="channelForm.remote_port" :min="1" :max="65535" style="width: 100%;" />
+                  <el-input-number v-model="channelForm.remote_port" :min="1" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -1234,10 +1344,10 @@ onMounted(async () => {
                     :value="opt.value"
                   >
                     <span>{{ opt.label }}</span>
-                    <span style="float: right; color: #8492a6; font-size: 12px">{{ opt.description }}</span>
+                    <span class="option-desc">{{ opt.description }}</span>
                   </el-option>
                 </el-select>
-                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+                <div class="form-hint">
                   可选择预置适配器，也可直接输入客户编号
                 </div>
               </el-form-item>
@@ -1248,7 +1358,7 @@ onMounted(async () => {
                   v-model="productKey"
                   placeholder="请输入产品Key，如: al12345"
                 />
-                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+                <div class="form-hint">
                   客户A平台的产品标识
                 </div>
               </el-form-item>
@@ -1257,9 +1367,9 @@ onMounted(async () => {
 
           <!-- 客户A模板配置 -->
           <el-form-item v-if="channelForm.adapter === 'C001'" label=" ">
-            <el-collapse style="width: 100%;">
+            <el-collapse class="full-width">
               <el-collapse-item title="模板配置（通常无需修改）">
-                <el-alert type="info" :closable="false" style="margin-bottom: 12px;">
+                <el-alert type="info" :closable="false" class="alert-with-margin">
                   Topic模板已使用客户A协议默认值，通常无需修改
                 </el-alert>
                 <el-input
@@ -1280,7 +1390,7 @@ onMounted(async () => {
               :rows="5"
               placeholder='JSON格式，如 {"productKey": "al12345", "topic_templates": {...}}'
             />
-            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            <div class="form-hint">
               适配器专属配置，不同适配器支持不同参数
             </div>
           </el-form-item>
@@ -1317,7 +1427,7 @@ onMounted(async () => {
                 <el-col :span="12">
                   <el-form-item label="保活时间">
                     <el-input-number v-model="channelForm.keepalive" :min="10" :max="3600" />
-                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                    <span class="unit-hint">秒</span>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -1338,7 +1448,7 @@ onMounted(async () => {
                 <el-col :span="12">
                   <el-form-item label="命令超时">
                     <el-input-number v-model="channelForm.command_timeout" :min="5" :max="300" />
-                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                    <span class="unit-hint">秒</span>
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -1363,17 +1473,22 @@ onMounted(async () => {
             <el-collapse-item v-if="channelForm.protocol === 'xnc'" title="XNC参数">
               <el-form-item label="重连间隔">
                 <el-input-number v-model="channelForm.reconnect_interval" :min="1" :max="300" />
-                <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                <span class="unit-hint">秒（与服务器断开后重连）</span>
               </el-form-item>
               <el-form-item label="映射配置">
                 <el-input
                   v-model="channelForm.mapping_config"
                   type="textarea"
-                  :rows="4"
-                  placeholder='JSON格式的设备映射配置'
+                  :rows="6"
+                  placeholder='点击下方"填充模板"按钮'
                 />
-                <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-                  用于Protobuf格式的设备ID和点位映射
+                <div class="mapping-help">
+                  <div class="mapping-help-text">
+                    用于Protobuf格式的设备ID和点位映射。留空则自动分配。
+                  </div>
+                  <el-button type="primary" link size="small" @click="fillMappingTemplate">
+                    填充模板
+                  </el-button>
                 </div>
               </el-form-item>
             </el-collapse-item>
@@ -1396,7 +1511,7 @@ onMounted(async () => {
                 <el-col :span="12">
                   <el-form-item label="超时时间">
                     <el-input-number v-model="channelForm.timeout" :min="1" :max="300" />
-                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                    <span class="unit-hint">秒</span>
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -1428,7 +1543,7 @@ onMounted(async () => {
                 <el-col :span="12">
                   <el-form-item label="上传间隔">
                     <el-input-number v-model="channelForm.interval" :min="1" :max="3600" />
-                    <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                    <span class="unit-hint">秒</span>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -1439,7 +1554,7 @@ onMounted(async () => {
               </el-row>
               <el-form-item label="重试间隔">
                 <el-input-number v-model="channelForm.retry_interval" :min="1" :max="300" />
-                <span style="margin-left: 8px; color: #909399; font-size: 12px;">秒</span>
+                <span class="unit-hint">秒（数据发送失败后重试）</span>
               </el-form-item>
             </el-collapse-item>
 
@@ -1973,6 +2088,241 @@ onMounted(async () => {
   gap: 16px;
 }
 
+/* 标题栏状态信息 */
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.header-info .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f56c6c;
+  flex-shrink: 0;
+}
+
+.header-info .status-dot.online {
+  background: #67c23a;
+}
+
+.protocol-tag {
+  padding: 2px 8px;
+  background: #ecf5ff;
+  color: #409eff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* 统计区域 - 简约风格 */
+.stats-dashboard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+}
+
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.upload-icon {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.success-icon {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.backlog-icon {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.total-icon {
+  background: #f4f4f5;
+  color: #909399;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-content .stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2c3e50;
+  line-height: 1.2;
+}
+
+.stat-content .stat-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+/* 连接配置区域 */
+.config-section {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  overflow: hidden;
+}
+
+.section-title {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+  background: #fafafa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: #f0f0f0;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: #fff;
+  min-height: 40px;
+}
+
+.config-item.full-width {
+  grid-column: span 2;
+}
+
+.config-label {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+.config-value {
+  flex: 1;
+  font-size: 13px;
+  color: #2c3e50;
+  word-break: break-all;
+}
+
+.config-value.code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  background: #f5f7fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.config-value .muted {
+  color: #909399;
+}
+
+/* 适配器配置 */
+.adapter-config {
+  border-top: 1px solid #e4e7ed;
+  padding: 12px 16px;
+}
+
+.adapter-config-title {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.json-config {
+  margin: 0;
+  padding: 12px;
+  background: #f5f7fa;
+  color: #2c3e50;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid #e4e7ed;
+}
+
+/* 折叠面板 */
+.detail-collapse {
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.detail-collapse :deep(.el-collapse-item__header) {
+  background: #fafafa;
+  border-bottom: 1px solid #e4e7ed;
+  padding: 0 16px;
+  height: 42px;
+  line-height: 42px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.detail-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+}
+
+.detail-collapse :deep(.el-collapse-item__content) {
+  padding: 0;
+}
+
+.description-text {
+  margin: 0;
+  padding: 16px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 映射配置帮助 */
+.mapping-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.mapping-help-text {
+  font-size: 12px;
+  color: #909399;
+}
+
 .detail-card {
   margin-bottom: 0;
 }
@@ -2089,6 +2439,27 @@ onMounted(async () => {
   .toolbar-right {
     order: 4;
     margin-left: auto;
+  }
+
+  /* 详情页响应式 */
+  .stats-dashboard {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-content .stat-value {
+    font-size: 18px;
+  }
+
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-item.full-width {
+    grid-column: span 1;
+  }
+
+  .header-info {
+    display: none;
   }
 }
 
@@ -2226,5 +2597,36 @@ onMounted(async () => {
   .empty-state {
     padding: 30px 0;
   }
+}
+
+/* 表单辅助样式 */
+.full-width {
+  width: 100%;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.unit-hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.option-desc {
+  float: right;
+  color: #8492a6;
+  font-size: 12px;
+}
+
+.danger-text {
+  color: #f56c6c;
+}
+
+.alert-with-margin {
+  margin-bottom: 12px;
 }
 </style>
