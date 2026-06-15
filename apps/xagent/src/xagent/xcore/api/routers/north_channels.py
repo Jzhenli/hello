@@ -174,7 +174,7 @@ async def get_channel(
 @router.put("/{channel_id}", response_model=NorthChannelUpdateResponse)
 async def update_channel(
     channel_id: str,
-    updates: dict,
+    channel: NorthChannelConfig,
     service: NorthChannelService = Depends(get_north_channel_service),
     token: str = Depends(verify_api_token)
 ):
@@ -182,7 +182,7 @@ async def update_channel(
     
     Args:
         channel_id: 通道ID
-        updates: 更新内容
+        channel: 完整的通道配置
         
     Returns:
         更新结果
@@ -192,13 +192,19 @@ async def update_channel(
         HTTPException: 400 - 更新内容无效
     """
     try:
-        updated_channel = await service.update_channel(channel_id, updates)
+        # 确保 channel.id 有效
+        if not channel.id:
+            raise HTTPException(status_code=400, detail="Channel ID is required")
+        if channel.id != channel_id:
+            raise HTTPException(status_code=400, detail=f"Channel ID mismatch: {channel.id} != {channel_id}")
+        
+        updated_channel = await service.update_channel_full(channel_id, channel)
         
         return NorthChannelUpdateResponse(
             success=True,
             message=f"Channel '{channel_id}' updated successfully",
             channel_id=channel_id,
-            updated_fields=list(updates.keys())
+            updated_fields=["all"]
         )
     except ValueError as e:
         logger.error(f"Failed to update channel: {e}")

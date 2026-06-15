@@ -12,7 +12,7 @@ import logging
 import time
 import hashlib
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dataclass_replace
 import aiosqlite
 
 logger = logging.getLogger(__name__)
@@ -1169,6 +1169,86 @@ class ServiceRepository:
         
         logger.info(f"Service updated: {name} v{service.version} by {user}")
         return service
+    
+    async def replace_service(
+        self,
+        name: str,
+        service: ServiceConfig,
+        user: Optional[str] = None
+    ) -> ServiceConfig:
+        """全量替换服务配置
+        
+        Args:
+            name: 服务名称
+            service: 新的服务配置
+            user: 操作用户
+            
+        Returns:
+            更新后的服务配置
+            
+        Raises:
+            ValueError: 如果服务不存在
+        """
+        existing = await self.get_service(name)
+        if not existing:
+            raise ValueError(f"Service '{name}' not found")
+        
+        old_config = existing.to_dict()
+        now = time.time()
+        
+        # 使用 dataclass_replace 创建新对象，避免修改传入对象
+        updated_service = dataclass_replace(
+            service,
+            version=existing.version + 1,
+            updated_at=now,
+            updated_by=user,
+            created_at=existing.created_at,
+            created_by=existing.created_by
+        )
+        
+        config_json = json.dumps(updated_service.to_dict(), sort_keys=True)
+        config_hash = self._compute_hash(config_json)
+        
+        await self._db.execute(
+            """
+            UPDATE service_registry SET
+                display_name = ?, description = ?, protocol = ?,
+                connection_config = ?, adapter_config = ?, upload_config = ?, command_config = ?,
+                enabled = ?, status = ?, priority = ?, metadata = ?, tags = ?, statistics = ?,
+                config_hash = ?, version = ?, updated_at = ?, updated_by = ?
+            WHERE name = ?
+            """,
+            (
+                updated_service.display_name,
+                updated_service.description,
+                updated_service.protocol,
+                json.dumps(updated_service.connection_config),
+                json.dumps(updated_service.adapter_config),
+                json.dumps(updated_service.upload_config),
+                json.dumps(updated_service.command_config),
+                1 if updated_service.enabled else 0,
+                updated_service.status,
+                updated_service.priority,
+                json.dumps(updated_service.metadata),
+                json.dumps(updated_service.tags),
+                json.dumps(updated_service.statistics),
+                config_hash,
+                updated_service.version,
+                now,
+                user,
+                name
+            )
+        )
+        
+        await self._save_config_version(
+            'service', name, updated_service.to_dict(),
+            'update', user, now, old_config
+        )
+        
+        await self._db.commit()
+        
+        logger.info(f"Service replaced: {name} v{updated_service.version} by {user}")
+        return updated_service
     
     async def delete_service(
         self,

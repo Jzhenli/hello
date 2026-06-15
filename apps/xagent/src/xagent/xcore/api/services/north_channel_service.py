@@ -300,11 +300,14 @@ class NorthChannelService:
         updates: Dict[str, Any],
         user: Optional[str] = None
     ) -> NorthChannelConfig:
-        """更新通道
+        """部分更新通道（仅用于简单字段更新）
+        
+        注意：此方法仅适用于 ServiceConfig 的直接属性（如 enabled, status, display_name 等）。
+        对于嵌套字段（connection, adapter, upload_strategy），请使用 update_channel_full()。
         
         Args:
             channel_id: 通道ID
-            updates: 更新内容
+            updates: 更新内容（仅限简单字段）
             user: 操作用户
             
         Returns:
@@ -322,18 +325,47 @@ class NorthChannelService:
         updated_channel = self._service_to_channel(updated_service)
         self._cache[channel_id] = updated_channel
         
-        if self._plugin_loader:
-            old_enabled = old_channel.enabled if old_channel else False
-            new_enabled = updated_channel.enabled
-            
-            if old_enabled and not new_enabled:
-                await self._unload_channel_plugin(channel_id)
-            elif not old_enabled and new_enabled:
-                await self._load_channel_plugin(updated_channel)
-            elif new_enabled:
-                await self._reload_channel_plugin(updated_channel)
+        await self._handle_plugin_lifecycle_change(old_channel, updated_channel)
         
         logger.info(f"Updated channel: {channel_id}")
+        return updated_channel
+    
+    async def update_channel_full(
+        self,
+        channel_id: str,
+        channel: NorthChannelConfig,
+        user: Optional[str] = None
+    ) -> NorthChannelConfig:
+        """全量更新通道（复用 _channel_to_service 转换逻辑）
+        
+        Args:
+            channel_id: 通道ID
+            channel: 完整的通道配置
+            user: 操作用户
+            
+        Returns:
+            更新后的通道
+            
+        Raises:
+            ValueError: 通道不存在
+        """
+        if channel_id not in self._cache:
+            raise ValueError(f"Channel '{channel_id}' not found")
+        
+        old_channel = self._cache.get(channel_id)
+        
+        # 复用 _channel_to_service 转换逻辑
+        service = self._channel_to_service(channel, user)
+        
+        # 全量更新数据库
+        updated_service = await self._service_repo.replace_service(channel_id, service, user)
+
+        updated_channel = self._service_to_channel(updated_service)
+        self._cache[channel_id] = updated_channel
+        
+        await self._handle_plugin_lifecycle_change(old_channel, updated_channel)
+        
+        logger.info(f"Updated channel (full): {channel_id}")
         return updated_channel
     
     async def delete_channel(
@@ -668,6 +700,32 @@ class NorthChannelService:
         """
         await self._unload_channel_plugin(channel.id)
         await self._load_channel_plugin(channel)
+    
+    async def _handle_plugin_lifecycle_change(
+        self,
+        old_channel: Optional[NorthChannelConfig],
+        updated_channel: NorthChannelConfig
+    ) -> None:
+        """处理插件生命周期变更
+        
+        根据启用状态变化决定插件的加载/卸载/重载操作。
+        
+        Args:
+            old_channel: 更新前的通道配置
+            updated_channel: 更新后的通道配置
+        """
+        if not self._plugin_loader:
+            return
+        
+        old_enabled = old_channel.enabled if old_channel else False
+        new_enabled = updated_channel.enabled
+        
+        if old_enabled and not new_enabled:
+            await self._unload_channel_plugin(updated_channel.id)
+        elif not old_enabled and new_enabled:
+            await self._load_channel_plugin(updated_channel)
+        elif new_enabled:
+            await self._reload_channel_plugin(updated_channel)
     
     async def load_all_plugins(self) -> None:
         """加载所有启用的通道插件"""

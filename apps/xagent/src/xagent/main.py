@@ -23,6 +23,35 @@ def setup_logging(debug: bool = False):
     )
 
 
+def patch_windows_selector():
+    """修复 Windows 上 SelectorEventLoop 的 WinError 10038 问题
+    
+    问题描述：
+    Windows 的 select() 只支持 socket，不支持管道等其他文件描述符。
+    当事件循环关闭时，如果 selector 中有非 socket 资源，会触发 WinError 10038。
+    
+    解决方案：
+    参考 https://bugs.python.org/issue33350
+    在 SelectSelector._select 中捕获该错误并返回空列表。
+    """
+    from selectors import SelectSelector
+    
+    # 保存原始方法
+    _original_select = SelectSelector._select
+    
+    def _patched_select(self, r, w, x, timeout=None):
+        try:
+            return _original_select(self, r, w, x, timeout)
+        except OSError as e:
+            if hasattr(e, 'winerror') and e.winerror == 10038:
+                # 文件描述符可能已经关闭，返回空列表
+                return [], [], []
+            raise
+    
+    SelectSelector._select = _patched_select
+    logger.debug("Windows SelectorEventLoop patch applied (WinError 10038 fix)")
+
+
 def main():
     """Main entry point - routes to appropriate mode."""
     parser = argparse.ArgumentParser(description="XAgent IoT Gateway")
@@ -104,6 +133,8 @@ def main():
     if use_cli_mode and platform.system() == "Windows":
         from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
         set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+        # 修复 Windows SelectorEventLoop 的 WinError 10038 问题
+        patch_windows_selector()
     
     if use_cli_mode:
         from .xcore.run import main as cli_main
