@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
 import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
 
 const alertStore = useAlertStore()
 const userStore = useUserStore()
@@ -38,10 +41,10 @@ const systemConfigForm = reactive<SystemNotificationConfig>({
 })
 
 const systemConfigRules = {
-  retentionDays: [{ required: true, message: '请输入保留天数', trigger: 'blur' }],
-  maxNotifications: [{ required: true, message: '请输入最大通知数', trigger: 'blur' }],
-  quietHoursStart: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  quietHoursEnd: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
+  retentionDays: [{ required: true, message: t('alerts.retentionDaysRequired'), trigger: 'blur' }],
+  maxNotifications: [{ required: true, message: t('alerts.maxNotificationsRequired'), trigger: 'blur' }],
+  quietHoursStart: [{ required: true, message: t('alerts.startTimeRequired'), trigger: 'change' }],
+  quietHoursEnd: [{ required: true, message: t('alerts.endTimeRequired'), trigger: 'change' }]
 }
 
 const systemConfigFormRef = ref()
@@ -56,9 +59,9 @@ const emailConfigForm = reactive({
   useTls: true,
 })
 const emailConfigRules = {
-  smtpHost: [{ required: true, message: '请输入SMTP服务器', trigger: 'blur' }],
-  smtpPort: [{ required: true, message: '请输入SMTP端口', trigger: 'blur' }],
-  fromAddress: [{ required: true, message: '请输入发件人地址', trigger: 'blur' }],
+  smtpHost: [{ required: true, message: t('alerts.smtpHostRequired'), trigger: 'blur' }],
+  smtpPort: [{ required: true, message: t('alerts.smtpPortRequired'), trigger: 'blur' }],
+  fromAddress: [{ required: true, message: t('alerts.fromAddressRequired'), trigger: 'blur' }],
 }
 const emailConfigFormRef = ref()
 
@@ -70,7 +73,7 @@ const webhookConfigForm = reactive({
   secret: '',
 })
 const webhookConfigRules = {
-  url: [{ required: true, message: '请输入Webhook URL', trigger: 'blur' }],
+  url: [{ required: true, message: t('alerts.webhookUrlRequired'), trigger: 'blur' }],
 }
 const webhookConfigFormRef = ref()
 
@@ -98,9 +101,9 @@ const filteredAlerts = computed(() => {
 
 const getLevelLabel = (level: string) => {
   const labels: Record<string, string> = {
-    critical: '紧急',
-    warning: '警告',
-    info: '提示'
+    critical: t('alerts.levelCritical'),
+    warning: t('alerts.levelWarning'),
+    info: t('alerts.levelInfo')
   }
   return labels[level] || level
 }
@@ -116,10 +119,10 @@ const getLevelTag = (level: string) => {
 
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
-    new: '未处理',
-    acknowledged: '已确认',
-    resolved: '已解决',
-    ignored: '已忽略'
+    new: t('alerts.statusNew'),
+    acknowledged: t('alerts.statusAcknowledged'),
+    resolved: t('alerts.statusResolved'),
+    ignored: t('alerts.statusIgnored')
   }
   return labels[status] || status
 }
@@ -137,45 +140,45 @@ const getStatusTag = (status: string) => {
 const handleAcknowledge = async (id: string) => {
   try {
     await alertStore.acknowledgeAlert(id)
-    ElMessage.success('告警已确认')
+    ElMessage.success(t('alerts.acknowledgeSuccess'))
   } catch {
-    ElMessage.error('操作失败')
+    ElMessage.error(t('common.operationFailed'))
   }
 }
 
 const handleResolve = async (id: string) => {
   try {
     await alertStore.resolveAlert(id)
-    ElMessage.success('告警已解决')
+    ElMessage.success(t('alerts.resolveSuccess'))
   } catch {
-    ElMessage.error('操作失败')
+    ElMessage.error(t('common.operationFailed'))
   }
 }
 
 const handleIgnore = async (id: string) => {
   try {
     await alertStore.ignoreAlert(id)
-    ElMessage.success('告警已忽略')
+    ElMessage.success(t('alerts.ignoreSuccess'))
   } catch {
-    ElMessage.error('操作失败')
+    ElMessage.error(t('common.operationFailed'))
   }
 }
 
 const handleClearAll = () => {
   ElMessageBox.confirm(
-    '确定要清除所有已解决的告警吗？',
-    '清除确认',
+    t('alerts.clearAllConfirm'),
+    t('alerts.clearConfirmTitle'),
     {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning'
     }
   ).then(async () => {
     try {
       await alertStore.clearResolvedAlerts()
-      ElMessage.success('已清除解决的告警')
+      ElMessage.success(t('alerts.clearSuccess'))
     } catch {
-      ElMessage.error('清除失败')
+      ElMessage.error(t('alerts.clearFailed'))
     }
   }).catch(() => {})
 }
@@ -184,22 +187,22 @@ const handleToggleChannel = (id: string) => {
   alertStore.toggleChannel(id)
   const channel = alertStore.channels.find(c => c.id === id)
   if (channel) {
-    ElMessage.success(channel.enabled ? '通道已启用' : '通道已禁用')
+    ElMessage.success(channel.enabled ? t('alerts.channelEnabled') : t('alerts.channelDisabled'))
   }
 }
 
 const getChannelTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
-    email: '邮件',
-    sms: '短信',
+    email: t('alerts.channelEmail'),
+    sms: t('alerts.channelSms'),
     webhook: 'Webhook',
-    system: '系统通知'
+    system: t('alerts.channelSystem')
   }
   return labels[type] || type
 }
 
 const getSystemNotifyLevelLabels = (levels: Array<'critical' | 'warning' | 'info'>) => {
-  const map: Record<string, string> = { critical: '紧急', warning: '警告', info: '提示' }
+  const map: Record<string, string> = { critical: t('alerts.levelCritical'), warning: t('alerts.levelWarning'), info: t('alerts.levelInfo') }
   return levels.map(l => map[l]).join('、')
 }
 
@@ -252,7 +255,7 @@ const handleSaveSystemConfig = async () => {
   const systemChannel = alertStore.channels.find(c => c.type === 'system')
   if (systemChannel) {
     alertStore.updateChannelConfig(systemChannel.id, { ...systemConfigForm })
-    ElMessage.success('系统通知配置已保存')
+    ElMessage.success(t('alerts.systemConfigSaved'))
     systemConfigDialogVisible.value = false
   }
 }
@@ -268,7 +271,7 @@ const handleSaveEmailConfig = async () => {
   const emailChannel = alertStore.channels.find(c => c.type === 'email')
   if (emailChannel) {
     alertStore.updateChannelConfig(emailChannel.id, { ...emailConfigForm })
-    ElMessage.success('邮件通知配置已保存')
+    ElMessage.success(t('alerts.emailConfigSaved'))
     emailConfigDialogVisible.value = false
   }
 }
@@ -284,7 +287,7 @@ const handleSaveWebhookConfig = async () => {
   const webhookChannel = alertStore.channels.find(c => c.type === 'webhook')
   if (webhookChannel) {
     alertStore.updateChannelConfig(webhookChannel.id, { ...webhookConfigForm })
-    ElMessage.success('Webhook 配置已保存')
+    ElMessage.success(t('alerts.webhookConfigSaved'))
     webhookConfigDialogVisible.value = false
   }
 }
@@ -294,7 +297,7 @@ const handleTestChannel = (channelId: string) => {
   if (!channel) return
 
   if (!channel.enabled) {
-    ElMessage.warning('请先启用该通知渠道')
+    ElMessage.warning(t('alerts.enableChannelFirst'))
     return
   }
 
@@ -305,7 +308,7 @@ const handleTestChannel = (channelId: string) => {
 
 const testSystemNotification = () => {
   if (Notification.permission === 'denied') {
-    ElMessage.warning('浏览器已禁止桌面通知，请在浏览器设置中允许通知权限')
+    ElMessage.warning(t('alerts.notificationDenied'))
     return
   }
 
@@ -314,7 +317,7 @@ const testSystemNotification = () => {
       if (permission === 'granted') {
         sendTestDesktopNotification()
       } else {
-        ElMessage.warning('桌面通知权限被拒绝，将仅发送站内通知')
+        ElMessage.warning(t('alerts.desktopNotificationDenied'))
         sendTestInAppNotification()
       }
     })
@@ -326,8 +329,8 @@ const testSystemNotification = () => {
 }
 
 const sendTestDesktopNotification = () => {
-  new Notification('XAgent 系统通知测试', {
-    body: '这是一条测试通知，如果您看到此消息，说明系统通知渠道工作正常。',
+  new Notification(t('alerts.testNotificationTitle'), {
+    body: t('alerts.testNotificationBody'),
     icon: '/favicon.ico',
     tag: 'xagent-test-notification'
   })
@@ -336,7 +339,7 @@ const sendTestDesktopNotification = () => {
 
 const sendTestInAppNotification = () => {
   ElMessage.success({
-    message: '系统通知测试发送成功！通知渠道工作正常。',
+    message: t('alerts.testNotificationSuccess'),
     duration: 5000
   })
 }
@@ -345,70 +348,70 @@ const sendTestInAppNotification = () => {
 <template>
   <div class="alerts-page">
     <el-tabs v-model="activeTab" class="alerts-tabs">
-      <el-tab-pane label="告警记录" name="alerts">
+      <el-tab-pane :label="$t('alerts.tabAlerts')" name="alerts">
         <div class="toolbar">
           <div class="toolbar-left">
             <el-input
               v-model="searchQuery"
-              placeholder="搜索告警..."
+              :placeholder="$t('alerts.searchPlaceholder')"
               :prefix-icon="Search"
               clearable
               class="toolbar-search"
             />
             <el-select 
               v-model="levelFilter" 
-              placeholder="级别筛选" 
+              :placeholder="$t('alerts.levelFilter')" 
               clearable
               class="toolbar-filter"
             >
-              <el-option label="全部" value="" />
-              <el-option label="紧急" value="critical" />
-              <el-option label="警告" value="warning" />
-              <el-option label="提示" value="info" />
+              <el-option :label="$t('common.all')" value="" />
+              <el-option :label="$t('alerts.levelCritical')" value="critical" />
+              <el-option :label="$t('alerts.levelWarning')" value="warning" />
+              <el-option :label="$t('alerts.levelInfo')" value="info" />
             </el-select>
             <el-select 
               v-model="statusFilter" 
-              placeholder="状态筛选" 
+              :placeholder="$t('alerts.statusFilter')" 
               clearable
               class="toolbar-filter"
             >
-              <el-option label="全部" value="" />
-              <el-option label="未处理" value="new" />
-              <el-option label="已确认" value="acknowledged" />
-              <el-option label="已解决" value="resolved" />
-              <el-option label="已忽略" value="ignored" />
+              <el-option :label="$t('common.all')" value="" />
+              <el-option :label="$t('alerts.statusNew')" value="new" />
+              <el-option :label="$t('alerts.statusAcknowledged')" value="acknowledged" />
+              <el-option :label="$t('alerts.statusResolved')" value="resolved" />
+              <el-option :label="$t('alerts.statusIgnored')" value="ignored" />
             </el-select>
           </div>
           <div class="toolbar-right">
-            <el-button @click="alertStore.fetchAlerts()" :loading="alertStore.loading">刷新</el-button>
-            <el-button type="danger" @click="handleClearAll" v-if="userStore.hasPermission('alerts', 'delete')">清除已解决</el-button>
+            <el-button @click="alertStore.fetchAlerts()" :loading="alertStore.loading">{{ $t('common.refresh') }}</el-button>
+            <el-button type="danger" @click="handleClearAll" v-if="userStore.hasPermission('alerts', 'delete')">{{ $t('alerts.clearResolved') }}</el-button>
           </div>
         </div>
         
         <el-table :data="filteredAlerts" style="width: 100%" stripe v-loading="alertStore.loading">
           <template #empty>
             <div class="empty-alerts">
-              <el-empty description="暂无告警记录" />
+              <el-empty :description="$t('alerts.noAlerts')" />
             </div>
           </template>
-          <el-table-column label="级别" width="100">
+          <el-table-column :label="$t('alerts.level')" width="100">
             <template #default="{ row }">
               <el-tag :type="getLevelTag(row.level)" size="small">
                 {{ getLevelLabel(row.level) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="ruleName" label="告警规则" width="150" />
-          <el-table-column prop="message" label="告警信息" show-overflow-tooltip />
-          <el-table-column label="状态" width="100">
+          <el-table-column prop="ruleName" :label="$t('alerts.alertRule')" width="150" />
+          <el-table-column prop="message" :label="$t('alerts.alertMessage')" show-overflow-tooltip />
+          <el-table-column :label="$t('alerts.status')" width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTag(row.status)" size="small">
                 {{ getStatusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="triggeredAt" label="触发时间" width="160" />
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column prop="triggeredAt" :label="$t('alerts.triggeredAt')" width="160" />
+          <el-table-column :label="$t('common.actions')" width="200" fixed="right">
             <template #default="{ row }">
               <el-button 
                 v-if="row.status === 'new' && userStore.hasPermission('alerts', 'update')"
@@ -417,7 +420,7 @@ const sendTestInAppNotification = () => {
                 link
                 @click="handleAcknowledge(row.id)"
               >
-                确认
+                {{ $t('alerts.acknowledge') }}
               </el-button>
               <el-button 
                 v-if="(row.status !== 'resolved' && row.status !== 'ignored') && userStore.hasPermission('alerts', 'update')"
@@ -426,7 +429,7 @@ const sendTestInAppNotification = () => {
                 link
                 @click="handleResolve(row.id)"
               >
-                解决
+                {{ $t('alerts.resolve') }}
               </el-button>
               <el-button 
                 v-if="row.status === 'new' && userStore.hasPermission('alerts', 'update')"
@@ -435,14 +438,14 @@ const sendTestInAppNotification = () => {
                 link
                 @click="handleIgnore(row.id)"
               >
-                忽略
+                {{ $t('alerts.ignore') }}
               </el-button>
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
       
-      <el-tab-pane label="通知渠道" name="channels">
+      <el-tab-pane :label="$t('alerts.tabChannels')" name="channels">
         <div class="channels-section">
           <el-row :gutter="20">
             <el-col 
@@ -479,27 +482,27 @@ const sendTestInAppNotification = () => {
                   </div>
                   <template v-if="channel.type === 'system'">
                     <div class="config-item">
-                      <span class="label">保留天数:</span>
-                      <span class="value">{{ channel.config.retentionDays }} 天</span>
+                      <span class="label">{{ $t('alerts.retentionDays') }}:</span>
+                      <span class="value">{{ channel.config.retentionDays }} {{ $t('alerts.days') }}</span>
                     </div>
                     <div class="config-item">
-                      <span class="label">通知上限:</span>
-                      <span class="value">{{ channel.config.maxNotifications }} 条</span>
+                      <span class="label">{{ $t('alerts.notificationLimit') }}:</span>
+                      <span class="value">{{ channel.config.maxNotifications }} {{ $t('alerts.items') }}</span>
                     </div>
                     <div class="config-item">
-                      <span class="label">通知级别:</span>
+                      <span class="label">{{ $t('alerts.notificationLevels') }}:</span>
                       <span class="value">{{ getSystemNotifyLevelLabels(channel.config.notifyLevels) }}</span>
                     </div>
                     <div class="config-item">
-                      <span class="label">桌面通知:</span>
-                      <span class="value">{{ channel.config.desktopEnabled ? '已开启' : '已关闭' }}</span>
+                      <span class="label">{{ $t('alerts.desktopNotification') }}:</span>
+                      <span class="value">{{ channel.config.desktopEnabled ? $t('alerts.enabled') : $t('alerts.disabled') }}</span>
                     </div>
                     <div class="config-item">
-                      <span class="label">提示音:</span>
-                      <span class="value">{{ channel.config.soundEnabled ? '已开启' : '已关闭' }}</span>
+                      <span class="label">{{ $t('alerts.sound') }}:</span>
+                      <span class="value">{{ channel.config.soundEnabled ? $t('alerts.enabled') : $t('alerts.disabled') }}</span>
                     </div>
                     <div v-if="channel.config.quietHoursEnabled" class="config-item">
-                      <span class="label">免打扰:</span>
+                      <span class="label">{{ $t('alerts.doNotDisturb') }}:</span>
                       <span class="value">{{ channel.config.quietHoursStart }} - {{ channel.config.quietHoursEnd }}</span>
                     </div>
                   </template>
@@ -512,7 +515,7 @@ const sendTestInAppNotification = () => {
                     size="small"
                     @click="handleConfigureChannel(channel.id)"
                   >
-                    配置
+                    {{ $t('alerts.configure') }}
                   </el-button>
                   <el-button 
                     v-else-if="userStore.hasPermission('alerts', 'update')"
@@ -521,7 +524,7 @@ const sendTestInAppNotification = () => {
                     size="small"
                     @click="handleConfigureChannel(channel.id)"
                   >
-                    配置
+                    {{ $t('alerts.configure') }}
                   </el-button>
                   <el-button 
                     v-if="channel.type === 'system' && userStore.hasPermission('alerts', 'update')"
@@ -530,7 +533,7 @@ const sendTestInAppNotification = () => {
                     size="small"
                     @click="handleTestChannel(channel.id)"
                   >
-                    测试
+                    {{ $t('common.test') }}
                   </el-button>
                   <el-button 
                     v-else-if="userStore.hasPermission('alerts', 'update')"
@@ -539,7 +542,7 @@ const sendTestInAppNotification = () => {
                     size="small"
                     @click="handleTestChannel(channel.id)"
                   >
-                    测试
+                    {{ $t('common.test') }}
                   </el-button>
                 </div>
               </el-card>
@@ -551,7 +554,7 @@ const sendTestInAppNotification = () => {
 
     <el-dialog
       v-model="systemConfigDialogVisible"
-      title="系统通知配置"
+      :title="$t('alerts.systemConfigTitle')"
       width="min(560px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
@@ -563,19 +566,19 @@ const sendTestInAppNotification = () => {
         label-width="110px"
         class="system-config-form"
       >
-        <el-divider content-position="left">基本设置</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.basicSettings') }}</el-divider>
 
-        <el-form-item label="通知保留天数" prop="retentionDays">
+        <el-form-item :label="$t('alerts.retentionDaysLabel')" prop="retentionDays">
           <el-input-number
             v-model="systemConfigForm.retentionDays"
             :min="1"
             :max="365"
             controls-position="right"
           />
-          <span class="form-item-hint">超过保留天数的通知将自动清除</span>
+          <span class="form-item-hint">{{ $t('alerts.retentionDaysHint') }}</span>
         </el-form-item>
 
-        <el-form-item label="最大通知数" prop="maxNotifications">
+        <el-form-item :label="$t('alerts.maxNotificationsLabel')" prop="maxNotifications">
           <el-input-number
             v-model="systemConfigForm.maxNotifications"
             :min="100"
@@ -583,79 +586,79 @@ const sendTestInAppNotification = () => {
             :step="100"
             controls-position="right"
           />
-          <span class="form-item-hint">超出上限时自动清除最早的通知</span>
+          <span class="form-item-hint">{{ $t('alerts.maxNotificationsHint') }}</span>
         </el-form-item>
 
-        <el-form-item label="通知级别" prop="notifyLevels">
+        <el-form-item :label="$t('alerts.notificationLevelsLabel')" prop="notifyLevels">
           <el-checkbox-group v-model="systemConfigForm.notifyLevels">
-            <el-checkbox label="critical">紧急</el-checkbox>
-            <el-checkbox label="warning">警告</el-checkbox>
-            <el-checkbox label="info">提示</el-checkbox>
+            <el-checkbox label="critical">{{ $t('alerts.levelCritical') }}</el-checkbox>
+            <el-checkbox label="warning">{{ $t('alerts.levelWarning') }}</el-checkbox>
+            <el-checkbox label="info">{{ $t('alerts.levelInfo') }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
 
-        <el-divider content-position="left">通知方式</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.notificationMethods') }}</el-divider>
 
-        <el-form-item label="桌面通知">
+        <el-form-item :label="$t('alerts.desktopNotificationLabel')">
           <el-switch v-model="systemConfigForm.desktopEnabled" />
-          <span class="form-item-hint">通过浏览器推送桌面通知弹窗</span>
+          <span class="form-item-hint">{{ $t('alerts.desktopNotificationHint') }}</span>
         </el-form-item>
 
-        <el-form-item label="提示音">
+        <el-form-item :label="$t('alerts.soundLabel')">
           <el-switch v-model="systemConfigForm.soundEnabled" />
-          <span class="form-item-hint">收到新通知时播放提示音</span>
+          <span class="form-item-hint">{{ $t('alerts.soundHint') }}</span>
         </el-form-item>
 
-        <el-divider content-position="left">免打扰</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.doNotDisturb') }}</el-divider>
 
-        <el-form-item label="免打扰模式">
+        <el-form-item :label="$t('alerts.doNotDisturbLabel')">
           <el-switch v-model="systemConfigForm.quietHoursEnabled" />
-          <span class="form-item-hint">在设定时段内不发送桌面通知和提示音</span>
+          <span class="form-item-hint">{{ $t('alerts.doNotDisturbHint') }}</span>
         </el-form-item>
 
         <template v-if="systemConfigForm.quietHoursEnabled">
-          <el-form-item label="开始时间" prop="quietHoursStart">
+          <el-form-item :label="$t('alerts.startTimeLabel')" prop="quietHoursStart">
             <el-time-select
               v-model="systemConfigForm.quietHoursStart"
               start="00:00"
               step="00:30"
               end="23:30"
-              placeholder="选择开始时间"
+              :placeholder="$t('alerts.selectStartTime')"
             />
           </el-form-item>
-          <el-form-item label="结束时间" prop="quietHoursEnd">
+          <el-form-item :label="$t('alerts.endTimeLabel')" prop="quietHoursEnd">
             <el-time-select
               v-model="systemConfigForm.quietHoursEnd"
               start="00:00"
               step="00:30"
               end="23:30"
-              placeholder="选择结束时间"
+              :placeholder="$t('alerts.selectEndTime')"
             />
           </el-form-item>
         </template>
 
-        <el-divider content-position="left">自动处理</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.autoProcess') }}</el-divider>
 
-        <el-form-item label="自动已读">
+        <el-form-item :label="$t('alerts.autoReadLabel')">
           <el-input-number
             v-model="systemConfigForm.autoReadMinutes"
             :min="0"
             :max="10080"
             controls-position="right"
           />
-          <span class="form-item-hint">通知发出后自动标记为已读（分钟，0 为不自动已读）</span>
+          <span class="form-item-hint">{{ $t('alerts.autoReadHint') }}</span>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="systemConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveSystemConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
+        <el-button @click="systemConfigDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveSystemConfig" v-if="userStore.hasPermission('alerts', 'update')">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="emailConfigDialogVisible"
-      title="邮件通知配置"
+      :title="$t('alerts.emailConfigTitle')"
       width="min(520px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
@@ -667,44 +670,44 @@ const sendTestInAppNotification = () => {
         label-width="110px"
         class="system-config-form"
       >
-        <el-divider content-position="left">SMTP 服务器</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.smtpServer') }}</el-divider>
 
-        <el-form-item label="服务器地址" prop="smtpHost">
+        <el-form-item :label="$t('alerts.serverAddress')" prop="smtpHost">
           <el-input v-model="emailConfigForm.smtpHost" placeholder="smtp.example.com" />
         </el-form-item>
 
-        <el-form-item label="端口" prop="smtpPort">
+        <el-form-item :label="$t('alerts.port')" prop="smtpPort">
           <el-input-number v-model="emailConfigForm.smtpPort" :min="1" :max="65535" controls-position="right" />
         </el-form-item>
 
-        <el-form-item label="启用 TLS">
+        <el-form-item :label="$t('alerts.enableTls')">
           <el-switch v-model="emailConfigForm.useTls" />
         </el-form-item>
 
-        <el-divider content-position="left">认证信息</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.authInfo') }}</el-divider>
 
-        <el-form-item label="用户名">
+        <el-form-item :label="$t('alerts.username')">
           <el-input v-model="emailConfigForm.username" placeholder="user@example.com" />
         </el-form-item>
 
-        <el-form-item label="密码">
+        <el-form-item :label="$t('alerts.password')">
           <el-input v-model="emailConfigForm.password" type="password" show-password placeholder="********" />
         </el-form-item>
 
-        <el-form-item label="发件人地址" prop="fromAddress">
+        <el-form-item :label="$t('alerts.fromAddressLabel')" prop="fromAddress">
           <el-input v-model="emailConfigForm.fromAddress" placeholder="noreply@example.com" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="emailConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveEmailConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
+        <el-button @click="emailConfigDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveEmailConfig" v-if="userStore.hasPermission('alerts', 'update')">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="webhookConfigDialogVisible"
-      title="Webhook 配置"
+      :title="$t('alerts.webhookConfigTitle')"
       width="min(520px, 92vw)"
       :close-on-click-modal="false"
       destroy-on-close
@@ -720,14 +723,14 @@ const sendTestInAppNotification = () => {
           <el-input v-model="webhookConfigForm.url" placeholder="https://hooks.example.com/alert" />
         </el-form-item>
 
-        <el-form-item label="请求方法">
+        <el-form-item :label="$t('alerts.requestMethod')">
           <el-select v-model="webhookConfigForm.method" style="width: 200px">
             <el-option label="POST" value="POST" />
             <el-option label="PUT" value="PUT" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="自定义请求头">
+        <el-form-item :label="$t('alerts.customHeaders')">
           <el-input
             v-model="webhookConfigForm.headers"
             type="textarea"
@@ -736,14 +739,14 @@ const sendTestInAppNotification = () => {
           />
         </el-form-item>
 
-        <el-form-item label="签名密钥">
-          <el-input v-model="webhookConfigForm.secret" type="password" show-password placeholder="用于验证请求来源" />
+        <el-form-item :label="$t('alerts.signatureKey')">
+          <el-input v-model="webhookConfigForm.secret" type="password" show-password :placeholder="$t('alerts.signatureKeyHint')" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="webhookConfigDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveWebhookConfig" v-if="userStore.hasPermission('alerts', 'update')">保存配置</el-button>
+        <el-button @click="webhookConfigDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveWebhookConfig" v-if="userStore.hasPermission('alerts', 'update')">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

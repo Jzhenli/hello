@@ -3,7 +3,9 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/users'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
@@ -13,21 +15,21 @@ const loading = ref(false)
 
 async function handleLogin() {
   if (!loginForm.value.username || !loginForm.value.password) {
-    ElMessage.warning('请输入用户名和密码')
+    ElMessage.warning(t('login.pleaseEnterCredentials'))
     return
   }
   loading.value = true
   try {
     const success = await userStore.login(loginForm.value.username, loginForm.value.password)
     if (success) {
-      ElMessage.success('登录成功')
+      ElMessage.success(t('login.loginSuccess'))
       const redirect = (route.query.redirect as string) || '/dashboard'
       router.push(redirect)
     } else {
-      ElMessage.error('用户名或密码错误')
+      ElMessage.error(t('login.loginFailed'))
     }
   } catch {
-    ElMessage.error('登录失败，请检查网络连接')
+    ElMessage.error(t('login.loginError'))
   } finally {
     loading.value = false
   }
@@ -45,14 +47,14 @@ async function handleLogin() {
           <div class="login-logo">
             <span class="logo-icon">⚡</span>
           </div>
-          <h1 class="login-title">XAgent</h1>
-          <p class="login-subtitle">IoT 网关控制台</p>
+          <h1 class="login-title">{{ $t('login.title') }}</h1>
+          <p class="login-subtitle">{{ $t('login.subtitle') }}</p>
         </div>
         <el-form class="login-form" @submit.prevent="handleLogin">
           <el-form-item>
             <el-input
               v-model="loginForm.username"
-              placeholder="用户名"
+              :placeholder="$t('login.username')"
               size="large"
               prefix-icon="User"
               @keyup.enter="handleLogin"
@@ -62,7 +64,7 @@ async function handleLogin() {
             <el-input
               v-model="loginForm.password"
               type="password"
-              placeholder="密码"
+              :placeholder="$t('login.password')"
               size="large"
               prefix-icon="Lock"
               show-password
@@ -77,12 +79,12 @@ async function handleLogin() {
               :loading="loading"
               @click="handleLogin"
             >
-              登 录
+              {{ $t('login.loginBtn') }}
             </el-button>
           </el-form-item>
         </el-form>
         <div class="login-footer">
-          <span>XAgent IoT Gateway v1.0</span>
+          <span>{{ $t('login.footer') }}</span>
         </div>
       </div>
     </div>

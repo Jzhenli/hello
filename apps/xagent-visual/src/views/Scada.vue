@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -8,6 +9,8 @@ import { FullScreen, View, Upload, ArrowLeft } from '@element-plus/icons-vue'
 import ComponentPalette from '@/components/ComponentPalette.vue'
 import ScadaCanvas from '@/components/ScadaCanvas.vue'
 import ComponentConfig from '@/components/ComponentConfig.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -58,7 +61,7 @@ const handleZoomReset = () => {
 }
 
 const handleSave = () => {
-  ElMessage.success('面板已保存')
+  ElMessage.success(t('scada.savePanelSuccess'))
 }
 
 const handlePreview = () => {
@@ -88,11 +91,11 @@ const handleFullscreen = () => {
 
 const handlePublish = () => {
   ElMessageBox.confirm(
-    '确定要发布当前面板吗？发布后其他用户将可以看到此面板。',
-    '发布确认',
-    { confirmButtonText: '发布', cancelButtonText: '取消', type: 'info' }
+    t('scada.publishConfirm'),
+    t('scada.publishConfirmTitle'),
+    { confirmButtonText: t('scada.publish'), cancelButtonText: t('common.cancel'), type: 'info' }
   ).then(() => {
-    ElMessage.success('面板已发布成功！')
+    ElMessage.success(t('scada.publishSuccess'))
   }).catch(() => {})
 }
 
@@ -107,7 +110,7 @@ const handleExport = () => {
   a.download = `${currentPanel.value.name}.json`
   a.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('面板已导出')
+  ElMessage.success(t('scada.exportSuccess'))
 }
 </script>
 
@@ -115,22 +118,22 @@ const handleExport = () => {
   <div class="scada-page" :class="{ 'preview-mode': isPreviewMode }">
     <div v-if="!isPreviewMode" class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="handleGoBack">返回列表</el-button>
+        <el-button :icon="ArrowLeft" @click="handleGoBack">{{ $t('scada.backToList') }}</el-button>
         <span class="project-name">{{ currentPanel?.name }}</span>
       </div>
       <div class="header-actions">
-        <el-button :icon="View" @click="handlePreview">预览</el-button>
-        <el-button :icon="FullScreen" @click="handleFullscreen">全屏</el-button>
-        <el-button @click="handleExport">导出</el-button>
-        <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">发布</el-button>
-        <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">保存</el-button>
+        <el-button :icon="View" @click="handlePreview">{{ $t('scada.preview') }}</el-button>
+        <el-button :icon="FullScreen" @click="handleFullscreen">{{ $t('scada.fullscreen') }}</el-button>
+        <el-button @click="handleExport">{{ $t('common.export') }}</el-button>
+        <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">{{ $t('scada.publish') }}</el-button>
+        <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">{{ $t('common.save') }}</el-button>
       </div>
     </div>
     
     <div v-if="isPreviewMode" class="preview-header">
       <span class="preview-title">{{ currentPanel?.name }}</span>
       <div class="preview-actions">
-        <el-button size="small" @click="handleExitPreview">退出预览</el-button>
+        <el-button size="small" @click="handleExitPreview">{{ $t('scada.exitPreview') }}</el-button>
       </div>
     </div>
     
@@ -147,11 +150,11 @@ const handleExport = () => {
               <el-button size="small" @click="handleZoomReset">{{ Math.round(scadaStore.zoom * 100) }}%</el-button>
               <el-button size="small" @click="handleZoomIn">+</el-button>
             </el-button-group>
-            <el-checkbox v-model="scadaStore.showGrid" size="small">显示网格</el-checkbox>
-            <el-checkbox v-model="scadaStore.isEditing" size="small">编辑模式</el-checkbox>
+            <el-checkbox v-model="scadaStore.showGrid" size="small">{{ $t('scada.showGrid') }}</el-checkbox>
+            <el-checkbox v-model="scadaStore.isEditing" size="small">{{ $t('scada.editMode') }}</el-checkbox>
           </div>
           <div class="toolbar-right">
-            <span class="component-count">组件: {{ currentPanel.components.length }}</span>
+            <span class="component-count">{{ $t('scada.componentCount', { count: currentPanel.components.length }) }}</span>
           </div>
         </div>
         
@@ -166,8 +169,8 @@ const handleExport = () => {
     </div>
     
     <div v-else class="empty-state">
-      <el-empty description="项目不存在或已被删除">
-        <el-button type="primary" @click="handleGoBack">返回项目列表</el-button>
+      <el-empty :description="$t('scada.projectNotExist')">
+        <el-button type="primary" @click="handleGoBack">{{ $t('scada.backToProjectList') }}</el-button>
       </el-empty>
     </div>
   </div>

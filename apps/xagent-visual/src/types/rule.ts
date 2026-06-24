@@ -111,25 +111,25 @@ export interface NodeTemplate {
 export const NODE_TEMPLATES: NodeTemplate[] = [
   {
     type: 'trigger',
-    label: '数据触发器',
+    label: 'ruleNodeLabels.trigger',
     icon: '🎯',
     color: '#3498db',
-    category: '触发器',
+    category: 'ruleNodeCategories.trigger',
     defaultData: {
       trigger: {
         source: '',
         field: '',
         description: ''
       },
-      label: '数据触发器'
+      label: 'ruleNodeLabels.trigger'
     }
   },
   {
     type: 'schedule-trigger',
-    label: '定时触发器',
+    label: 'ruleNodeLabels.scheduleTrigger',
     icon: '⏰',
     color: '#00bcd4',
-    category: '触发器',
+    category: 'ruleNodeCategories.trigger',
     defaultData: {
       scheduleTrigger: {
         mode: 'periodic',
@@ -138,15 +138,15 @@ export const NODE_TEMPLATES: NodeTemplate[] = [
         days: [],
         description: ''
       },
-      label: '定时触发器'
+      label: 'ruleNodeLabels.scheduleTrigger'
     }
   },
   {
     type: 'condition',
-    label: '条件判断',
+    label: 'ruleNodeLabels.condition',
     icon: '⚙️',
     color: '#9b59b6',
-    category: '条件',
+    category: 'ruleNodeCategories.condition',
     defaultData: {
       condition: {
         field: '',
@@ -155,104 +155,104 @@ export const NODE_TEMPLATES: NodeTemplate[] = [
         duration: 0,
         description: ''
       },
-      label: '条件判断'
+      label: 'ruleNodeLabels.condition'
     }
   },
   {
     type: 'logic',
-    label: '逻辑运算',
+    label: 'ruleNodeLabels.logic',
     icon: '🔀',
     color: '#e67e22',
-    category: '逻辑',
+    category: 'ruleNodeCategories.logic',
     defaultData: {
       logic: {
         operator: 'and',
         description: ''
       },
-      label: '逻辑运算'
+      label: 'ruleNodeLabels.logic'
     }
   },
   {
     type: 'action',
-    label: '执行动作',
+    label: 'ruleNodeLabels.action',
     icon: '⚡',
     color: '#27ae60',
-    category: '动作',
+    category: 'ruleNodeCategories.action',
     defaultData: {
       action: {
         target_asset: '',
-        operation: '',
+        operation: 'write_setpoint',
         parameters: {},
         delay: 0,
         description: ''
       },
-      label: '执行动作'
+      label: 'ruleNodeLabels.action'
     }
   },
   {
     type: 'notification',
-    label: '通知告警',
+    label: 'ruleNodeLabels.notification',
     icon: '📢',
     color: '#e74c3c',
-    category: '通知',
+    category: 'ruleNodeCategories.notification',
     defaultData: {
       notification: {
         channel_type: 'system',
         level: 'warning',
         description: ''
       },
-      label: '通知告警'
+      label: 'ruleNodeLabels.notification'
     }
   }
 ]
 
 export const OPERATORS = [
-  { value: '>', label: '大于 (>)' },
-  { value: '<', label: '小于 (<)' },
-  { value: '>=', label: '大于等于 (>=)' },
-  { value: '<=', label: '小于等于 (<=)' },
-  { value: '==', label: '等于 (==)' },
-  { value: '!=', label: '不等于 (!=)' },
-  { value: 'regex', label: '正则匹配 (=~)' }
+  { value: '>', labelKey: 'operators.gt' },
+  { value: '<', labelKey: 'operators.lt' },
+  { value: '>=', labelKey: 'operators.gte' },
+  { value: '<=', labelKey: 'operators.lte' },
+  { value: '==', labelKey: 'operators.eq' },
+  { value: '!=', labelKey: 'operators.neq' },
+  { value: 'regex', labelKey: 'operators.regex' }
 ]
 
 export const LOGIC_OPERATORS = [
-  { value: 'and', label: 'AND (与)' },
-  { value: 'or', label: 'OR (或)' },
-  { value: 'not', label: 'NOT (非)' }
+  { value: 'and', labelKey: 'logicOperators.and' },
+  { value: 'or', labelKey: 'logicOperators.or' },
+  { value: 'not', labelKey: 'logicOperators.not' }
 ]
 
 export const NOTIFICATION_LEVELS = [
-  { value: 'info', label: '提示 (info)', color: '#3b82f6' },
-  { value: 'warning', label: '警告 (warning)', color: '#f59e0b' },
-  { value: 'error', label: '错误 (error)', color: '#ef4444' },
-  { value: 'critical', label: '紧急 (critical)', color: '#dc2626' }
+  { value: 'info', labelKey: 'notificationLevels.info', color: '#3b82f6' },
+  { value: 'warning', labelKey: 'notificationLevels.warning', color: '#f59e0b' },
+  { value: 'error', labelKey: 'notificationLevels.error', color: '#ef4444' },
+  { value: 'critical', labelKey: 'notificationLevels.critical', color: '#dc2626' }
 ]
 
 export const NOTIFICATION_CHANNEL_TYPES = [
-  { value: 'system', label: '🔔 系统通知' },
-  { value: 'email', label: '📧 邮件通知' },
-  { value: 'webhook', label: '🔗 Webhook' }
+  { value: 'system', labelKey: 'notificationChannels.system' },
+  { value: 'email', labelKey: 'notificationChannels.email' },
+  { value: 'webhook', labelKey: 'notificationChannels.webhook' }
 ]
 
 export const SCHEDULE_MODES = [
-  { value: 'once', label: '一次性' },
-  { value: 'periodic', label: '周期性' },
-  { value: 'cron', label: 'Cron表达式' }
+  { value: 'once', labelKey: 'scheduleModes.once' },
+  { value: 'periodic', labelKey: 'scheduleModes.periodic' },
+  { value: 'cron', labelKey: 'scheduleModes.cron' }
 ]
 
 export const SCHEDULE_FREQUENCIES = [
-  { value: 'daily', label: '每天' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' }
+  { value: 'daily', labelKey: 'scheduleFrequencies.daily' },
+  { value: 'weekly', labelKey: 'scheduleFrequencies.weekly' },
+  { value: 'monthly', labelKey: 'scheduleFrequencies.monthly' }
 ]
 
 export const WEEKDAYS = [
-  { value: 0, label: '周日' },
-  { value: 1, label: '周一' },
-  { value: 2, label: '周二' },
-  { value: 3, label: '周三' },
-  { value: 4, label: '周四' },
-  { value: 5, label: '周五' },
-  { value: 6, label: '周六' }
+  { value: 0, labelKey: 'weekdays.sun' },
+  { value: 1, labelKey: 'weekdays.mon' },
+  { value: 2, labelKey: 'weekdays.tue' },
+  { value: 3, labelKey: 'weekdays.wed' },
+  { value: 4, labelKey: 'weekdays.thu' },
+  { value: 5, labelKey: 'weekdays.fri' },
+  { value: 6, labelKey: 'weekdays.sat' }
 ]

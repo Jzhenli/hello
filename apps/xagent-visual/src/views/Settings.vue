@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   Setting,
   Document,
@@ -19,6 +20,8 @@ import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
 import type { UserInfo, RoleInfo } from '@/api/users'
 import { configApi, type ConfigBackup } from '@/api/config'
+
+const { t } = useI18n()
 
 const { isTablet, isMobile, isMediumTablet, width } = useResponsive()
 
@@ -43,33 +46,33 @@ const systemConfig = ref({
 })
 
 const handleSave = () => {
-  ElMessage.success('配置已保存')
+  ElMessage.success(t('settings.config_saved'))
 }
 
 const userStore = useUserStore()
 
 const RESOURCE_LABELS: Record<string, string> = {
-  dashboard: '监控面板',
-  devices: '设备管理',
-  rules: '规则引擎',
-  alerts: '告警配置',
-  scada: '组态面板',
-  settings: '系统设置',
-  users: '用户管理',
-  logs: '日志查看',
-  backup: '配置管理',
-  control: '控制命令',
+  dashboard: t('settings.resources.dashboard'),
+  devices: t('settings.resources.devices'),
+  rules: t('settings.resources.rules'),
+  alerts: t('settings.resources.alerts'),
+  scada: t('settings.resources.scada'),
+  settings: t('settings.resources.settings'),
+  users: t('settings.resources.users'),
+  logs: t('settings.resources.logs'),
+  backup: t('settings.resources.backup'),
+  control: t('settings.resources.control'),
 }
 
 const ACTION_LABELS: Record<string, string> = {
-  view: '查看',
-  create: '创建',
-  update: '编辑',
-  delete: '删除',
+  view: t('settings.actions.view'),
+  create: t('settings.actions.create'),
+  update: t('settings.actions.update'),
+  delete: t('settings.actions.delete'),
 }
 
 const userDialogVisible = ref(false)
-const userDialogTitle = ref('添加用户')
+const userDialogTitle = ref(t('settings.user.add_title'))
 const editingUserId = ref<number | null>(null)
 const userForm = ref({
   username: '',
@@ -81,7 +84,7 @@ const userForm = ref({
 })
 
 const roleDialogVisible = ref(false)
-const roleDialogTitle = ref('添加角色')
+const roleDialogTitle = ref(t('settings.role.add_title'))
 const editingRoleName = ref<string | null>(null)
 const roleForm = ref({
   name: '',
@@ -118,18 +121,18 @@ function getStatusType(status: string) {
 }
 
 function getStatusLabel(status: string) {
-  return status === 'active' ? '活跃' : status === 'inactive' ? '禁用' : '锁定'
+  return status === 'active' ? t('settings.status.active') : status === 'inactive' ? t('settings.status.inactive') : t('settings.status.locked')
 }
 
 function openCreateUserDialog() {
-  userDialogTitle.value = '添加用户'
+  userDialogTitle.value = t('settings.user.add_title')
   editingUserId.value = null
   userForm.value = { username: '', password: '', display_name: '', email: '', role_name: 'viewer', status: 'active' }
   userDialogVisible.value = true
 }
 
 function openEditUserDialog(user: UserInfo) {
-  userDialogTitle.value = '编辑用户'
+  userDialogTitle.value = t('settings.user.edit_title')
   editingUserId.value = user.id
   userForm.value = {
     username: user.username,
@@ -151,10 +154,10 @@ async function handleUserSubmit() {
       if (userForm.value.role_name) updateData.role_name = userForm.value.role_name
       if (userForm.value.status) updateData.status = userForm.value.status
       await userStore.updateUser(editingUserId.value, updateData)
-      ElMessage.success('用户更新成功')
+      ElMessage.success(t('settings.user.update_success'))
     } else {
       if (!userForm.value.username || !userForm.value.password) {
-        ElMessage.warning('请填写用户名和密码')
+        ElMessage.warning(t('settings.user.fill_username_password'))
         return
       }
       await userStore.createUser({
@@ -164,23 +167,23 @@ async function handleUserSubmit() {
         display_name: userForm.value.display_name || undefined,
         email: userForm.value.email || undefined,
       })
-      ElMessage.success('用户创建成功')
+      ElMessage.success(t('settings.user.create_success'))
     }
     userDialogVisible.value = false
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '操作失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.operation_failed'))
   }
 }
 
 async function handleDeleteUser(user: UserInfo) {
   try {
-    await ElMessageBox.confirm(`确定要删除用户 "${user.display_name || user.username}" 吗？`, '删除确认', {
+    await ElMessageBox.confirm(t('settings.user.delete_confirm_msg', { name: user.display_name || user.username }), t('settings.delete_confirm'), {
       type: 'warning',
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
     })
     await userStore.deleteUser(user.id)
-    ElMessage.success('用户删除成功')
+    ElMessage.success(t('settings.user.delete_success'))
   } catch {
     // cancelled
   }
@@ -194,28 +197,28 @@ function openChangePasswordDialog(user: UserInfo) {
 
 async function handleChangePassword() {
   if (!passwordForm.value.new_password) {
-    ElMessage.warning('请输入新密码')
+    ElMessage.warning(t('settings.password.enter_new'))
     return
   }
   try {
     const { userApi } = await import('@/api/users')
     await userApi.changePassword(passwordUserId.value!, passwordForm.value.new_password)
-    ElMessage.success('密码修改成功')
+    ElMessage.success(t('settings.password.change_success'))
     passwordDialogVisible.value = false
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '密码修改失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.password.change_failed'))
   }
 }
 
 function openCreateRoleDialog() {
-  roleDialogTitle.value = '添加角色'
+  roleDialogTitle.value = t('settings.role.add_title')
   editingRoleName.value = null
   roleForm.value = { name: '', display_name: '', description: '' }
   roleDialogVisible.value = true
 }
 
 function openEditRoleDialog(role: RoleInfo) {
-  roleDialogTitle.value = '编辑角色'
+  roleDialogTitle.value = t('settings.role.edit_title')
   editingRoleName.value = role.name
   roleForm.value = {
     name: role.name,
@@ -232,10 +235,10 @@ async function handleRoleSubmit() {
         display_name: roleForm.value.display_name,
         description: roleForm.value.description || undefined,
       })
-      ElMessage.success('角色更新成功')
+      ElMessage.success(t('settings.role.update_success'))
     } else {
       if (!roleForm.value.name || !roleForm.value.display_name) {
-        ElMessage.warning('请填写角色标识和显示名称')
+        ElMessage.warning(t('settings.role.fill_name_display'))
         return
       }
       await userStore.createRole({
@@ -243,27 +246,27 @@ async function handleRoleSubmit() {
         display_name: roleForm.value.display_name,
         description: roleForm.value.description || undefined,
       })
-      ElMessage.success('角色创建成功')
+      ElMessage.success(t('settings.role.create_success'))
     }
     roleDialogVisible.value = false
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '操作失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.operation_failed'))
   }
 }
 
 async function handleDeleteRole(role: RoleInfo) {
   if (role.is_system) {
-    ElMessage.warning('系统内置角色不可删除')
+    ElMessage.warning(t('settings.role.system_cannot_delete'))
     return
   }
   try {
-    await ElMessageBox.confirm(`确定要删除角色 "${role.display_name}" 吗？`, '删除确认', {
+    await ElMessageBox.confirm(t('settings.role.delete_confirm_msg', { name: role.display_name }), t('settings.delete_confirm'), {
       type: 'warning',
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
     })
     await userStore.deleteRole(role.name)
-    ElMessage.success('角色删除成功')
+    ElMessage.success(t('settings.role.delete_success'))
   } catch {
     // cancelled
   }
@@ -283,10 +286,10 @@ function cancelEditPermissions() {
 async function savePermissions() {
   try {
     await userStore.updatePermissionMatrix(activePermissionRole.value, permissionEditData.value)
-    ElMessage.success('权限矩阵更新成功')
+    ElMessage.success(t('settings.permission.update_success'))
     isEditingPermissions.value = false
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '权限更新失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.permission.update_failed'))
   }
 }
 
@@ -328,7 +331,7 @@ async function loadBackupList() {
     const res = await configApi.listConfigs()
     backupList.value = res.configs
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '加载备份列表失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.backup.load_failed'))
   } finally {
     backupLoading.value = false
   }
@@ -340,13 +343,13 @@ async function handleCreateBackup() {
     exportLoading.value = true
     const res = await configApi.exportConfig()
     if (res.success) {
-      ElMessage.success(`配置导出成功：${res.file} (${res.size_mb}MB)`)
+      ElMessage.success(t('settings.backup.export_success', { file: res.file, size: res.size_mb }))
       await loadBackupList()
     } else {
-      ElMessage.error(res.error || '导出配置失败')
+      ElMessage.error(res.error || t('settings.backup.export_failed'))
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '导出配置失败')
+    ElMessage.error(e.response?.data?.detail || t('settings.backup.export_failed'))
   } finally {
     exportLoading.value = false
   }
@@ -358,7 +361,7 @@ async function handleDownloadConfig(backup?: ConfigBackup) {
     const filename = backup?.filename || (backupList.value.length > 0 ? backupList.value[0].filename : null)
 
     if (!filename) {
-      ElMessage.warning('没有可下载的备份文件')
+      ElMessage.warning(t('settings.backup.no_downloadable'))
       return
     }
 
@@ -373,7 +376,7 @@ async function handleDownloadConfig(backup?: ConfigBackup) {
     })
 
     if (!response.ok) {
-      throw new Error(`下载失败: ${response.statusText}`)
+      throw new Error(`${t('settings.backup.download_failed')}: ${response.statusText}`)
     }
 
     const blob = await response.blob()
@@ -384,7 +387,7 @@ async function handleDownloadConfig(backup?: ConfigBackup) {
     a.click()
     URL.revokeObjectURL(downloadUrl)
   } catch (e: any) {
-    ElMessage.error(e.message || '下载失败')
+    ElMessage.error(e.message || t('settings.backup.download_failed'))
   }
 }
 
@@ -397,12 +400,12 @@ async function handleImportConfig(uploadFile: UploadFile) {
   // 确认导入
   try {
     await ElMessageBox.confirm(
-      '导入配置将覆盖当前配置，是否继续？',
-      '确认导入',
+      t('settings.backup.import_confirm'),
+      t('settings.backup.import_confirm_title'),
       {
         type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
       }
     )
 
@@ -413,7 +416,7 @@ async function handleImportConfig(uploadFile: UploadFile) {
       ElMessage.success(res.message)
       await loadBackupList()
     } else {
-      ElMessage.error(res.error || '导入配置失败')
+      ElMessage.error(res.error || t('settings.backup.import_failed'))
     }
   } catch {
     // 用户取消
@@ -426,17 +429,17 @@ async function handleImportConfig(uploadFile: UploadFile) {
 async function handleDeleteBackup(backup: ConfigBackup) {
   try {
     await ElMessageBox.confirm(
-      `确定要删除备份文件 "${backup.filename}" 吗？`,
-      '删除确认',
+      t('settings.backup.delete_confirm_msg', { filename: backup.filename }),
+      t('settings.delete_confirm'),
       {
         type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
       }
     )
     
     await configApi.deleteConfig(backup.filename)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('settings.backup.delete_success'))
     await loadBackupList()
   } catch {
     // 用户取消
@@ -447,12 +450,12 @@ async function handleDeleteBackup(backup: ConfigBackup) {
 async function handleRestoreBackup(backup: ConfigBackup) {
   try {
     await ElMessageBox.confirm(
-      `恢复备份将覆盖当前配置，是否继续？`,
-      '确认恢复',
+      t('settings.backup.restore_confirm'),
+      t('settings.backup.restore_confirm_title'),
       {
         type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
       }
     )
 
@@ -475,7 +478,7 @@ async function handleRestoreBackup(backup: ConfigBackup) {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        throw new Error(`下载失败: ${response.statusText}`)
+        throw new Error(`${t('settings.backup.download_failed')}: ${response.statusText}`)
       }
 
       const blob = await response.blob()
@@ -488,18 +491,18 @@ async function handleRestoreBackup(backup: ConfigBackup) {
         ElMessage.success(res.message)
         await loadBackupList()
       } else {
-        ElMessage.error(res.error || '恢复备份失败')
+        ElMessage.error(res.error || t('settings.backup.restore_failed'))
       }
     } catch (fetchError: any) {
       clearTimeout(timeoutId)
       if (fetchError.name === 'AbortError') {
-        throw new Error('下载超时，请检查网络连接后重试')
+        throw new Error(t('settings.backup.download_timeout'))
       }
       throw fetchError
     }
   } catch (e: any) {
     if (e !== 'cancel') {
-      ElMessage.error(e.response?.data?.detail || e.message || '恢复备份失败')
+      ElMessage.error(e.response?.data?.detail || e.message || t('settings.backup.restore_failed'))
     }
   } finally {
     importLoading.value = false
@@ -534,23 +537,23 @@ watch(() => userStore.permissionMatrix, (matrix) => {
           <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
             <el-menu-item index="general">
               <el-icon><Setting /></el-icon>
-              <span>系统配置</span>
+              <span>{{ $t('settings.menu.general') }}</span>
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
               <el-icon><Document /></el-icon>
-              <span>日志查看</span>
+              <span>{{ $t('settings.menu.logs') }}</span>
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
               <el-icon><Refresh /></el-icon>
-              <span>配置管理</span>
+              <span>{{ $t('settings.menu.backup') }}</span>
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
               <el-icon><User /></el-icon>
-              <span>用户管理</span>
+              <span>{{ $t('settings.menu.users') }}</span>
             </el-menu-item>
             <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
               <el-icon><Lock /></el-icon>
-              <span>权限矩阵</span>
+              <span>{{ $t('settings.menu.permissions') }}</span>
             </el-menu-item>
           </el-menu>
         </div>
@@ -564,7 +567,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'general'"
           >
             <el-icon><Setting /></el-icon>
-            <span>系统配置</span>
+            <span>{{ $t('settings.menu.general') }}</span>
           </div>
           <div 
             v-if="userStore.hasPermission('logs', 'view')"
@@ -573,7 +576,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'logs'"
           >
             <el-icon><Document /></el-icon>
-            <span>日志查看</span>
+            <span>{{ $t('settings.menu.logs') }}</span>
           </div>
           <div 
             v-if="userStore.hasPermission('backup', 'view')"
@@ -582,7 +585,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'backup'"
           >
             <el-icon><Refresh /></el-icon>
-            <span>配置管理</span>
+            <span>{{ $t('settings.menu.backup') }}</span>
           </div>
           <div 
             v-if="userStore.hasPermission('users', 'view')"
@@ -591,7 +594,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'users'"
           >
             <el-icon><User /></el-icon>
-            <span>用户管理</span>
+            <span>{{ $t('settings.menu.users') }}</span>
           </div>
           <div 
             v-if="userStore.hasPermission('users', 'view')"
@@ -600,16 +603,16 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             @click="activeMenu = 'permissions'"
           >
             <el-icon><Lock /></el-icon>
-            <span>权限矩阵</span>
+            <span>{{ $t('settings.menu.permissions') }}</span>
           </div>
         </div>
       </template>
 
       <div class="settings-content">
         <div v-if="activeMenu === 'general'" class="settings-section">
-          <h3>系统配置</h3>
+          <h3>{{ $t('settings.menu.general') }}</h3>
           <el-form label-width="120px" class="settings-form">
-            <el-form-item label="日志级别">
+            <el-form-item :label="$t('settings.general.log_level')">
               <el-select v-model="systemConfig.logLevel" style="width: 200px">
                 <el-option label="DEBUG" value="debug" />
                 <el-option label="INFO" value="info" />
@@ -617,34 +620,34 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 <el-option label="ERROR" value="error" />
               </el-select>
             </el-form-item>
-            <el-form-item label="数据保留天数">
+            <el-form-item :label="$t('settings.general.data_retention')">
               <el-input-number v-model="systemConfig.dataRetention" :min="1" :max="365" />
             </el-form-item>
-            <el-form-item label="最大连接数">
+            <el-form-item :label="$t('settings.general.max_connections')">
               <el-input-number v-model="systemConfig.maxConnections" :min="1" :max="1000" />
             </el-form-item>
-            <el-form-item label="超时时间(秒)">
+            <el-form-item :label="$t('settings.general.timeout')">
               <el-input-number v-model="systemConfig.timeout" :min="1" :max="300" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" @click="handleSave">保存配置</el-button>
+              <el-button type="primary" @click="handleSave">{{ $t('settings.general.save_config') }}</el-button>
             </el-form-item>
           </el-form>
         </div>
 
         <div v-if="activeMenu === 'logs'" class="settings-section">
-          <h3>日志查看</h3>
+          <h3>{{ $t('settings.menu.logs') }}</h3>
           <div class="log-viewer">
             <div class="log-toolbar">
-              <el-select placeholder="日志级别" style="width: 120px">
-                <el-option label="全部" value="" />
+              <el-select :placeholder="$t('settings.log.level')" style="width: 120px">
+                <el-option :label="$t('settings.log.all')" value="" />
                 <el-option label="DEBUG" value="debug" />
                 <el-option label="INFO" value="info" />
                 <el-option label="WARNING" value="warning" />
                 <el-option label="ERROR" value="error" />
               </el-select>
-              <el-button type="primary">刷新</el-button>
-              <el-button>下载日志</el-button>
+              <el-button type="primary">{{ $t('common.refresh') }}</el-button>
+              <el-button>{{ $t('settings.log.download') }}</el-button>
             </div>
             <div class="log-content">
               <div class="log-line info">
@@ -677,7 +680,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
         </div>
 
         <div v-if="activeMenu === 'backup'" class="settings-section">
-          <h3>配置管理</h3>
+          <h3>{{ $t('settings.menu.backup') }}</h3>
           <div class="backup-section">
             <!-- 操作按钮 -->
             <div class="backup-actions">
@@ -687,7 +690,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 :loading="exportLoading"
                 @click="handleCreateBackup"
               >
-                导出配置
+                {{ $t('settings.backup.export') }}
               </el-button>
               <el-upload
                 :show-file-list="false"
@@ -696,14 +699,14 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 :disabled="importLoading"
                 :on-change="handleImportConfig"
               >
-                <el-button :icon="Upload" :loading="importLoading">导入配置</el-button>
+                <el-button :icon="Upload" :loading="importLoading">{{ $t('settings.backup.import') }}</el-button>
               </el-upload>
               <el-button 
                 :icon="Download" 
                 :disabled="backupList.length === 0"
                 @click="handleDownloadConfig()"
               >
-                下载最新备份
+                {{ $t('settings.backup.download_latest') }}
               </el-button>
             </div>
 
@@ -714,36 +717,36 @@ watch(() => userStore.permissionMatrix, (matrix) => {
               stripe
               style="width: 100%"
             >
-              <el-table-column label="文件名" min-width="200">
+              <el-table-column :label="$t('settings.backup.filename')" min-width="200">
                 <template #default="{ row, $index }">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <el-icon style="color: #409eff;"><Document /></el-icon>
                     <span>{{ row.filename }}</span>
-                    <el-tag v-if="$index === 0" type="success" size="small">最新</el-tag>
+                    <el-tag v-if="$index === 0" type="success" size="small">{{ $t('settings.backup.latest') }}</el-tag>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="大小" width="100" align="center">
+              <el-table-column :label="$t('settings.backup.size')" width="100" align="center">
                 <template #default="{ row }">
                   {{ row.size_mb }} MB
                 </template>
               </el-table-column>
-              <el-table-column label="创建时间" width="170" align="center">
+              <el-table-column :label="$t('settings.backup.created_at')" width="170" align="center">
                 <template #default="{ row }">
                   {{ row.created_at.replace('T', ' ').substring(0, 19) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="200" align="center">
+              <el-table-column :label="$t('settings.actions_label')" width="200" align="center">
                 <template #default="{ row }">
-                  <el-button type="primary" link size="small" @click="handleRestoreBackup(row)">恢复</el-button>
-                  <el-button type="default" link size="small" @click="handleDownloadConfig(row)">下载</el-button>
-                  <el-button type="danger" link size="small" @click="handleDeleteBackup(row)">删除</el-button>
+                  <el-button type="primary" link size="small" @click="handleRestoreBackup(row)">{{ $t('settings.backup.restore') }}</el-button>
+                  <el-button type="default" link size="small" @click="handleDownloadConfig(row)">{{ $t('settings.backup.download') }}</el-button>
+                  <el-button type="danger" link size="small" @click="handleDeleteBackup(row)">{{ $t('common.delete') }}</el-button>
                 </template>
               </el-table-column>
               
               <template #empty>
-                <el-empty description="暂无备份文件">
-                  <el-button type="primary" size="small" @click="handleCreateBackup">立即创建</el-button>
+                <el-empty :description="$t('settings.backup.no_backup')">
+                  <el-button type="primary" size="small" @click="handleCreateBackup">{{ $t('settings.backup.create_now') }}</el-button>
                 </el-empty>
               </template>
             </el-table>
@@ -751,38 +754,38 @@ watch(() => userStore.permissionMatrix, (matrix) => {
         </div>
 
         <div v-if="activeMenu === 'users'" class="settings-section">
-          <h3>用户管理</h3>
+          <h3>{{ $t('settings.menu.users') }}</h3>
           <div class="user-section">
             <el-card shadow="never" class="section-card">
               <template #header>
                 <div class="card-header">
-                  <span class="card-title">用户列表</span>
-                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">添加用户</el-button>
+                  <span class="card-title">{{ $t('settings.user.list_title') }}</span>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">{{ $t('settings.user.add') }}</el-button>
                 </div>
               </template>
               <el-table :data="userStore.users" stripe v-loading="userStore.loading">
-                <el-table-column prop="username" label="用户名" min-width="90" />
-                <el-table-column prop="display_name" label="显示名称" min-width="90" />
-                <el-table-column label="角色" min-width="90">
+                <el-table-column prop="username" :label="$t('settings.user.username')" min-width="90" />
+                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
+                <el-table-column :label="$t('settings.user.role')" min-width="90">
                   <template #default="{ row }">
                     <el-tag size="small">{{ row.role_display_name || row.role_name }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="状态" width="70" align="center">
+                <el-table-column :label="$t('settings.user.status')" width="70" align="center">
                   <template #default="{ row }">
                     <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="最后登录" min-width="140">
+                <el-table-column :label="$t('settings.user.last_login')" min-width="140">
                   <template #default="{ row }">
                     {{ formatTime(row.last_login) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="180" fixed="right" align="center">
+                <el-table-column :label="$t('settings.actions_label')" width="180" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditUserDialog(row)">编辑</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" @click="openChangePasswordDialog(row)">改密</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditUserDialog(row)">{{ $t('common.edit') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" @click="openChangePasswordDialog(row)">{{ $t('settings.user.change_password') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">{{ $t('common.delete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -791,25 +794,25 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             <el-card shadow="never" class="section-card">
               <template #header>
                 <div class="card-header">
-                  <span class="card-title">角色列表</span>
-                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">添加角色</el-button>
+                  <span class="card-title">{{ $t('settings.role.list_title') }}</span>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">{{ $t('settings.role.add') }}</el-button>
                 </div>
               </template>
               <el-table :data="userStore.roles" stripe>
-                <el-table-column prop="name" label="角色标识" min-width="90" />
-                <el-table-column prop="display_name" label="显示名称" min-width="90" />
-                <el-table-column prop="description" label="描述" min-width="140" />
-                <el-table-column label="类型" width="70" align="center">
+                <el-table-column prop="name" :label="$t('settings.role.name')" min-width="90" />
+                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
+                <el-table-column prop="description" :label="$t('settings.role.description')" min-width="140" />
+                <el-table-column :label="$t('settings.role.type')" width="70" align="center">
                   <template #default="{ row }">
                     <el-tag :type="row.is_system ? 'info' : 'success'" size="small">
-                      {{ row.is_system ? '系统' : '自定义' }}
+                      {{ row.is_system ? $t('settings.role.system') : $t('settings.role.custom') }}
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="120" fixed="right" align="center">
+                <el-table-column :label="$t('settings.actions_label')" width="120" fixed="right" align="center">
                   <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditRoleDialog(row)">编辑</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteRole(row)" :disabled="row.is_system">删除</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditRoleDialog(row)">{{ $t('common.edit') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteRole(row)" :disabled="row.is_system">{{ $t('common.delete') }}</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -818,10 +821,10 @@ watch(() => userStore.permissionMatrix, (matrix) => {
         </div>
 
         <div v-if="activeMenu === 'permissions'" class="settings-section">
-          <h3>权限矩阵</h3>
+          <h3>{{ $t('settings.menu.permissions') }}</h3>
           <div class="permission-section">
             <div class="permission-toolbar">
-              <el-select v-model="activePermissionRole" placeholder="选择角色" style="width: 200px">
+              <el-select v-model="activePermissionRole" :placeholder="$t('settings.permission.select_role')" style="width: 200px">
                 <el-option
                   v-for="role in userStore.permissionMatrix?.roles || []"
                   :key="role.name"
@@ -830,11 +833,11 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                 />
               </el-select>
               <div v-if="!isEditingPermissions && userStore.hasPermission('users', 'update')" class="permission-actions">
-                <el-button type="primary" :icon="Edit" @click="startEditPermissions">编辑权限</el-button>
+                <el-button type="primary" :icon="Edit" @click="startEditPermissions">{{ $t('settings.permission.edit') }}</el-button>
               </div>
               <div v-else class="permission-actions">
-                <el-button type="success" :icon="Check" @click="savePermissions">保存</el-button>
-                <el-button :icon="Close" @click="cancelEditPermissions">取消</el-button>
+                <el-button type="success" :icon="Check" @click="savePermissions">{{ $t('common.save') }}</el-button>
+                <el-button :icon="Close" @click="cancelEditPermissions">{{ $t('common.cancel') }}</el-button>
               </div>
             </div>
 
@@ -842,11 +845,11 @@ watch(() => userStore.permissionMatrix, (matrix) => {
               <table class="matrix-table">
                 <thead>
                   <tr>
-                    <th class="resource-header">资源 / 操作</th>
+                    <th class="resource-header">{{ $t('settings.permission.resource_action') }}</th>
                     <th v-for="action in userStore.permissionMatrix.actions" :key="action" class="action-header">
                       {{ ACTION_LABELS[action] || action }}
                     </th>
-                    <th v-if="isEditingPermissions" class="action-header">快捷操作</th>
+                    <th v-if="isEditingPermissions" class="action-header">{{ $t('settings.permission.quick_action') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -865,8 +868,8 @@ watch(() => userStore.permissionMatrix, (matrix) => {
                       </template>
                     </td>
                     <td v-if="isEditingPermissions" class="shortcut-cell">
-                      <el-button link type="primary" size="small" @click="selectAllForResource(resource)">全选</el-button>
-                      <el-button link type="danger" size="small" @click="clearAllForResource(resource)">清空</el-button>
+                      <el-button link type="primary" size="small" @click="selectAllForResource(resource)">{{ $t('settings.permission.select_all') }}</el-button>
+                      <el-button link type="danger" size="small" @click="clearAllForResource(resource)">{{ $t('settings.permission.clear_all') }}</el-button>
                     </td>
                   </tr>
                 </tbody>
@@ -874,12 +877,12 @@ watch(() => userStore.permissionMatrix, (matrix) => {
             </div>
 
             <div v-if="!activePermissionRole && userStore.permissionMatrix" class="empty-hint">
-              请从上方下拉框选择一个角色查看权限配置
+              {{ $t('settings.permission.select_role_hint') }}
             </div>
 
             <div class="permission-legend">
-              <span class="legend-item"><el-icon class="perm-allowed"><Check /></el-icon> 允许</span>
-              <span class="legend-item"><el-icon class="perm-denied"><Close /></el-icon> 拒绝</span>
+              <span class="legend-item"><el-icon class="perm-allowed"><Check /></el-icon> {{ $t('settings.permission.allowed') }}</span>
+              <span class="legend-item"><el-icon class="perm-denied"><Close /></el-icon> {{ $t('settings.permission.denied') }}</span>
             </div>
           </div>
         </div>
@@ -888,70 +891,70 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 
     <el-dialog v-model="userDialogVisible" :title="userDialogTitle" width="min(480px, 92vw)" destroy-on-close>
       <el-form label-width="90px">
-        <el-form-item label="用户名" v-if="!editingUserId">
-          <el-input v-model="userForm.username" placeholder="请输入用户名" />
+        <el-form-item :label="$t('settings.user.username')" v-if="!editingUserId">
+          <el-input v-model="userForm.username" :placeholder="$t('settings.user.username_placeholder')" />
         </el-form-item>
-        <el-form-item label="用户名" v-else>
+        <el-form-item :label="$t('settings.user.username')" v-else>
           <el-input :model-value="userForm.username" disabled />
         </el-form-item>
-        <el-form-item label="密码" v-if="!editingUserId">
-          <el-input v-model="userForm.password" type="password" show-password placeholder="请输入密码" />
+        <el-form-item :label="$t('settings.user.password')" v-if="!editingUserId">
+          <el-input v-model="userForm.password" type="password" show-password :placeholder="$t('settings.user.password_placeholder')" />
         </el-form-item>
-        <el-form-item label="显示名称">
-          <el-input v-model="userForm.display_name" placeholder="请输入显示名称" />
+        <el-form-item :label="$t('settings.user.display_name')">
+          <el-input v-model="userForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
         </el-form-item>
-        <el-form-item label="邮箱">
-          <el-input v-model="userForm.email" placeholder="请输入邮箱" />
+        <el-form-item :label="$t('settings.user.email')">
+          <el-input v-model="userForm.email" :placeholder="$t('settings.user.email_placeholder')" />
         </el-form-item>
-        <el-form-item label="角色">
+        <el-form-item :label="$t('settings.user.role')">
           <el-select v-model="userForm.role_name" style="width: 100%">
             <el-option v-for="opt in roleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" v-if="editingUserId">
+        <el-form-item :label="$t('settings.user.status')" v-if="editingUserId">
           <el-select v-model="userForm.status" style="width: 100%">
-            <el-option label="活跃" value="active" />
-            <el-option label="禁用" value="inactive" />
-            <el-option label="锁定" value="locked" />
+            <el-option :label="$t('settings.status.active')" value="active" />
+            <el-option :label="$t('settings.status.inactive')" value="inactive" />
+            <el-option :label="$t('settings.status.locked')" value="locked" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="userDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleUserSubmit">确定</el-button>
+        <el-button @click="userDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleUserSubmit">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="min(480px, 92vw)" destroy-on-close>
       <el-form label-width="90px">
-        <el-form-item label="角色标识" v-if="!editingRoleName">
-          <el-input v-model="roleForm.name" placeholder="请输入角色标识（英文）" />
+        <el-form-item :label="$t('settings.role.name')" v-if="!editingRoleName">
+          <el-input v-model="roleForm.name" :placeholder="$t('settings.role.name_placeholder')" />
         </el-form-item>
-        <el-form-item label="角色标识" v-else>
+        <el-form-item :label="$t('settings.role.name')" v-else>
           <el-input :model-value="roleForm.name" disabled />
         </el-form-item>
-        <el-form-item label="显示名称">
-          <el-input v-model="roleForm.display_name" placeholder="请输入显示名称" />
+        <el-form-item :label="$t('settings.user.display_name')">
+          <el-input v-model="roleForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
         </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="roleForm.description" type="textarea" :rows="3" placeholder="请输入角色描述" />
+        <el-form-item :label="$t('settings.role.description')">
+          <el-input v-model="roleForm.description" type="textarea" :rows="3" :placeholder="$t('settings.role.description_placeholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleRoleSubmit">确定</el-button>
+        <el-button @click="roleDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleRoleSubmit">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="min(400px, 90vw)" destroy-on-close>
+    <el-dialog v-model="passwordDialogVisible" :title="$t('settings.password.title')" width="min(400px, 90vw)" destroy-on-close>
       <el-form label-width="80px">
-        <el-form-item label="新密码">
-          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="请输入新密码" />
+        <el-form-item :label="$t('settings.password.new_password')">
+          <el-input v-model="passwordForm.new_password" type="password" show-password :placeholder="$t('settings.password.new_password_placeholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleChangePassword">确定</el-button>
+        <el-button @click="passwordDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleChangePassword">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>

@@ -115,9 +115,9 @@ export interface ComponentTemplate {
 export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   {
     type: 'gauge',
-    name: '仪表盘',
+    name: 'scadaComponentNames.gauge',
     icon: '🎯',
-    category: '仪表',
+    category: 'scadaComponentCategories.gauge',
     defaultStyle: { width: 150, height: 150 },
     defaultConfig: {
       gaugeConfig: {
@@ -135,9 +135,9 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'chart-line',
-    name: '折线图',
+    name: 'scadaComponentNames.chartLine',
     icon: '📈',
-    category: '图表',
+    category: 'scadaComponentCategories.chart',
     defaultStyle: { width: 300, height: 200 },
     defaultConfig: {
       chartConfig: {
@@ -150,9 +150,9 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'chart-bar',
-    name: '柱状图',
+    name: 'scadaComponentNames.chartBar',
     icon: '📊',
-    category: '图表',
+    category: 'scadaComponentCategories.chart',
     defaultStyle: { width: 300, height: 200 },
     defaultConfig: {
       chartConfig: {
@@ -165,9 +165,9 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'indicator',
-    name: '指示灯',
+    name: 'scadaComponentNames.indicator',
     icon: '💡',
-    category: '指示',
+    category: 'scadaComponentCategories.indicator',
     defaultStyle: { width: 60, height: 60 },
     defaultConfig: {
       indicatorConfig: {
@@ -179,9 +179,9 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'switch',
-    name: '开关',
+    name: 'scadaComponentNames.switch',
     icon: '🔘',
-    category: '控制',
+    category: 'scadaComponentCategories.control',
     defaultStyle: { width: 100, height: 50 },
     defaultConfig: {
       switchConfig: {
@@ -194,17 +194,17 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'slider',
-    name: '滑块',
+    name: 'scadaComponentNames.slider',
     icon: '🎚️',
-    category: '控制',
+    category: 'scadaComponentCategories.control',
     defaultStyle: { width: 200, height: 40 },
     defaultConfig: {}
   },
   {
     type: 'text',
-    name: '文本',
+    name: 'scadaComponentNames.text',
     icon: '📝',
-    category: '基础',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 150, height: 40, fontSize: 14, fontColor: '#2c3e50' },
     defaultConfig: {
       textConfig: {
@@ -218,17 +218,17 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'image',
-    name: '图片',
+    name: 'scadaComponentNames.image',
     icon: '🖼️',
-    category: '基础',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 200, height: 150 },
     defaultConfig: {}
   },
   {
     type: 'button',
-    name: '按钮',
+    name: 'scadaComponentNames.button',
     icon: '🔲',
-    category: '控制',
+    category: 'scadaComponentCategories.control',
     defaultStyle: { width: 100, height: 40 },
     defaultConfig: {
       buttonConfig: {
@@ -241,9 +241,9 @@ export const COMPONENT_TEMPLATES: ComponentTemplate[] = [
   },
   {
     type: 'container',
-    name: '容器',
+    name: 'scadaComponentNames.container',
     icon: '📦',
-    category: '布局',
+    category: 'scadaComponentCategories.layout',
     defaultStyle: { width: 300, height: 200, backgroundColor: '#f5f7fa', borderWidth: 1, borderColor: '#dce1e6' },
     defaultConfig: {}
   }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { 
   Odometer, 
   Monitor, 
@@ -17,6 +18,9 @@ import { useAlertStore } from '@/stores/alerts'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
 import { useResponsive } from '@/utils/useResponsive'
+import { ElMessage } from 'element-plus'
+
+const { t, locale } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -29,8 +33,26 @@ const isCollapsed = ref(false)
 const isDrawerVisible = ref(false)
 const forceExpanded = ref(false)
 
+// Language options
+const languageOptions = [
+  { value: 'zh-CN', label: '简体中文' },
+  { value: 'en', label: 'English' },
+  { value: 'zh-TW', label: '繁體中文' }
+]
+
+const currentLanguageLabel = computed(() => {
+  const opt = languageOptions.find(o => o.value === locale.value)
+  return opt ? opt.label : locale.value
+})
+
+function handleLanguageChange(lang: string) {
+  locale.value = lang as 'zh-CN' | 'en' | 'zh-TW'
+  localStorage.setItem('locale', lang)
+  ElMessage.success(t('common.languageChanged'))
+}
+
 // 当前时间
-const currentTime = ref(new Date().toLocaleString('zh-CN', {
+const currentTime = ref(new Date().toLocaleString(locale.value, {
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -40,23 +62,34 @@ const currentTime = ref(new Date().toLocaleString('zh-CN', {
 }))
 let timeTimer: ReturnType<typeof setInterval>
 
+watch(locale, () => {
+  currentTime.value = new Date().toLocaleString(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+})
+
 const shouldCollapseSidebar = computed(() => {
   if (forceExpanded.value) return false
   return width.value <= 1280 || height.value <= 700
 })
 
-const allMenuItems = [
-  { path: '/dashboard', title: '监控面板', icon: Odometer, resource: 'dashboard' },
-  { path: '/devices', title: '设备管理', icon: Monitor, resource: 'devices' },
-  { path: '/channels', title: '通道管理', icon: Connection, resource: 'channels' },
-  { path: '/rules', title: '规则引擎', icon: Connection, resource: 'rules' },
-  { path: '/alerts', title: '告警配置', icon: Bell, resource: 'alerts' },
-  { path: '/scada', title: '项目管理', icon: PictureFilled, resource: 'scada' },
-  { path: '/settings', title: '系统设置', icon: Setting, resource: 'settings' }
-]
+const allMenuItems = computed(() => [
+  { path: '/dashboard', title: t('layout.dashboard'), icon: Odometer, resource: 'dashboard' },
+  { path: '/devices', title: t('layout.devices'), icon: Monitor, resource: 'devices' },
+  { path: '/channels', title: t('layout.channels'), icon: Connection, resource: 'channels' },
+  { path: '/rules', title: t('layout.rules'), icon: Connection, resource: 'rules' },
+  { path: '/alerts', title: t('layout.alerts'), icon: Bell, resource: 'alerts' },
+  { path: '/scada', title: t('layout.scada'), icon: PictureFilled, resource: 'scada' },
+  { path: '/settings', title: t('layout.settings'), icon: Setting, resource: 'settings' }
+])
 
 const menuItems = computed(() =>
-  allMenuItems.filter(item => userStore.hasPermission(item.resource, 'view'))
+  allMenuItems.value.filter(item => userStore.hasPermission(item.resource, 'view'))
 )
 
 const activeMenu = computed(() => route.path)
@@ -96,7 +129,7 @@ function handleLogout() {
 // 时间更新
 onMounted(() => {
   timeTimer = setInterval(() => {
-    currentTime.value = new Date().toLocaleString('zh-CN', {
+    currentTime.value = new Date().toLocaleString(locale.value, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -150,7 +183,7 @@ onUnmounted(() => {
             @click="toggleCollapse"
             text
           />
-          <div v-if="!isCollapsed && !shouldCollapseSidebar" class="version">v1.0.0</div>
+          <div v-if="!isCollapsed && !shouldCollapseSidebar" class="version">{{ $t('layout.version') }}</div>
         </div>
       </el-aside>
     </template>
@@ -186,7 +219,7 @@ onUnmounted(() => {
         </el-menu>
         
         <div class="drawer-footer">
-          <div class="version">v1.0.0</div>
+          <div class="version">{{ $t('layout.version') }}</div>
         </div>
       </div>
     </el-drawer>
@@ -206,13 +239,30 @@ onUnmounted(() => {
           <el-badge :value="alertStore.pendingAlerts" :hidden="alertStore.pendingAlerts === 0">
             <el-button :icon="Bell" circle @click="router.push('/alerts')" />
           </el-badge>
+          <!-- Language switcher -->
+          <el-dropdown @command="handleLanguageChange">
+            <el-button size="small">
+              {{ currentLanguageLabel }}
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item 
+                  v-for="lang in languageOptions" 
+                  :key="lang.value" 
+                  :command="lang.value"
+                >
+                  {{ lang.label }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-dropdown>
             <div class="user-info">
               <el-avatar :size="32" class="user-avatar">
                 <el-icon><User /></el-icon>
               </el-avatar>
               <span v-if="!isMobile && !isTablet" class="user-name">
-                {{ userStore.currentUser?.display_name || userStore.currentUser?.username || '未登录' }}
+                {{ userStore.currentUser?.display_name || userStore.currentUser?.username || $t('common.notLoggedIn') }}
               </span>
             </div>
             <template #dropdown>
@@ -222,8 +272,8 @@ onUnmounted(() => {
                     {{ userStore.currentUser?.role_display_name || userStore.currentUser?.role_name }}
                   </el-tag>
                 </el-dropdown-item>
-                <el-dropdown-item @click="router.push('/settings')">个人设置</el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/settings')">{{ $t('layout.personalSettings') }}</el-dropdown-item>
+                <el-dropdown-item divided @click="handleLogout">{{ $t('layout.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -241,9 +291,9 @@ onUnmounted(() => {
       </el-main>
       
       <el-footer v-if="!isFullscreenMode && !isMobile && !isLoginPage && height > 700" class="app-footer" height="32px">
-        <span class="copyright">© 2026 XAgent 数据采集网关系统</span>
+        <span class="copyright">{{ $t('layout.copyright') }}</span>
         <span class="divider">|</span>
-        <span class="icp">京ICP备XXXXXXXX号</span>
+        <span class="icp">{{ $t('layout.icp') }}</span>
         <span class="divider">|</span>
         <span class="current-time">{{ currentTime }}</span>
       </el-footer>

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { RuleNodeData } from '@/types/rule'
 
+const { t } = useI18n()
 const { node } = useNode<RuleNodeData>()
 
 const nodeData = computed(() => node.data?.condition)
@@ -26,10 +28,10 @@ const operatorSymbol = computed(() => {
 
 const durationText = computed(() => {
   const duration = nodeData.value?.duration || 0
-  if (duration === 0) return '即时'
-  if (duration < 60) return `${duration}秒`
-  if (duration < 3600) return `${Math.floor(duration / 60)}分钟`
-  return `${Math.floor(duration / 3600)}小时`
+  if (duration === 0) return t('nodeViews.instant')
+  if (duration < 60) return `${duration}${t('nodeViews.seconds')}`
+  if (duration < 3600) return `${Math.floor(duration / 60)}${t('nodeViews.minutes')}`
+  return `${Math.floor(duration / 3600)}${t('nodeViews.hours')}`
 })
 </script>
 
@@ -39,18 +41,18 @@ const durationText = computed(() => {
     
     <div class="node-header">
       <span class="node-icon">⚙️</span>
-      <span class="node-title">条件判断</span>
+      <span class="node-title">{{ t('nodeViews.condition') }}</span>
     </div>
     
     <div class="node-body">
       <div class="node-info" :class="{ 'has-data': hasValidData }">
         <div class="condition-expression">
-          <span class="field">{{ nodeData?.field || '字段' }}</span>
+          <span class="field">{{ nodeData?.field || t('nodeViews.triggerField') }}</span>
           <span class="operator">{{ operatorSymbol }}</span>
-          <span class="value">{{ nodeData?.value || '值' }}</span>
+          <span class="value">{{ nodeData?.value || t('ruleNodes.conditionValue') }}</span>
         </div>
         <div class="duration-badge" v-if="nodeData?.duration">
-          持续: {{ durationText }}
+          {{ t('nodeViews.duration') }}: {{ durationText }}
         </div>
       </div>
     </div>

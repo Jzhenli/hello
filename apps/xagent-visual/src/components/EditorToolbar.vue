@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Rule } from '@/types/rule'
 import { useResponsive } from '@/utils/useResponsive'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   rule: Rule | null
@@ -31,43 +34,43 @@ const showStats = computed(() => !isMobile.value)
 <template>
   <div class="editor-toolbar" :class="{ 'mobile-toolbar': isMobile, 'tablet-toolbar': isTablet }">
     <div class="toolbar-left">
-      <h2 class="toolbar-title">场景联动规则编辑器</h2>
+      <h2 class="toolbar-title">{{ t('editorToolbar.title') }}</h2>
     </div>
     
     <div v-if="showStats" class="toolbar-center">
       <div class="stats">
         <span class="stat-item">
-          <span class="stat-label">节点:</span>
+          <span class="stat-label">{{ t('editorToolbar.nodes') }}:</span>
           <span class="stat-value">{{ nodeCount }}</span>
         </span>
         <span class="stat-item">
-          <span class="stat-label">连线:</span>
+          <span class="stat-label">{{ t('editorToolbar.edges') }}:</span>
           <span class="stat-value">{{ edgeCount }}</span>
         </span>
       </div>
     </div>
     
     <div class="toolbar-right">
-      <button class="toolbar-btn" @click="emit('import')" title="导入规则">
+      <button class="toolbar-btn" @click="emit('import')" :title="t('editorToolbar.importRule')">
         <span class="btn-icon">📥</span>
-        <span class="btn-text">导入</span>
+        <span class="btn-text">{{ t('editorToolbar.import') }}</span>
       </button>
-      <button class="toolbar-btn" @click="emit('export')" title="导出规则">
+      <button class="toolbar-btn" @click="emit('export')" :title="t('editorToolbar.exportRule')">
         <span class="btn-icon">📤</span>
-        <span class="btn-text">导出</span>
+        <span class="btn-text">{{ t('editorToolbar.export') }}</span>
       </button>
-      <button class="toolbar-btn danger" @click="emit('clear')" title="清空画布">
+      <button class="toolbar-btn danger" @click="emit('clear')" :title="t('editorToolbar.clearCanvas')">
         <span class="btn-icon">🗑️</span>
-        <span class="btn-text">清空</span>
+        <span class="btn-text">{{ t('editorToolbar.clear') }}</span>
       </button>
       <button 
         class="toolbar-btn primary" 
         @click="emit('save')"
         :disabled="!canSave"
-        title="保存规则"
+        :title="t('editorToolbar.saveRule')"
       >
         <span class="btn-icon">💾</span>
-        <span class="btn-text">保存</span>
+        <span class="btn-text">{{ t('editorToolbar.save') }}</span>
       </button>
     </div>
   </div>

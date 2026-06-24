@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { usePointStore } from '@/stores/points'
 import type { PointBinding } from '@/types/scada'
 
+const { t } = useI18n()
 const scadaStore = useScadaStore()
 const pointStore = usePointStore()
 
@@ -118,10 +120,10 @@ const updatePanelSize = () => {
 }
 
 const presetSizes = [
-  { name: '小 (800×600)', width: 800, height: 600 },
-  { name: '中 (1200×800)', width: 1200, height: 800 },
-  { name: '大 (1920×1080)', width: 1920, height: 1080 },
-  { name: '超宽 (2560×1080)', width: 2560, height: 1080 },
+  { key: 'small', name: 'componentConfig.small', width: 800, height: 600 },
+  { key: 'medium', name: 'componentConfig.medium', width: 1200, height: 800 },
+  { key: 'large', name: 'componentConfig.large', width: 1920, height: 1080 },
+  { key: 'extraWide', name: 'componentConfig.extraWide', width: 2560, height: 1080 },
 ]
 
 const applyPreset = (preset: typeof presetSizes[0]) => {
@@ -134,15 +136,15 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 <template>
   <div class="config-panel">
     <div class="panel-header">
-      <h3>⚙️ {{ component ? '组件配置' : '面板设置' }}</h3>
+      <h3>⚙️ {{ component ? t('componentConfig.componentConfig') : t('componentConfig.panelConfig') }}</h3>
     </div>
     
     <div v-if="component" class="panel-body">
       <!-- 基本信息 -->
       <div class="config-section">
-        <div class="section-title">基本信息</div>
+        <div class="section-title">{{ t('componentConfig.basicInfo') }}</div>
         <div class="form-group">
-          <label>名称</label>
+          <label>{{ t('componentConfig.name') }}</label>
           <input 
             type="text" 
             :value="component.name"
@@ -161,11 +163,11 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>宽度</label>
+            <label>{{ t('componentConfig.width') }}</label>
             <input type="number" :value="component.style.width" @input="updateStyle('width', +($event.target as HTMLInputElement).value)">
           </div>
           <div class="form-group">
-            <label>高度</label>
+            <label>{{ t('componentConfig.height') }}</label>
             <input type="number" :value="component.style.height" @input="updateStyle('height', +($event.target as HTMLInputElement).value)">
           </div>
         </div>
@@ -173,20 +175,20 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 
       <!-- 点位绑定 -->
       <div class="config-section">
-        <div class="section-title">点位绑定</div>
+        <div class="section-title">{{ t('componentConfig.pointBinding') }}</div>
         <div class="form-group">
-          <label>设备</label>
+          <label>{{ t('componentConfig.device') }}</label>
           <select v-model="selectedDevice" @change="handleDeviceChange">
-            <option value="">请选择设备</option>
+            <option value="">{{ t('componentConfig.selectDevice') }}</option>
             <option v-for="device in pointStore.devices" :key="device.asset" :value="device.asset">
               {{ device.name }}
             </option>
           </select>
         </div>
         <div class="form-group">
-          <label>点位</label>
+          <label>{{ t('componentConfig.point') }}</label>
           <select v-model="selectedPoint" @change="handlePointChange">
-            <option value="">请选择点位</option>
+            <option value="">{{ t('componentConfig.selectPoint') }}</option>
             <option v-for="point in availablePoints" :key="point.name" :value="point.name">
               {{ point.name }} ({{ point.description }})
             </option>
@@ -198,75 +200,75 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
             <span class="separator">/</span>
             <span class="point">{{ currentBinding.pointName }}</span>
           </div>
-          <el-button type="danger" size="small" @click="handleUnbind">解除绑定</el-button>
+          <el-button type="danger" size="small" @click="handleUnbind">{{ t('componentConfig.unbind') }}</el-button>
         </div>
       </div>
 
       <!-- 仪表盘配置 -->
       <div v-if="component.type === 'gauge' && component.gaugeConfig" class="config-section">
-        <div class="section-title">仪表盘配置</div>
+        <div class="section-title">{{ t('componentConfig.gaugeConfig') }}</div>
         <div class="form-row">
           <div class="form-group">
-            <label>最小值</label>
+            <label>{{ t('componentConfig.minValue') }}</label>
             <input type="number" :value="component.gaugeConfig.min" @input="updateConfig('gaugeConfig', 'min', +($event.target as HTMLInputElement).value)">
           </div>
           <div class="form-group">
-            <label>最大值</label>
+            <label>{{ t('componentConfig.maxValue') }}</label>
             <input type="number" :value="component.gaugeConfig.max" @input="updateConfig('gaugeConfig', 'max', +($event.target as HTMLInputElement).value)">
           </div>
         </div>
         <div class="form-group">
-          <label>单位</label>
+          <label>{{ t('componentConfig.unit') }}</label>
           <input type="text" :value="component.gaugeConfig.unit" @input="updateConfig('gaugeConfig', 'unit', ($event.target as HTMLInputElement).value)">
         </div>
       </div>
 
       <!-- 图表配置 -->
       <div v-if="(component.type === 'chart-line' || component.type === 'chart-bar') && component.chartConfig" class="config-section">
-        <div class="section-title">图表配置</div>
+        <div class="section-title">{{ t('componentConfig.chartConfig') }}</div>
         <div class="form-group">
-          <label>时间范围</label>
+          <label>{{ t('componentConfig.timeRange') }}</label>
           <select :value="component.chartConfig.timeRange" @change="updateConfig('chartConfig', 'timeRange', ($event.target as HTMLSelectElement).value)">
-            <option value="1h">1小时</option>
-            <option value="6h">6小时</option>
-            <option value="24h">24小时</option>
-            <option value="7d">7天</option>
-          </select>
+              <option value="1h">{{ t('dashboard.timeRange1h') }}</option>
+              <option value="6h">{{ t('pointTrend.timeRange6h') }}</option>
+              <option value="24h">{{ t('dashboard.timeRange24h') }}</option>
+              <option value="7d">{{ t('dashboard.timeRange7d') }}</option>
+            </select>
         </div>
         <div class="form-group">
-          <label>线条颜色</label>
+          <label>{{ t('componentConfig.lineColor') }}</label>
           <input type="color" :value="component.chartConfig.lineColor" @input="updateConfig('chartConfig', 'lineColor', ($event.target as HTMLInputElement).value)">
         </div>
       </div>
 
       <!-- 指示灯配置 -->
       <div v-if="component.type === 'indicator' && component.indicatorConfig" class="config-section">
-        <div class="section-title">指示灯配置</div>
+        <div class="section-title">{{ t('componentConfig.indicatorConfig') }}</div>
         <div class="form-group">
-          <label>开启颜色</label>
+          <label>{{ t('componentConfig.onColor') }}</label>
           <input type="color" :value="component.indicatorConfig.onColor" @input="updateConfig('indicatorConfig', 'onColor', ($event.target as HTMLInputElement).value)">
         </div>
         <div class="form-group">
-          <label>关闭颜色</label>
+          <label>{{ t('componentConfig.offColor') }}</label>
           <input type="color" :value="component.indicatorConfig.offColor" @input="updateConfig('indicatorConfig', 'offColor', ($event.target as HTMLInputElement).value)">
         </div>
       </div>
 
       <!-- 操作按钮 -->
       <div class="config-section">
-        <div class="section-title">操作</div>
+        <div class="section-title">{{ t('componentConfig.operations') }}</div>
         <div class="action-buttons">
-          <el-button size="small" @click="handleDuplicate">📋 复制</el-button>
-          <el-button size="small" @click="handleBringToFront">⬆️ 置顶</el-button>
-          <el-button size="small" @click="handleSendToBack">⬇️ 置底</el-button>
+          <el-button size="small" @click="handleDuplicate">📋 {{ t('componentConfig.duplicate') }}</el-button>
+          <el-button size="small" @click="handleBringToFront">⬆️ {{ t('componentConfig.bringToFront') }}</el-button>
+          <el-button size="small" @click="handleSendToBack">⬇️ {{ t('componentConfig.sendToBack') }}</el-button>
           <el-button 
             :type="component.locked ? 'success' : 'warning'" 
             size="small"
             @click="scadaStore.updateComponent(component.id, { locked: !component.locked })"
           >
-            {{ component.locked ? '🔓 解锁' : '🔒 锁定' }}
+            {{ component.locked ? '🔓 ' + t('componentConfig.unlock') : '🔒 ' + t('componentConfig.lock') }}
           </el-button>
-          <el-button type="danger" size="small" @click="handleDelete">🗑️ 删除</el-button>
+          <el-button type="danger" size="small" @click="handleDelete">🗑️ {{ t('componentConfig.delete') }}</el-button>
         </div>
       </div>
     </div>
@@ -274,56 +276,56 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
     <!-- 面板设置（未选中组件时显示） -->
     <div v-else-if="currentPanel" class="panel-body">
       <div class="config-section">
-        <div class="section-title">画布尺寸</div>
+        <div class="section-title">{{ t('componentConfig.canvasSize') }}</div>
         <div class="form-row">
           <div class="form-group">
-            <label>宽度</label>
+            <label>{{ t('componentConfig.width') }}</label>
             <input type="number" v-model.number="panelWidth" min="400" max="4096" @change="updatePanelSize">
           </div>
           <div class="form-group">
-            <label>高度</label>
+            <label>{{ t('componentConfig.height') }}</label>
             <input type="number" v-model.number="panelHeight" min="300" max="4096" @change="updatePanelSize">
           </div>
         </div>
         <div class="preset-buttons">
           <el-button 
             v-for="preset in presetSizes" 
-            :key="preset.name"
+            :key="preset.key"
             size="small"
             @click="applyPreset(preset)"
           >
-            {{ preset.name }}
+            {{ t('componentConfig.' + preset.key) }}
           </el-button>
         </div>
       </div>
 
       <div class="config-section">
-        <div class="section-title">画布样式</div>
+        <div class="section-title">{{ t('componentConfig.canvasStyle') }}</div>
         <div class="form-group">
-          <label>背景颜色</label>
+          <label>{{ t('componentConfig.backgroundColor') }}</label>
           <div class="color-input">
             <input type="color" v-model="panelBgColor" @change="updatePanelSize">
             <input type="text" v-model="panelBgColor" @change="updatePanelSize" placeholder="#f0f2f5">
           </div>
         </div>
         <div class="form-group">
-          <label>网格大小</label>
+          <label>{{ t('componentConfig.gridSize') }}</label>
           <input type="number" v-model.number="panelGrid" min="10" max="50" step="5" @change="updatePanelSize">
         </div>
       </div>
 
       <div class="config-section">
-        <div class="section-title">面板信息</div>
+        <div class="section-title">{{ t('componentConfig.panelInfo') }}</div>
         <div class="info-item">
-          <span class="info-label">面板名称</span>
+          <span class="info-label">{{ t('componentConfig.panelName') }}</span>
           <span class="info-value">{{ currentPanel.name }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">组件数量</span>
+          <span class="info-label">{{ t('componentConfig.componentCount') }}</span>
           <span class="info-value">{{ currentPanel.components.length }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">画布尺寸</span>
+          <span class="info-label">{{ t('componentConfig.canvasDimensions') }}</span>
           <span class="info-value">{{ currentPanel.width }} × {{ currentPanel.height }}</span>
         </div>
       </div>
@@ -331,7 +333,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 
     <div v-else class="empty-state">
       <span class="empty-icon">📦</span>
-      <p>选择组件进行配置</p>
+      <p>{{ t('componentConfig.selectComponentHint') }}</p>
     </div>
   </div>
 </template>

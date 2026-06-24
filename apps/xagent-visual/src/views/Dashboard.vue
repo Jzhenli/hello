@@ -26,6 +26,8 @@ import dayjs from 'dayjs'
 import { RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
+import { useI18n } from 'vue-i18n'
+
 use([
   CanvasRenderer,
   LineChart,
@@ -37,6 +39,7 @@ use([
   GridComponent
 ])
 
+const { t } = useI18n()
 const router = useRouter()
 const deviceStore = useDeviceStore()
 const ruleStore = useRuleStore()
@@ -83,35 +86,35 @@ function getProgressColor(percentage: number): string {
 
 const alertTrend = computed(() => {
   const pending = alertStore.pendingAlerts
-  if (pending > 0) return { text: `${pending} 条待处理`, type: 'danger' }
-  return { text: '无新增', type: 'success' }
+  if (pending > 0) return { text: t('dashboard.pendingAlerts') + ` (${pending})`, type: 'danger' }
+  return { text: t('dashboard.noNew'), type: 'success' }
 })
 
 const deviceTrend = computed(() => {
   const online = deviceStore.onlineDevices
   const total = deviceStore.totalDevices
-  if (total === 0) return { text: '无设备', type: 'info' }
+  if (total === 0) return { text: t('dashboard.noDevices'), type: 'info' }
   const percentage = Math.round((online / total) * 100)
-  if (percentage >= 80) return { text: '运行良好', type: 'success' }
-  if (percentage >= 50) return { text: '部分离线', type: 'warning' }
-  return { text: '多数离线', type: 'danger' }
+  if (percentage >= 80) return { text: t('dashboard.runningWell'), type: 'success' }
+  if (percentage >= 50) return { text: t('dashboard.partiallyOffline'), type: 'warning' }
+  return { text: t('dashboard.mostlyOffline'), type: 'danger' }
 })
 
 const channelTrend = computed(() => {
   const online = channelStore.onlineChannels
   const total = channelStore.totalChannels
-  if (total === 0) return { text: '无通道', type: 'info' }
+  if (total === 0) return { text: t('dashboard.noChannels'), type: 'info' }
   const percentage = Math.round((online / total) * 100)
-  if (percentage >= 80) return { text: '连接正常', type: 'success' }
-  if (percentage >= 50) return { text: '部分断开', type: 'warning' }
-  return { text: '多数断开', type: 'danger' }
+  if (percentage >= 80) return { text: t('dashboard.connectionNormal'), type: 'success' }
+  if (percentage >= 50) return { text: t('dashboard.partiallyDisconnected'), type: 'warning' }
+  return { text: t('dashboard.mostlyDisconnected'), type: 'danger' }
 })
 
 const ruleTrend = computed(() => {
   const active = ruleStore.activeRules
   const total = ruleStore.totalRules
-  if (total === 0) return { text: '无规则', type: 'info' }
-  return { text: `${active}/${total} 启用`, type: active > 0 ? 'success' : 'warning' }
+  if (total === 0) return { text: t('dashboard.noRules'), type: 'info' }
+  return { text: `${active}/${total} ` + t('dashboard.enabled'), type: active > 0 ? 'success' : 'warning' }
 })
 
 const chartSummary = computed(() => {
@@ -143,7 +146,7 @@ const dataChartOption = ref({
     type: 'value'
   },
   series: [{
-    name: '数据采集量',
+    name: t('dashboard.dataCollection'),
     type: 'line',
     smooth: true,
     areaStyle: {
@@ -181,7 +184,7 @@ async function fetchAllData() {
 
   } catch (error) {
     console.error('Failed to fetch data:', error)
-    ElMessage.error('数据加载失败')
+    ElMessage.error(t('dashboard.dataLoadFailed'))
   }
 }
 
@@ -195,7 +198,7 @@ async function updateChartData() {
     })
   } catch (error) {
     console.error('Failed to update chart data:', error)
-    ElMessage.error('获取数据采集统计失败')
+    ElMessage.error(t('dashboard.dataFetchFailed'))
   }
 }
 
@@ -211,7 +214,7 @@ async function refreshData() {
   try {
     await fetchAllData()
     lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-    ElMessage.success('数据已刷新')
+    ElMessage.success(t('dashboard.dataRefreshed'))
   } finally {
     refreshing.value = false
   }
@@ -260,7 +263,7 @@ onMounted(async () => {
     })
   } catch (error) {
     console.error('Failed to fetch data:', error)
-    ElMessage.error('数据加载失败')
+    ElMessage.error(t('dashboard.dataLoadFailed'))
     showSkeleton.value = false
     showContent.value = true
     isInitialized.value = true
@@ -300,7 +303,7 @@ onActivated(async () => {
       class="dashboard-skeleton"
       role="region"
       aria-busy="true"
-      aria-label="内容加载中"
+      :aria-label="$t('dashboard.ariaContentLoading')"
     >
       <el-row :gutter="isMobile ? 12 : 20" class="skeleton-cards">
         <el-col :span="statCardSpan" v-for="i in 4" :key="i">
@@ -337,7 +340,7 @@ onActivated(async () => {
       class="dashboard-content"
       role="region"
       :aria-busy="!showContent"
-      aria-label="仪表盘内容"
+      :aria-label="$t('dashboard.ariaDashboardContent')"
     >
     <div class="dashboard-toolbar">
       <div class="toolbar-right">
@@ -347,9 +350,9 @@ onActivated(async () => {
           :loading="refreshing"
           circle
           size="small"
-          title="刷新数据"
+          :title="$t('dashboard.refreshData')"
         />
-        <span class="update-time">最后更新: {{ lastUpdateTime }}</span>
+        <span class="update-time">{{ $t('dashboard.lastUpdate') }}: {{ lastUpdateTime }}</span>
       </div>
     </div>
 
@@ -361,7 +364,7 @@ onActivated(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ alertStore.pendingAlerts }}</div>
-            <div class="stat-label">待处理告警</div>
+            <div class="stat-label">{{ $t('dashboard.pendingAlerts') }}</div>
             <div class="stat-trend" :class="alertTrend.type">{{ alertTrend.text }}</div>
           </div>
         </el-card>
@@ -374,7 +377,7 @@ onActivated(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ deviceStore.onlineDevices }}/{{ deviceStore.totalDevices }}</div>
-            <div class="stat-label">在线设备</div>
+            <div class="stat-label">{{ $t('dashboard.onlineDevices') }}</div>
             <div class="stat-trend" :class="deviceTrend.type">{{ deviceTrend.text }}</div>
           </div>
         </el-card>
@@ -387,7 +390,7 @@ onActivated(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ channelStore.onlineChannels }}/{{ channelStore.totalChannels }}</div>
-            <div class="stat-label">在线通道</div>
+            <div class="stat-label">{{ $t('dashboard.onlineChannels') }}</div>
             <div class="stat-trend" :class="channelTrend.type">{{ channelTrend.text }}</div>
           </div>
         </el-card>
@@ -400,7 +403,7 @@ onActivated(async () => {
           </div>
           <div class="stat-content">
             <div class="stat-value">{{ ruleStore.activeRules }}/{{ ruleStore.totalRules }}</div>
-            <div class="stat-label">活跃规则</div>
+            <div class="stat-label">{{ $t('dashboard.activeRules') }}</div>
             <div class="stat-trend" :class="ruleTrend.type">{{ ruleTrend.text }}</div>
           </div>
         </el-card>
@@ -413,21 +416,21 @@ onActivated(async () => {
           <template #header>
             <div class="card-header">
               <div class="header-left">
-                <span class="chart-title">数据采集趋势</span>
+                <span class="chart-title">{{ $t('dashboard.title') }}</span>
                 <el-radio-group v-model="timeRange" size="small" class="time-range-selector">
-                  <el-radio-button value="1h">1小时</el-radio-button>
-                  <el-radio-button value="24h">24小时</el-radio-button>
-                  <el-radio-button value="7d">7天</el-radio-button>
+                  <el-radio-button value="1h">{{ $t('dashboard.timeRange1h') }}</el-radio-button>
+                  <el-radio-button value="24h">{{ $t('dashboard.timeRange24h') }}</el-radio-button>
+                  <el-radio-button value="7d">{{ $t('dashboard.timeRange7d') }}</el-radio-button>
                 </el-radio-group>
               </div>
               <div class="chart-summary">
                 <span class="summary-item">
-                  <span class="label">峰值:</span>
-                  <span class="value">{{ chartSummary.peak }} 条/时</span>
+                  <span class="label">{{ $t('dashboard.peak') }}:</span>
+                  <span class="value">{{ chartSummary.peak }} {{ $t('dashboard.itemsPerHour') }}</span>
                 </span>
                 <span class="summary-item">
-                  <span class="label">均值:</span>
-                  <span class="value">{{ chartSummary.average }} 条/时</span>
+                  <span class="label">{{ $t('dashboard.average') }}:</span>
+                  <span class="value">{{ chartSummary.average }} {{ $t('dashboard.itemsPerHour') }}</span>
                 </span>
               </div>
             </div>
@@ -442,9 +445,9 @@ onActivated(async () => {
         <el-card class="info-card resource-panel" shadow="hover">
           <template #header>
             <div class="panel-title">
-              <span>系统资源</span>
+              <span>{{ $t('dashboard.systemResource') }}</span>
               <el-tag size="small" :type="systemStore.stats.cpuUsage > 80 ? 'danger' : 'success'">
-                {{ systemStore.stats.cpuUsage > 80 ? '负载较高' : '运行正常' }}
+                {{ systemStore.stats.cpuUsage > 80 ? $t('dashboard.highLoad') : $t('dashboard.runningNormal') }}
               </el-tag>
             </div>
           </template>
@@ -458,7 +461,7 @@ onActivated(async () => {
                   :width="80"
                 />
               </div>
-              <div class="gauge-label">CPU</div>
+              <div class="gauge-label">{{ $t('dashboard.cpu') }}</div>
             </div>
             <div class="gauge-item">
               <div class="gauge-chart">
@@ -469,7 +472,7 @@ onActivated(async () => {
                   :width="80"
                 />
               </div>
-              <div class="gauge-label">内存</div>
+              <div class="gauge-label">{{ $t('dashboard.memory') }}</div>
             </div>
             <div class="gauge-item">
               <div class="gauge-chart">
@@ -480,7 +483,7 @@ onActivated(async () => {
                   :width="80"
                 />
               </div>
-              <div class="gauge-label">磁盘</div>
+              <div class="gauge-label">{{ $t('dashboard.disk') }}</div>
             </div>
           </div>
         </el-card>
@@ -490,25 +493,25 @@ onActivated(async () => {
         <el-card class="info-card" shadow="hover">
           <template #header>
             <div class="panel-title">
-              <span>通道上传统计</span>
+              <span>{{ $t('dashboard.channelUploadStats') }}</span>
               <el-tag size="small" :type="channelStore.averageSuccessRate > 95 ? 'success' : 'warning'">
-                {{ channelStore.averageSuccessRate > 95 ? '传输良好' : '需要关注' }}
+                {{ channelStore.averageSuccessRate > 95 ? $t('dashboard.transmissionGood') : $t('dashboard.needsAttention') }}
               </el-tag>
             </div>
           </template>
           <div class="channel-stats">
             <div class="channel-stat-item">
-              <span class="stat-label">总上传速率</span>
-              <span class="stat-value">{{ channelStore.totalUploadRate }} 条/秒</span>
+              <span class="stat-label">{{ $t('dashboard.totalUploadRate') }}</span>
+              <span class="stat-value">{{ channelStore.totalUploadRate }} {{ $t('dashboard.itemsPerSecond') }}</span>
             </div>
             <div class="channel-stat-item">
-              <span class="stat-label">平均成功率</span>
+              <span class="stat-label">{{ $t('dashboard.averageSuccessRate') }}</span>
               <span class="stat-value">{{ channelStore.averageSuccessRate }}%</span>
             </div>
             <div class="channel-stat-item">
-              <span class="stat-label">数据积压</span>
+              <span class="stat-label">{{ $t('dashboard.dataBacklog') }}</span>
               <span class="stat-value" :class="{ 'text-danger': channelStore.totalBacklog > 100 }">
-                {{ channelStore.totalBacklog }} 条
+                {{ channelStore.totalBacklog }} {{ $t('dashboard.items') }}
               </span>
             </div>
           </div>
@@ -521,9 +524,9 @@ onActivated(async () => {
         <el-card class="info-card alert-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>最新告警</span>
+              <span>{{ $t('dashboard.latestAlerts') }}</span>
               <el-button type="primary" link size="small" @click="router.push('/alerts')">
-                查看全部
+                {{ $t('dashboard.viewAll') }}
               </el-button>
             </div>
           </template>
@@ -543,7 +546,7 @@ onActivated(async () => {
               </div>
               <span class="alert-time">{{ alert.triggeredAt.split(' ')[1] }}</span>
             </div>
-            <el-empty v-if="alertStore.alerts.length === 0" description="暂无告警" :image-size="60" />
+            <el-empty v-if="alertStore.alerts.length === 0" :description="$t('dashboard.noAlerts')" :image-size="60" />
           </div>
         </el-card>
       </el-col>
@@ -552,25 +555,25 @@ onActivated(async () => {
         <el-card class="info-card" shadow="hover">
           <template #header>
             <div class="panel-title">
-              <span>系统信息</span>
-              <el-tag size="small" type="info">详情</el-tag>
+              <span>{{ $t('dashboard.systemInfo') }}</span>
+              <el-tag size="small" type="info">{{ $t('dashboard.details') }}</el-tag>
             </div>
           </template>
           <div class="system-info">
             <div class="info-item">
-              <span class="info-label">运行时长</span>
-              <span class="info-value">{{ Math.floor(systemStore.stats.uptime / 3600) }} 小时</span>
+              <span class="info-label">{{ $t('dashboard.uptime') }}</span>
+              <span class="info-value">{{ Math.floor(systemStore.stats.uptime / 3600) }} {{ $t('dashboard.hours') }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">采集总量</span>
+              <span class="info-label">{{ $t('dashboard.totalCollection') }}</span>
               <span class="info-value">{{ systemStore.stats.totalReadings.toLocaleString() }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">今日采集</span>
+              <span class="info-label">{{ $t('dashboard.todayCollection') }}</span>
               <span class="info-value">{{ systemStore.stats.todayReadings.toLocaleString() }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">数据质量</span>
+              <span class="info-label">{{ $t('dashboard.dataQuality') }}</span>
               <span class="info-value" :class="{ 'text-success': systemStore.dataQuality.qualityRate > 95 }">
                 {{ systemStore.dataQuality.qualityRate }}%
               </span>

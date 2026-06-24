@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { RuleNodeData, NodeType } from '@/types/rule'
 import { OPERATORS, LOGIC_OPERATORS, SCHEDULE_MODES, SCHEDULE_FREQUENCIES, WEEKDAYS, NOTIFICATION_LEVELS, NOTIFICATION_CHANNEL_TYPES } from '@/types/rule'
 import { useDeviceStore } from '@/stores/devices'
 import type { DeviceConfig, PointConfig } from '@/api/types'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   nodeId: string
@@ -134,12 +137,12 @@ const actionValue = computed<string>({
 
 const panelTitle = computed(() => {
   const titles: Record<NodeType, string> = {
-    trigger: '🎯 数据触发器配置',
-    'schedule-trigger': '⏰ 定时触发器配置',
-    condition: '⚙️ 条件判断配置',
-    logic: '🔀 逻辑运算配置',
-    action: '⚡ 执行动作配置',
-    notification: '📢 通知告警配置'
+    trigger: t('nodeConfig.triggerTitle'),
+    'schedule-trigger': t('nodeConfig.scheduleTitle'),
+    condition: t('nodeConfig.conditionTitle'),
+    logic: t('nodeConfig.logicTitle'),
+    action: t('nodeConfig.actionTitle'),
+    notification: t('nodeConfig.notificationTitle')
   }
   return titles[props.nodeType]
 })
@@ -173,7 +176,7 @@ const isDaySelected = (day: number) => {
   <div class="node-config-panel">
     <div class="panel-header">
       <h3>{{ panelTitle }}</h3>
-      <button class="delete-btn" @click="handleDelete" title="删除节点">
+      <button class="delete-btn" @click="handleDelete" :title="t('nodeConfig.deleteNode')">
         🗑️
       </button>
     </div>
@@ -182,10 +185,10 @@ const isDaySelected = (day: number) => {
       <!-- 数据触发器配置 -->
       <template v-if="nodeType === 'trigger' && localData.trigger">
         <div class="form-group">
-          <label>数据源设备</label>
+          <label>{{ t('nodeConfig.dataSourceDevice') }}</label>
           <el-select
             v-model="selectedTriggerDevice"
-            placeholder="选择设备"
+            :placeholder="t('common.pleaseSelect', { name: t('nodeConfig.dataSourceDevice') })"
             filterable
             clearable
             value-key="asset"
@@ -200,16 +203,16 @@ const isDaySelected = (day: number) => {
             >
               <div class="device-option">
                 <span class="device-name">{{ device.name || device.asset }}</span>
-                <span class="device-meta">{{ device.plugin?.name }} · {{ device.points?.length || 0 }} 点位</span>
+                <span class="device-meta">{{ device.plugin?.name }} · {{ device.points?.length || 0 }} {{ t('nodeConfig.points') }}</span>
               </div>
             </el-option>
           </el-select>
         </div>
         <div class="form-group">
-          <label>数据点位</label>
+          <label>{{ t('nodeConfig.dataPoint') }}</label>
           <el-select
             v-model="localData.trigger.field"
-            placeholder="选择点位"
+            :placeholder="t('common.pleaseSelect', { name: t('nodeConfig.dataPoint') })"
             filterable
             clearable
             :disabled="!selectedTriggerDevice"
@@ -232,14 +235,14 @@ const isDaySelected = (day: number) => {
           </el-select>
         </div>
         <div v-if="localData.trigger.sourceService" class="form-group info-group">
-          <label>南向插件</label>
+          <label>{{ t('nodeConfig.southPlugin') }}</label>
           <div class="info-value">{{ localData.trigger.sourceService }}</div>
         </div>
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea
             v-model="localData.trigger.description"
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>
@@ -248,26 +251,26 @@ const isDaySelected = (day: number) => {
       <!-- 定时触发器配置 -->
       <template v-if="nodeType === 'schedule-trigger' && localData.scheduleTrigger">
         <div class="form-group">
-          <label>触发模式</label>
+          <label>{{ t('nodeConfig.triggerMode') }}</label>
           <select v-model="localData.scheduleTrigger.mode" @change="updateData">
             <option v-for="mode in SCHEDULE_MODES" :key="mode.value" :value="mode.value">
-              {{ mode.label }}
+              {{ t(mode.labelKey) }}
             </option>
           </select>
         </div>
         
         <template v-if="localData.scheduleTrigger.mode === 'periodic'">
           <div class="form-group">
-            <label>执行频率</label>
+            <label>{{ t('nodeConfig.executionFrequency') }}</label>
             <select v-model="localData.scheduleTrigger.frequency" @change="updateData">
               <option v-for="freq in SCHEDULE_FREQUENCIES" :key="freq.value" :value="freq.value">
-                {{ freq.label }}
+                {{ t(freq.labelKey) }}
               </option>
             </select>
           </div>
           
           <div class="form-group">
-            <label>执行时间</label>
+            <label>{{ t('nodeConfig.executionTime') }}</label>
             <input 
               v-model="localData.scheduleTrigger.time" 
               type="time" 
@@ -276,7 +279,7 @@ const isDaySelected = (day: number) => {
           </div>
           
           <div v-if="localData.scheduleTrigger.frequency === 'weekly'" class="form-group">
-            <label>选择星期</label>
+            <label>{{ t('nodeConfig.selectWeekday') }}</label>
             <div class="weekday-selector">
               <button 
                 v-for="day in WEEKDAYS" 
@@ -285,7 +288,7 @@ const isDaySelected = (day: number) => {
                 :class="{ active: isDaySelected(day.value) }"
                 @click="toggleDay(day.value)"
               >
-                {{ day.label }}
+                {{ t(day.labelKey) }}
               </button>
             </div>
           </div>
@@ -293,7 +296,7 @@ const isDaySelected = (day: number) => {
         
         <template v-if="localData.scheduleTrigger.mode === 'once'">
           <div class="form-group">
-            <label>执行时间</label>
+            <label>{{ t('nodeConfig.executionTime') }}</label>
             <input 
               v-model="localData.scheduleTrigger.time" 
               type="time" 
@@ -301,7 +304,7 @@ const isDaySelected = (day: number) => {
             >
           </div>
           <div class="form-group">
-            <label>执行日期</label>
+            <label>{{ t('nodeConfig.executionDate') }}</label>
             <input 
               v-model="localData.scheduleTrigger.startDate" 
               type="date" 
@@ -312,47 +315,47 @@ const isDaySelected = (day: number) => {
         
         <template v-if="localData.scheduleTrigger.mode === 'cron'">
           <div class="form-group">
-            <label>Cron表达式</label>
+            <label>{{ t('nodeConfig.cronExpression') }}</label>
             <input 
               v-model="localData.scheduleTrigger.cron" 
               type="text" 
-              placeholder="例如: 0 0 8 * * ?"
+              :placeholder="t('nodeConfig.cronFormat')"
               @input="updateData"
             >
-            <span class="hint">格式: 秒 分 时 日 月 周</span>
+            <span class="hint">{{ t('nodeConfig.cronFormat') }}</span>
           </div>
           <div class="cron-examples">
-            <p><strong>示例:</strong></p>
-            <p>0 0 8 * * ? - 每天8:00</p>
-            <p>0 30 18 * * ? - 每天18:30</p>
-            <p>0 0 9 ? * MON-FRI - 工作日9:00</p>
+            <p><strong>{{ t('nodeConfig.cronExample') }}:</strong></p>
+            <p>0 0 8 * * ? - {{ t('ruleEditor.executionTime') }}8:00</p>
+            <p>0 30 18 * * ? - {{ t('ruleEditor.executionTime') }}18:30</p>
+            <p>0 0 9 ? * MON-FRI - {{ t('ruleEditor.executionTime') }}9:00</p>
           </div>
         </template>
         
         <div class="form-group">
-          <label>生效日期范围</label>
+          <label>{{ t('nodeConfig.effectiveDateRange') }}</label>
           <div class="date-range">
             <input 
               v-model="localData.scheduleTrigger.startDate" 
               type="date" 
               @input="updateData"
-              placeholder="开始日期"
+              :placeholder="t('nodeConfig.startDate')"
             >
-            <span>至</span>
+            <span>{{ t('nodeConfig.to') }}</span>
             <input 
               v-model="localData.scheduleTrigger.endDate" 
               type="date" 
               @input="updateData"
-              placeholder="结束日期"
+              :placeholder="t('nodeConfig.endDate')"
             >
           </div>
         </div>
         
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea 
             v-model="localData.scheduleTrigger.description" 
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>
@@ -361,11 +364,11 @@ const isDaySelected = (day: number) => {
       <!-- 条件判断配置 -->
       <template v-if="nodeType === 'condition' && localData.condition">
         <div class="form-group">
-          <label>字段名</label>
+          <label>{{ t('nodeConfig.fieldName') }}</label>
           <el-select
             v-if="triggerPoints.length > 0"
             v-model="localData.condition.field"
-            placeholder="选择或输入字段"
+            :placeholder="t('nodeConfig.selectOrEnterField')"
             filterable
             allow-create
             clearable
@@ -383,43 +386,43 @@ const isDaySelected = (day: number) => {
             v-else
             v-model="localData.condition.field"
             type="text"
-            placeholder="例如: temperature"
+            placeholder="e.g. temperature"
             @input="updateData"
           >
         </div>
         <div class="form-group">
-          <label>运算符</label>
+          <label>{{ t('nodeConfig.operator') }}</label>
           <select v-model="localData.condition.operator" @change="updateData">
             <option v-for="op in OPERATORS" :key="op.value" :value="op.value">
-              {{ op.label }}
+              {{ t(op.labelKey) }}
             </option>
           </select>
         </div>
         <div class="form-group">
-          <label>比较值</label>
+          <label>{{ t('nodeConfig.comparisonValue') }}</label>
           <input 
             v-model="localData.condition.value" 
             type="text" 
-            placeholder="例如: 30"
+            placeholder="e.g. 30"
             @input="updateData"
           >
         </div>
         <div class="form-group">
-          <label>持续时间 (秒)</label>
+          <label>{{ t('nodeConfig.duration') }}</label>
           <input 
             v-model.number="localData.condition.duration" 
             type="number" 
             min="0"
-            placeholder="0 表示即时触发"
+            :placeholder="t('nodeConfig.instantTrigger')"
             @input="updateData"
           >
-          <span class="hint">0 = 即时触发</span>
+          <span class="hint">0 = {{ t('nodeConfig.instantTrigger') }}</span>
         </div>
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea 
             v-model="localData.condition.description" 
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>
@@ -428,23 +431,23 @@ const isDaySelected = (day: number) => {
       <!-- 逻辑运算配置 -->
       <template v-if="nodeType === 'logic' && localData.logic">
         <div class="form-group">
-          <label>逻辑运算符</label>
+          <label>{{ t('nodeConfig.logicOperator') }}</label>
           <select v-model="localData.logic.operator" @change="updateData">
             <option v-for="op in LOGIC_OPERATORS" :key="op.value" :value="op.value">
-              {{ op.label }}
+              {{ t(op.labelKey) }}
             </option>
           </select>
         </div>
         <div class="logic-hint">
-          <p><strong>AND:</strong> 所有条件都满足</p>
-          <p><strong>OR:</strong> 任一条件满足</p>
-          <p><strong>NOT:</strong> 条件不满足</p>
+          <p><strong>AND:</strong> {{ t('nodeConfig.logicAnd') }}</p>
+          <p><strong>OR:</strong> {{ t('nodeConfig.logicOr') }}</p>
+          <p><strong>NOT:</strong> {{ t('nodeConfig.logicNot') }}</p>
         </div>
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea 
             v-model="localData.logic.description" 
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>
@@ -453,10 +456,10 @@ const isDaySelected = (day: number) => {
       <!-- 执行动作配置 -->
       <template v-if="nodeType === 'action' && localData.action">
         <div class="form-group">
-          <label>目标设备</label>
+          <label>{{ t('nodeConfig.targetDevice') }}</label>
           <el-select
             v-model="selectedActionDevice"
-            placeholder="选择设备"
+            :placeholder="t('common.pleaseSelect', { name: t('nodeConfig.targetDevice') })"
             filterable
             clearable
             value-key="asset"
@@ -471,29 +474,29 @@ const isDaySelected = (day: number) => {
             >
               <div class="device-option">
                 <span class="device-name">{{ device.name || device.asset }}</span>
-                <span class="device-meta">{{ device.plugin?.name }} · {{ device.points?.length || 0 }} 点位</span>
+                <span class="device-meta">{{ device.plugin?.name }} · {{ device.points?.length || 0 }} {{ t('nodeConfig.points') }}</span>
               </div>
             </el-option>
           </el-select>
         </div>
         <div class="form-group">
-          <label>操作类型</label>
+          <label>{{ t('nodeConfig.operationType') }}</label>
           <el-select
             v-model="localData.action.operation"
-            placeholder="选择操作"
+            :placeholder="t('common.pleaseSelect', { name: t('nodeConfig.operationType') })"
             style="width: 100%"
             @change="updateData"
           >
-            <el-option label="写入设定值" value="write_setpoint" />
-            <el-option label="执行操作" value="execute_operation" />
+            <el-option :label="t('nodeConfig.writeSetpoint')" value="write_setpoint" />
+            <el-option :label="t('nodeConfig.executeOperation')" value="execute_operation" />
           </el-select>
         </div>
         <template v-if="localData.action.operation === 'write_setpoint'">
           <div class="form-group">
-            <label>写入点位</label>
+            <label>{{ t('nodeConfig.writePoint') }}</label>
             <el-select
               v-model="selectedActionPoint"
-              placeholder="选择点位"
+              :placeholder="t('common.pleaseSelect', { name: t('nodeConfig.writePoint') })"
               filterable
               clearable
               :disabled="!selectedActionDevice"
@@ -514,35 +517,35 @@ const isDaySelected = (day: number) => {
             </el-select>
           </div>
           <div class="form-group">
-            <label>写入值</label>
+            <label>{{ t('nodeConfig.writeValue') }}</label>
             <input 
               v-model="actionValue"
               type="text"
-              placeholder="例如: true / 1 / 25.5"
+              placeholder="e.g. true / 1 / 25.5"
               @input="updateData"
             >
           </div>
         </template>
         <div v-if="localData.action.targetService" class="form-group info-group">
-          <label>南向插件</label>
+          <label>{{ t('nodeConfig.southPlugin') }}</label>
           <div class="info-value">{{ localData.action.targetService }}</div>
         </div>
         <div class="form-group">
-          <label>延迟执行 (秒)</label>
+          <label>{{ t('nodeConfig.delayExecution') }}</label>
           <input 
             v-model.number="localData.action.delay" 
             type="number" 
             min="0"
-            placeholder="0 表示立即执行"
+            :placeholder="t('nodeConfig.immediateExecution')"
             @input="updateData"
           >
-          <span class="hint">0 = 立即执行</span>
+          <span class="hint">0 = {{ t('nodeConfig.immediateExecution') }}</span>
         </div>
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea 
             v-model="localData.action.description" 
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>
@@ -551,30 +554,30 @@ const isDaySelected = (day: number) => {
       <!-- 通知告警配置 -->
       <template v-if="nodeType === 'notification' && localData.notification">
         <div class="form-group">
-          <label>告警级别</label>
+          <label>{{ t('nodeConfig.notificationLevel') }}</label>
           <select v-model="localData.notification.level" @change="updateData">
             <option v-for="lv in NOTIFICATION_LEVELS" :key="lv.value" :value="lv.value">
-              {{ lv.label }}
+              {{ t(lv.labelKey) }}
             </option>
           </select>
         </div>
         <div class="form-group">
-          <label>通知渠道</label>
+          <label>{{ t('nodeConfig.notificationChannel') }}</label>
           <select v-model="localData.notification.channel_type" @change="updateData">
             <option v-for="ct in NOTIFICATION_CHANNEL_TYPES" :key="ct.value" :value="ct.value">
-              {{ ct.label }}
+              {{ t(ct.labelKey) }}
             </option>
           </select>
         </div>
         <div class="form-group info-box">
           <span class="info-icon">💡</span>
-          <span>通知渠道的详细配置（收件人、SMTP、Webhook 等）请在告警配置页面中统一管理</span>
+          <span>{{ t('nodeConfig.channelConfigHint') }}</span>
         </div>
         <div class="form-group">
-          <label>描述</label>
+          <label>{{ t('nodeConfig.description') }}</label>
           <textarea
             v-model="localData.notification.description"
-            placeholder="可选描述"
+            :placeholder="t('nodeConfig.optionalDesc')"
             @input="updateData"
           ></textarea>
         </div>

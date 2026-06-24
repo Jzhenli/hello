@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 defineProps<{
   message: string
 }>()
@@ -15,8 +19,8 @@ const emit = defineEmits<{
       <div class="confirm-icon">⚠️</div>
       <div class="confirm-message">{{ message }}</div>
       <div class="confirm-buttons">
-        <button class="btn-cancel" @click="emit('cancel')">取消</button>
-        <button class="btn-ok" @click="emit('ok')">确定</button>
+        <button class="btn-cancel" @click="emit('cancel')">{{ t('confirmDialog.cancel') }}</button>
+        <button class="btn-ok" @click="emit('ok')">{{ t('confirmDialog.confirm') }}</button>
       </div>
     </div>
   </div>

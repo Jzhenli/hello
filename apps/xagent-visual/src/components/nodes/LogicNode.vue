@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { RuleNodeData } from '@/types/rule'
 
+const { t } = useI18n()
 const { node } = useNode<RuleNodeData>()
 
 const nodeData = computed(() => node.data?.logic)
@@ -35,7 +37,7 @@ const operatorColor = computed(() => {
     
     <div class="node-header">
       <span class="node-icon">🔀</span>
-      <span class="node-title">逻辑运算</span>
+      <span class="node-title">{{ t('nodeViews.logic') }}</span>
     </div>
     
     <div class="node-body">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, markRaw, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VueFlow, useVueFlow, type Connection, type NodeChange, type EdgeChange } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -19,6 +20,8 @@ import { createNode, validateGraph } from '@/utils/ruleConverter'
 import { graphToBackendCreate, graphToBackendUpdate, backendToGraph } from '@/utils/ruleBridge'
 import { useRuleStore } from '@/stores/rules'
 import { ElMessage } from 'element-plus'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   ruleId?: string | null
@@ -47,7 +50,7 @@ const {
 const nodes = ref<RuleNode[]>([])
 const edges = ref<RuleEdge[]>([])
 const selectedNodeId = ref<string | null>(null)
-const ruleName = ref('新规则')
+const ruleName = ref(t('ruleEditor.defaultRuleName'))
 const ruleDescription = ref('')
 const saving = ref(false)
 const loading = ref(false)
@@ -197,7 +200,7 @@ const handleSave = async () => {
         currentRule?.enabled ?? true
       )
       await ruleStore.updateRule(props.ruleId, updateData)
-      ElMessage.success('规则更新成功')
+      ElMessage.success(t('ruleEditor.ruleSaved'))
     } else {
       const createData = graphToBackendCreate(
         ruleName.value,
@@ -206,7 +209,7 @@ const handleSave = async () => {
         edges.value
       )
       await ruleStore.createRule(createData)
-      ElMessage.success('规则创建成功')
+      ElMessage.success(t('ruleEditor.ruleCreated'))
     }
     emit('saved')
     emit('close')
@@ -214,7 +217,7 @@ const handleSave = async () => {
     const detail = e.response?.data?.detail
     const msg = detail
       ? (Array.isArray(detail) ? detail.map((d: any) => d.msg || d).join('; ') : String(detail))
-      : e.message || '保存失败'
+      : t('ruleEditor.saveFailed')
     ElMessage.error(msg)
   } finally {
     saving.value = false
@@ -232,7 +235,7 @@ const loadRule = async (ruleId: string) => {
   try {
     const ruleResponse = await ruleStore.getRule(ruleId)
     if (!ruleResponse) {
-      ElMessage.error('加载规则失败：规则不存在')
+      ElMessage.error(t('ruleEditor.ruleNotFound'))
       return
     }
 
@@ -244,10 +247,10 @@ const loadRule = async (ruleId: string) => {
       ruleDescription.value = graphData.description
       setTimeout(() => fitView(), 100)
     } else {
-      ElMessage.warning('无法解析规则图形数据')
+      ElMessage.warning(t('ruleEditor.parseFailed'))
     }
   } catch (e: any) {
-    ElMessage.error('加载规则失败：' + (e.message || '未知错误'))
+    ElMessage.error(t('ruleEditor.loadFailed') + '：' + (e.message || t('common.unknownError')))
   } finally {
     loading.value = false
   }
@@ -267,7 +270,7 @@ watch(() => props.ruleId, (newId) => {
   } else {
     nodes.value = []
     edges.value = []
-    ruleName.value = '新规则'
+    ruleName.value = t('ruleEditor.defaultRuleName')
     ruleDescription.value = ''
   }
 }, { immediate: false })
@@ -279,27 +282,27 @@ watch(() => props.ruleId, (newId) => {
       <div class="toolbar-left">
         <el-input 
           v-model="ruleName" 
-          placeholder="规则名称" 
+          :placeholder="t('ruleEditor.ruleName')" 
           style="width: 200px"
         />
         <el-input 
           v-model="ruleDescription" 
-          placeholder="规则描述" 
+          :placeholder="t('ruleEditor.ruleDescription')" 
           style="width: 300px"
         />
       </div>
       <div class="toolbar-right">
-        <span class="node-count">节点: {{ nodes.length }} | 连线: {{ edges.length }}</span>
-        <el-button @click="handleClear" :disabled="loading">清空</el-button>
+        <span class="node-count">{{ t('ruleEditor.nodeCount') }}: {{ nodes.length }} | {{ t('ruleEditor.edgeCount') }}: {{ edges.length }}</span>
+        <el-button @click="handleClear" :disabled="loading">{{ t('ruleEditor.clear') }}</el-button>
         <el-button type="primary" :disabled="!canSave" :loading="saving" @click="handleSave">
-          {{ saving ? '保存中...' : '保存' }}
+          {{ saving ? t('ruleEditor.saving') : t('ruleEditor.save') }}
         </el-button>
       </div>
     </div>
     
     <div v-if="loading" class="editor-loading">
       <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-      <span>加载规则中...</span>
+      <span>{{ t('ruleEditor.loadingRule') }}</span>
     </div>
 
     <div v-else class="editor-main">
@@ -324,9 +327,9 @@ watch(() => props.ruleId, (newId) => {
       
       <div v-if="selectedNode" class="config-panel">
         <div class="panel-header">
-          <span>节点配置</span>
+          <span>{{ t('ruleEditor.nodeConfig') }}</span>
           <el-button type="danger" link size="small" @click="handleNodeDelete(selectedNode.id)">
-            删除节点
+            {{ t('ruleEditor.deleteNode') }}
           </el-button>
         </div>
         <NodeConfigPanel
@@ -341,8 +344,8 @@ watch(() => props.ruleId, (newId) => {
       <div v-else class="empty-panel">
         <div class="empty-content">
           <span class="empty-icon">📝</span>
-          <p>选择节点进行配置</p>
-          <p class="hint">从左侧拖拽节点到画布</p>
+          <p>{{ t('ruleEditor.selectNodeHint') }}</p>
+          <p class="hint">{{ t('ruleEditor.dragHint') }}</p>
         </div>
       </div>
     </div>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { COMPONENT_TEMPLATES, type ComponentType } from '@/types/scada'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'dragStart', type: ComponentType): void
@@ -17,10 +20,11 @@ const onDragStart = (type: ComponentType, event: DragEvent) => {
 const categories = computed(() => {
   const cats: Record<string, typeof COMPONENT_TEMPLATES> = {}
   COMPONENT_TEMPLATES.forEach(template => {
-    if (!cats[template.category]) {
-      cats[template.category] = []
+    const catKey = template.category
+    if (!cats[catKey]) {
+      cats[catKey] = []
     }
-    cats[template.category].push(template)
+    cats[catKey].push(template)
   })
   return cats
 })
@@ -29,13 +33,13 @@ const categories = computed(() => {
 <template>
   <div class="component-palette">
     <div class="palette-header">
-      <h3>📦 组件库</h3>
-      <span class="hint">拖拽到画布</span>
+      <h3>{{ t('componentPalette.title') }}</h3>
+      <span class="hint">{{ t('componentPalette.dragHint') }}</span>
     </div>
     
     <div class="palette-body">
       <div v-for="(templates, category) in categories" :key="category" class="category-section">
-        <div class="category-title">{{ category }}</div>
+        <div class="category-title">{{ t(category) }}</div>
         <div class="component-grid">
           <div
             v-for="template in templates"
@@ -45,7 +49,7 @@ const categories = computed(() => {
             @dragstart="onDragStart(template.type, $event)"
           >
             <div class="component-icon">{{ template.icon }}</div>
-            <div class="component-name">{{ template.name }}</div>
+            <div class="component-name">{{ t(template.name) }}</div>
           </div>
         </div>
       </div>

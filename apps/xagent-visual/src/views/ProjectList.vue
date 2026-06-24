@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, Setting } from '@element-plus/icons-vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const scadaStore = useScadaStore()
 
@@ -20,7 +22,7 @@ const projects = computed(() => scadaStore.panels)
 
 const handleCreate = async () => {
   if (!formName.value.trim()) {
-    ElMessage.warning('请输入项目名称')
+    ElMessage.warning(t('scada.enterProjectName'))
     return
   }
   
@@ -31,7 +33,7 @@ const handleCreate = async () => {
     formHeight.value
   )
   
-  ElMessage.success('创建成功')
+  ElMessage.success(t('scada.createSuccess'))
   showCreateDialog.value = false
   resetForm()
 }
@@ -42,14 +44,14 @@ const handleEdit = (id: string) => {
 
 const handleDelete = async (id: string) => {
   try {
-    await ElMessageBox.confirm('确定要删除这个项目吗？此操作不可恢复。', '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('scada.deleteConfirm'), t('scada.deleteConfirmTitle'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning'
     })
     
     scadaStore.deletePanel(id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('scada.deleteSuccess'))
   } catch {
     // User cancelled
   }
@@ -66,7 +68,7 @@ const openEditDialog = (panel: any) => {
 
 const handleSaveEdit = async () => {
   if (!formName.value.trim()) {
-    ElMessage.warning('请输入项目名称')
+    ElMessage.warning(t('scada.enterProjectName'))
     return
   }
   
@@ -84,7 +86,7 @@ const handleSaveEdit = async () => {
     height: formHeight.value
   })
   
-  ElMessage.success('保存成功')
+  ElMessage.success(t('scada.saveSuccess'))
   showEditDialog.value = false
   resetForm()
 }
@@ -105,15 +107,15 @@ const formatTime = (timestamp: number) => {
 <template>
   <div class="project-list-container">
     <div class="header">
-      <h2>项目管理</h2>
+      <h2>{{ $t('scada.title') }}</h2>
       <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
-        新建项目
+        {{ $t('scada.newProject') }}
       </el-button>
     </div>
 
     <div v-if="projects.length === 0" class="empty-state">
-      <el-empty description="暂无项目，请点击右上角创建新项目">
-        <el-button type="primary" @click="showCreateDialog = true">创建项目</el-button>
+      <el-empty :description="$t('scada.noProjects')">
+        <el-button type="primary" @click="showCreateDialog = true">{{ $t('scada.createProject') }}</el-button>
       </el-empty>
     </div>
 
@@ -126,10 +128,10 @@ const formatTime = (timestamp: number) => {
       >
         <div class="project-info">
           <h3 class="project-name">{{ panel.name }}</h3>
-          <p class="project-desc">{{ panel.description || '暂无描述' }}</p>
+          <p class="project-desc">{{ panel.description || $t('scada.noDescription') }}</p>
           <div class="project-meta">
-            <span>组件数: {{ panel.components?.length || 0 }}</span>
-            <span>创建时间: {{ formatTime(panel.createdAt) }}</span>
+            <span>{{ $t('scada.componentCount') }}: {{ panel.components?.length || 0 }}</span>
+            <span>{{ $t('scada.createTime') }}: {{ formatTime(panel.createdAt) }}</span>
           </div>
         </div>
         <div class="project-actions">
@@ -139,7 +141,7 @@ const formatTime = (timestamp: number) => {
             size="small"
             @click="handleEdit(panel.id)"
           >
-            编辑
+            {{ $t('scada.edit') }}
           </el-button>
           <el-button 
             type="warning" 
@@ -147,7 +149,7 @@ const formatTime = (timestamp: number) => {
             size="small"
             @click="openEditDialog(panel)"
           >
-            设置
+            {{ $t('scada.settings') }}
           </el-button>
           <el-button 
             type="danger" 
@@ -155,7 +157,7 @@ const formatTime = (timestamp: number) => {
             size="small"
             @click="handleDelete(panel.id)"
           >
-            删除
+            {{ $t('scada.delete') }}
           </el-button>
         </div>
       </el-card>
@@ -164,74 +166,74 @@ const formatTime = (timestamp: number) => {
     <!-- 创建项目对话框 -->
     <el-dialog
       v-model="showCreateDialog"
-      title="新建项目"
+      :title="$t('scada.newProject')"
       width="500px"
     >
       <el-form label-width="80px">
-        <el-form-item label="项目名称" required>
-          <el-input v-model="formName" placeholder="请输入项目名称" />
+        <el-form-item :label="$t('scada.projectName')" required>
+          <el-input v-model="formName" :placeholder="$t('scada.enterProjectName')" />
         </el-form-item>
-        <el-form-item label="项目描述">
+        <el-form-item :label="$t('scada.projectDesc')">
           <el-input
             v-model="formDescription"
             type="textarea"
-            placeholder="请输入项目描述"
+            :placeholder="$t('scada.enterProjectDesc')"
             :rows="3"
           />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="画布宽度">
+            <el-form-item :label="$t('scada.canvasWidth')">
               <el-input-number v-model="formWidth" :min="400" :max="4000" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="画布高度">
+            <el-form-item :label="$t('scada.canvasHeight')">
               <el-input-number v-model="formHeight" :min="300" :max="3000" />
             </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">确定</el-button>
+        <el-button @click="showCreateDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreate">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 编辑项目对话框 -->
     <el-dialog
       v-model="showEditDialog"
-      title="编辑项目"
+      :title="$t('scada.editProject')"
       width="500px"
     >
       <el-form label-width="80px">
-        <el-form-item label="项目名称" required>
-          <el-input v-model="formName" placeholder="请输入项目名称" />
+        <el-form-item :label="$t('scada.projectName')" required>
+          <el-input v-model="formName" :placeholder="$t('scada.enterProjectName')" />
         </el-form-item>
-        <el-form-item label="项目描述">
+        <el-form-item :label="$t('scada.projectDesc')">
           <el-input
             v-model="formDescription"
             type="textarea"
-            placeholder="请输入项目描述"
+            :placeholder="$t('scada.enterProjectDesc')"
             :rows="3"
           />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="画布宽度">
+            <el-form-item :label="$t('scada.canvasWidth')">
               <el-input-number v-model="formWidth" :min="400" :max="4000" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="画布高度">
+            <el-form-item :label="$t('scada.canvasHeight')">
               <el-input-number v-model="formHeight" :min="300" :max="3000" />
             </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="showEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveEdit">确定</el-button>
+        <el-button @click="showEditDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveEdit">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -298,6 +300,7 @@ const formatTime = (timestamp: number) => {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 

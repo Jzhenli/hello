@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NODE_TEMPLATES, type NodeType } from '@/types/rule'
 import { useResponsive } from '@/utils/useResponsive'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'dragStart', type: NodeType, event: DragEvent): void
@@ -20,10 +23,11 @@ const onDragStart = (type: NodeType, event: DragEvent) => {
 const categories = computed(() => {
   const cats: Record<string, typeof NODE_TEMPLATES> = {}
   NODE_TEMPLATES.forEach(template => {
-    if (!cats[template.category]) {
-      cats[template.category] = []
+    const catKey = template.category
+    if (!cats[catKey]) {
+      cats[catKey] = []
     }
-    cats[template.category].push(template)
+    cats[catKey].push(template)
   })
   return cats
 })
@@ -38,13 +42,13 @@ const paletteWidth = computed(() => {
 <template>
   <div class="node-palette" :style="{ width: paletteWidth }">
     <div class="palette-header">
-      <h3>节点面板</h3>
-      <p class="hint">拖拽节点到画布</p>
+      <h3>{{ t('ruleNodes.nodePanel') }}</h3>
+      <p class="hint">{{ t('ruleNodes.dragHint') }}</p>
     </div>
     
     <div class="palette-body">
       <div v-for="(templates, category) in categories" :key="category" class="category-section">
-        <div class="category-title">{{ category }}</div>
+        <div class="category-title">{{ t(category) }}</div>
         <div
           v-for="template in templates"
           :key="template.type"
@@ -56,7 +60,7 @@ const paletteWidth = computed(() => {
         >
           <div class="item-icon">{{ template.icon }}</div>
           <div class="item-info">
-            <div class="item-label">{{ template.label }}</div>
+            <div class="item-label">{{ t(template.label) }}</div>
           </div>
         </div>
       </div>

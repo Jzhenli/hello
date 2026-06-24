@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChannelStore } from '@/stores/channels'
 import { useUserStore } from '@/stores/users'
 import { channelApi } from '@/api/channels'
@@ -22,6 +23,8 @@ import {
   RefreshRight
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
 
 // XNC映射配置模板
 const XNC_MAPPING_TEMPLATE = {
@@ -81,9 +84,9 @@ const handleFilterChange = () => {}
 const handleToggleChannel = async (id: string) => {
   try {
     await channelStore.toggleChannel(id)
-    ElMessage.success('通道状态已切换')
+    ElMessage.success(t('channels.statusChanged'))
   } catch (e: unknown) {
-    ElMessage.error('操作失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    ElMessage.error(t('channels.operationFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
   }
 }
 
@@ -172,8 +175,8 @@ const protocolOptions = [
 ]
 
 const mqttAdapterOptions = [
-  { label: '标准适配器', value: 'standard', description: '默认数据格式' },
-  { label: '客户A (C001)', value: 'C001', description: '客户A私有云协议' },
+  { label: t('channels.adapterStandard'), value: 'standard', description: t('channels.adapterStandardDesc') },
+  { label: t('channels.adapterC001'), value: 'C001', description: t('channels.adapterC001Desc') },
 ]
 
 // 适配器默认配置缓存（从后端API获取）
@@ -184,7 +187,6 @@ const productKey = ref('')
 
 // 获取适配器默认配置
 const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
-  // 如果已缓存，直接返回
   if (adapterDefaultsCache.value[adapterCode]) {
     return adapterDefaultsCache.value[adapterCode]
   }
@@ -218,13 +220,10 @@ const handleAdapterChange = async (adapter: string) => {
     channelForm.value.adapter_config = '{}'
     productKey.value = ''
   } else {
-    // 仅在新增或配置为空时预填充，避免编辑时覆盖已有配置
     if (!isEditing.value || !channelForm.value.adapter_config || channelForm.value.adapter_config === '{}') {
-      // 从后端API获取默认配置
       const defaults = await loadAdapterDefaults(adapter)
       if (defaults) {
         channelForm.value.adapter_config = JSON.stringify(defaults, null, 2)
-        // 同步 productKey
         productKey.value = defaults.productKey || ''
       }
     }
@@ -237,9 +236,9 @@ const fillMappingTemplate = () => {
 }
 
 const channelFormRules = {
-  id: [{ required: true, message: '请输入通道ID', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入通道名称', trigger: 'blur' }],
-  protocol: [{ required: true, message: '请选择协议类型', trigger: 'change' }]
+  id: [{ required: true, message: t('channels.idRequired'), trigger: 'blur' }],
+  name: [{ required: true, message: t('channels.nameRequired'), trigger: 'blur' }],
+  protocol: [{ required: true, message: t('channels.protocolRequired'), trigger: 'change' }]
 }
 
 const handleProtocolChange = (val: NorthChannelProtocol) => {
@@ -255,7 +254,7 @@ const handleProtocolChange = (val: NorthChannelProtocol) => {
 const handleAddChannel = () => {
   isEditing.value = false
   editingId.value = ''
-  productKey.value = ''  // 重置产品Key
+  productKey.value = ''
   channelForm.value = {
     id: '',
     name: '',
@@ -338,7 +337,6 @@ const handleEditChannel = (channel: ChannelListItem) => {
     tags: (fullChannel.tags || []).join(', ')
   }
   
-  // 从 adapter_config 中提取 productKey
   try {
     const config = JSON.parse(channelForm.value.adapter_config || '{}')
     productKey.value = config.productKey || ''
@@ -354,9 +352,7 @@ const buildChannelConfig = (): NorthChannelConfig => {
   let adapterConfig: any = {}
   let adapterType = 'default'
   
-  // 根据协议类型构建扁平的连接配置
   if (channelForm.value.protocol === 'mqtt') {
-    // MQTT协议配置
     connection.broker = channelForm.value.host
     connection.port = channelForm.value.port
     if (channelForm.value.username) connection.username = channelForm.value.username
@@ -372,7 +368,6 @@ const buildChannelConfig = (): NorthChannelConfig => {
     
     adapterType = 'mqtt'
     
-    // 适配器配置
     if (channelForm.value.adapter) {
       adapterConfig.adapter = channelForm.value.adapter
     }
@@ -401,7 +396,6 @@ const buildChannelConfig = (): NorthChannelConfig => {
       console.error('Invalid mapping config JSON:', e)
     }
   } else if (channelForm.value.protocol === 'http') {
-    // HTTP协议配置
     connection.endpoint = channelForm.value.endpoint
     connection.method = channelForm.value.method
     connection.timeout = channelForm.value.timeout
@@ -410,7 +404,6 @@ const buildChannelConfig = (): NorthChannelConfig => {
     
     adapterType = 'http'
     
-    // 添加 headers 到 adapter.config
     try {
       const headers = JSON.parse(channelForm.value.headers)
       if (Object.keys(headers).length > 0) {
@@ -465,15 +458,15 @@ const handleSaveChannel = async () => {
     
     if (isEditing.value) {
       await channelStore.updateChannel(editingId.value, config)
-      ElMessage.success('通道已更新')
+      ElMessage.success(t('channels.channelUpdated'))
     } else {
       await channelStore.createChannel(config)
-      ElMessage.success('通道已创建')
+      ElMessage.success(t('channels.channelCreated'))
     }
     showChannelDialog.value = false
   } catch (e: unknown) {
-    const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : '未知错误')
-    ElMessage.error(isEditing.value ? '更新失败: ' + detail : '创建失败: ' + detail)
+    const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : t('common.unknownError'))
+    ElMessage.error(isEditing.value ? t('channels.updateFailed', { message: detail }) : t('channels.createFailed', { message: detail }))
   } finally {
     saving.value = false
   }
@@ -481,11 +474,11 @@ const handleSaveChannel = async () => {
 
 const handleDeleteChannel = (channel: ChannelListItem) => {
   ElMessageBox.confirm(
-    `确定要删除通道 "${channel.name}" (${channel.id}) 吗？此操作不可恢复。`,
-    '删除确认',
+    t('channels.deleteConfirmMessage', { name: channel.name, id: channel.id }),
+    t('channels.deleteConfirmTitle'),
     {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning'
     }
   ).then(async () => {
@@ -494,33 +487,33 @@ const handleDeleteChannel = (channel: ChannelListItem) => {
       if (selectedChannelId.value === channel.id) {
         selectedChannelId.value = null
       }
-      ElMessage.success('通道已删除')
+      ElMessage.success(t('channels.channelDeleted'))
     } catch (e: unknown) {
-      ElMessage.error('删除失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      ElMessage.error(t('channels.deleteFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
     }
   }).catch(() => {})
 }
 
 const handleTestConnection = async (id: string) => {
   try {
-    ElMessage.info('正在测试连接...')
+    ElMessage.info(t('channels.testingConnection'))
     const result = await channelStore.testConnection(id)
     if (result.success) {
-      ElMessage.success(`连接成功！延迟: ${result.latency}ms`)
+      ElMessage.success(t('channels.connectionSuccess', { latency: result.latency }))
     } else {
-      ElMessage.error('连接失败: ' + result.message)
+      ElMessage.error(t('channels.connectionFailed', { message: result.message }))
     }
   } catch (e: unknown) {
-    ElMessage.error('测试失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    ElMessage.error(t('channels.testFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
   }
 }
 
 const handleRestartChannel = async (id: string) => {
   try {
     await channelStore.restartChannel(id)
-    ElMessage.success('通道已重启')
+    ElMessage.success(t('channels.channelRestarted'))
   } catch (e: unknown) {
-    ElMessage.error('重启失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    ElMessage.error(t('channels.restartFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
   }
 }
 
@@ -537,7 +530,7 @@ const handleExportYaml = async () => {
     const channels = result.channels || []
     
     if (channels.length === 0) {
-      ElMessage.warning('没有可导出的通道')
+      ElMessage.warning(t('channels.noExportableChannels'))
       return
     }
     
@@ -554,15 +547,15 @@ const handleExportYaml = async () => {
     a.download = `xagent-channels-${new Date().toISOString().slice(0, 10)}.yaml`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success(`已导出 ${channels.length} 个通道`)
+    ElMessage.success(t('channels.exportSuccess', { count: channels.length }))
   } catch (e: unknown) {
     console.error('导出失败:', e)
     if (e instanceof Error) {
       console.error('错误详情:', e.message)
       console.error('错误堆栈:', e.stack)
     }
-    const errorMsg = e instanceof Error ? e.message : '未知错误'
-    ElMessage.error(`导出失败: ${errorMsg}`)
+    const errorMsg = e instanceof Error ? e.message : t('common.unknownError')
+    ElMessage.error(t('channels.exportFailed', { message: errorMsg }))
   }
 }
 
@@ -582,27 +575,27 @@ const handleImportFileChange = async (e: Event) => {
     const text = await file.text()
     const parsed = yaml.load(text) as { channels?: NorthChannelConfig[] }
     if (!parsed.channels || !Array.isArray(parsed.channels)) {
-      ElMessage.error('无效的 YAML 文件：缺少 channels 数组')
+      ElMessage.error(t('channels.invalidYaml'))
       return
     }
 
     const channels = parsed.channels
     await ElMessageBox.confirm(
-      `即将导入 ${channels.length} 个通道，是否继续？`,
-      '导入确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
+      t('channels.importConfirmMessage', { count: channels.length }),
+      t('channels.importConfirmTitle'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'info' }
     )
 
     const result = await channelApi.importChannels({ channels: parsed.channels }, false)
     if (result.failed > 0) {
-      ElMessage.warning(`导入完成：成功 ${result.succeeded}，失败 ${result.failed}`)
+      ElMessage.warning(t('channels.importPartialSuccess', { success: result.succeeded, fail: result.failed }))
     } else {
-      ElMessage.success(`成功导入 ${result.succeeded} 个通道`)
+      ElMessage.success(t('channels.importSuccess', { count: result.succeeded }))
     }
     await channelStore.fetchChannels()
   } catch (e: unknown) {
     if ((e as any) !== 'cancel') {
-      ElMessage.error('导入失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      ElMessage.error(t('channels.importFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
     }
   }
 }
@@ -631,7 +624,7 @@ onMounted(async () => {
       <div class="toolbar-left">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索通道..."
+          :placeholder="$t('channels.searchPlaceholder')"
           :prefix-icon="Search"
           clearable
           class="toolbar-search"
@@ -639,23 +632,23 @@ onMounted(async () => {
         />
         <el-select 
           v-model="statusFilter" 
-          placeholder="状态筛选" 
+          :placeholder="$t('channels.statusFilter')" 
           clearable
           class="toolbar-filter"
           @change="handleFilterChange"
         >
-          <el-option label="全部" value="" />
-          <el-option label="在线" value="online" />
-          <el-option label="离线" value="offline" />
+          <el-option :label="$t('common.all')" value="" />
+          <el-option :label="$t('channels.online')" value="online" />
+          <el-option :label="$t('channels.offline')" value="offline" />
         </el-select>
         <el-select 
           v-model="protocolFilter" 
-          placeholder="协议筛选" 
+          :placeholder="$t('channels.protocolFilter')" 
           clearable
           class="toolbar-filter"
           @change="handleFilterChange"
         >
-          <el-option label="全部" value="" />
+          <el-option :label="$t('common.all')" value="" />
           <el-option label="MQTT" value="mqtt" />
           <el-option label="XNC" value="xnc" />
           <el-option label="HTTP" value="http" />
@@ -663,27 +656,27 @@ onMounted(async () => {
         <div class="toolbar-stats">
           <span class="stat-item">
             <span class="stat-value">{{ channelStore.totalChannels }}</span>
-            <span class="stat-label">通道</span>
+            <span class="stat-label">{{ $t('channels.channels') }}</span>
           </span>
           <span class="stat-divider">/</span>
           <span class="stat-item stat-online">
             <span class="stat-value">{{ channelStore.onlineChannels }}</span>
-            <span class="stat-label">在线</span>
+            <span class="stat-label">{{ $t('channels.online') }}</span>
           </span>
         </div>
       </div>
       <div class="toolbar-right">
         <el-button v-if="userStore.hasPermission('devices', 'create')" type="primary" :icon="Plus" @click="handleAddChannel">
-          新增通道
+          {{ $t('channels.addChannel') }}
         </el-button>
         <el-button :icon="Download" @click="handleExportYaml">
-          导出
+          {{ $t('common.export') }}
         </el-button>
         <el-button v-if="userStore.hasPermission('devices', 'create')" :icon="Upload" @click="handleImportYaml">
-          导入
+          {{ $t('common.import') }}
         </el-button>
         <el-button :icon="Refresh" @click="handleRefresh" :loading="channelStore.loading">
-          刷新
+          {{ $t('common.refresh') }}
         </el-button>
       </div>
     </div>
@@ -704,7 +697,7 @@ onMounted(async () => {
           :class="{ active: activeTab === 'channels' }"
           @click="activeTab = 'channels'"
         >
-          通道列表
+          {{ $t('channels.channelList') }}
           <span v-if="selectedChannelId" class="tab-badge">{{ selectedChannel?.name }}</span>
         </div>
         <div 
@@ -712,18 +705,18 @@ onMounted(async () => {
           :class="{ active: activeTab === 'details', disabled: !selectedChannelId }"
           @click="selectedChannelId && (activeTab = 'details')"
         >
-          通道详情
+          {{ $t('channels.channelDetails') }}
         </div>
       </div>
       
       <div v-show="activeTab === 'channels'" class="compact-panel channel-panel">
         <div v-if="channelStore.loading && channelStore.channels.length === 0" class="loading-state">
           <el-icon class="is-loading" :size="32"><Refresh /></el-icon>
-          <p>加载通道列表...</p>
+          <p>{{ $t('channels.loadingChannelList') }}</p>
         </div>
 
         <div v-else-if="filteredChannels.length === 0" class="empty-state">
-          <p>暂无通道</p>
+          <p>{{ $t('channels.noChannels') }}</p>
         </div>
 
         <div v-else class="channel-grid">
@@ -746,17 +739,17 @@ onMounted(async () => {
                 <div class="channel-card-name">{{ channel.name }}</div>
                 <div class="channel-card-meta">
                   <span>{{ channel.protocol.toUpperCase() }}</span>
-                  <span>{{ channel.uploadRate }} 条/分</span>
+                  <span>{{ channel.uploadRate }} {{ $t('channels.itemsPerMin') }}</span>
                 </div>
               </div>
             </div>
             <div class="channel-card-stats">
               <div class="stat-mini">
-                <span class="stat-mini-label">成功率</span>
+                <span class="stat-mini-label">{{ $t('channels.successRate') }}</span>
                 <span class="stat-mini-value">{{ channel.successRate }}%</span>
               </div>
               <div class="stat-mini">
-                <span class="stat-mini-label">积压</span>
+                <span class="stat-mini-label">{{ $t('channels.backlog') }}</span>
                 <span class="stat-mini-value">{{ channel.backlogCount }}</span>
               </div>
             </div>
@@ -770,10 +763,10 @@ onMounted(async () => {
               />
               <div class="action-buttons" @click.stop>
                 <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" link :size="isTouch ? 'default' : 'small'" @click="handleEditChannel(channel)">
-                  编辑
+                  {{ $t('common.edit') }}
                 </el-button>
                 <el-button v-if="userStore.hasPermission('devices', 'delete')" type="danger" link :size="isTouch ? 'default' : 'small'" @click="handleDeleteChannel(channel)">
-                  删除
+                  {{ $t('common.delete') }}
                 </el-button>
               </div>
             </div>
@@ -784,8 +777,8 @@ onMounted(async () => {
       <div v-show="activeTab === 'details'" class="compact-panel details-panel">
         <div v-if="!selectedChannelId" class="empty-details">
           <el-icon :size="48"><Connection /></el-icon>
-          <p>请先选择一个通道</p>
-          <el-button type="primary" @click="activeTab = 'channels'">返回通道列表</el-button>
+          <p>{{ $t('channels.selectChannelFirst') }}</p>
+          <el-button type="primary" @click="activeTab = 'channels'">{{ $t('channels.backToChannelList') }}</el-button>
         </div>
         
         <template v-else>
@@ -793,7 +786,7 @@ onMounted(async () => {
             <div class="panel-header-left">
               <el-button link @click="activeTab = 'channels'">
                 <el-icon><RefreshRight /></el-icon>
-                返回通道
+                {{ $t('channels.backToChannels') }}
               </el-button>
             </div>
             <span class="panel-title">{{ selectedChannel?.name }}</span>
@@ -803,10 +796,10 @@ onMounted(async () => {
             </div>
             <div class="header-actions">
               <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" plain @click="handleTestConnection(selectedChannelId!)">
-                测试
+                {{ $t('common.test') }}
               </el-button>
               <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" plain @click="handleRestartChannel(selectedChannelId!)">
-                重启
+                {{ $t('channels.restart') }}
               </el-button>
             </div>
           </div>
@@ -818,42 +811,42 @@ onMounted(async () => {
                 <div class="stat-icon upload-icon">↑</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.upload_rate }}</div>
-                  <div class="stat-label">条/分钟</div>
+                  <div class="stat-label">{{ $t('channels.itemsPerMin') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon success-icon">✓</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.success_rate }}%</div>
-                  <div class="stat-label">成功率</div>
+                  <div class="stat-label">{{ $t('channels.successRate') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon backlog-icon">⏳</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.backlog_count }}</div>
-                  <div class="stat-label">积压</div>
+                  <div class="stat-label">{{ $t('channels.backlog') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon total-icon">📊</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ formatNumber(selectedChannel.statistics.total_uploaded) }}</div>
-                  <div class="stat-label">总上传</div>
+                  <div class="stat-label">{{ $t('channels.totalUploaded') }}</div>
                 </div>
               </div>
             </div>
 
             <!-- 连接配置（合并基本信息） -->
             <div class="config-section">
-              <div class="section-title">连接配置</div>
+              <div class="section-title">{{ $t('channels.connectionConfig') }}</div>
               <div class="config-grid">
                 <div class="config-item">
-                  <span class="config-label">通道ID</span>
+                  <span class="config-label">{{ $t('channels.channelId') }}</span>
                   <span class="config-value">{{ selectedChannel.id }}</span>
                 </div>
                 <div class="config-item">
-                  <span class="config-label">名称</span>
+                  <span class="config-label">{{ $t('channels.name') }}</span>
                   <span class="config-value">{{ selectedChannel.name }}</span>
                 </div>
                 <template v-if="selectedChannel.protocol === 'mqtt'">
@@ -862,11 +855,11 @@ onMounted(async () => {
                     <span class="config-value">{{ selectedChannel.connection.broker }}:{{ selectedChannel.connection.port }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">客户端ID</span>
+                    <span class="config-label">{{ $t('channels.clientId') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.client_id }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">主题</span>
+                    <span class="config-label">{{ $t('channels.topic') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.topic }}</span>
                   </div>
                   <div class="config-item">
@@ -874,80 +867,80 @@ onMounted(async () => {
                     <span class="config-value">{{ selectedChannel.connection.qos }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">保活</span>
-                    <span class="config-value">{{ selectedChannel.connection.keepalive }}秒</span>
+                    <span class="config-label">{{ $t('channels.keepalive') }}</span>
+                    <span class="config-value">{{ selectedChannel.connection.keepalive }}{{ $t('channels.seconds') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">适配器</span>
+                    <span class="config-label">{{ $t('channels.adapter') }}</span>
                     <span class="config-value">
                       <el-tag v-if="selectedChannel.adapter.adapter" size="small" type="primary">{{ selectedChannel.adapter.adapter }}</el-tag>
-                      <span v-else class="muted">标准</span>
+                      <span v-else class="muted">{{ $t('channels.standard') }}</span>
                     </span>
                   </div>
                 </template>
                 <template v-if="selectedChannel.protocol === 'xnc'">
                   <div class="config-item">
-                    <span class="config-label">本地端口</span>
+                    <span class="config-label">{{ $t('channels.localPort') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.local_port }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">远程主机</span>
+                    <span class="config-label">{{ $t('channels.remoteHost') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.remote_host || '--' }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">远程端口</span>
+                    <span class="config-label">{{ $t('channels.remotePort') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.remote_port || '--' }}</span>
                   </div>
                 </template>
                 <template v-if="selectedChannel.protocol === 'http'">
                   <div class="config-item full-width">
-                    <span class="config-label">端点</span>
+                    <span class="config-label">{{ $t('channels.endpoint') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.endpoint }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">方法</span>
+                    <span class="config-label">{{ $t('channels.method') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.method }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">超时</span>
-                    <span class="config-value">{{ selectedChannel.connection.timeout }}秒</span>
+                    <span class="config-label">{{ $t('channels.timeout') }}</span>
+                    <span class="config-value">{{ selectedChannel.connection.timeout }}{{ $t('channels.seconds') }}</span>
                   </div>
                 </template>
               </div>
               <!-- 适配器配置JSON -->
               <div v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" class="adapter-config">
-                <div class="adapter-config-title">适配器配置</div>
+                <div class="adapter-config-title">{{ $t('channels.adapterConfig') }}</div>
                 <pre class="json-config">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
               </div>
             </div>
 
             <!-- 上传策略（可折叠） -->
             <el-collapse class="detail-collapse">
-              <el-collapse-item title="上传策略">
+              <el-collapse-item :title="$t('channels.uploadStrategy')">
                 <div class="config-grid">
                   <div class="config-item">
-                    <span class="config-label">立即上传</span>
+                    <span class="config-label">{{ $t('channels.immediateUpload') }}</span>
                     <span class="config-value">
                       <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'" size="small">
-                        {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
+                        {{ selectedChannel.upload_strategy.immediate_upload ? $t('common.yes') : $t('common.no') }}
                       </el-tag>
                     </span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">批量大小</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} 条</span>
+                    <span class="config-label">{{ $t('channels.batchSize') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} {{ $t('channels.items') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">上传间隔</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} 秒</span>
+                    <span class="config-label">{{ $t('channels.uploadInterval') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} {{ $t('channels.seconds') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">重试次数</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} 次</span>
+                    <span class="config-label">{{ $t('channels.retryTimes') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} {{ $t('channels.times') }}</span>
                   </div>
                 </div>
               </el-collapse-item>
-              <el-collapse-item v-if="selectedChannel.description" title="描述">
+              <el-collapse-item v-if="selectedChannel.description" :title="$t('channels.description')">
                 <p class="description-text">{{ selectedChannel.description }}</p>
               </el-collapse-item>
             </el-collapse>
@@ -959,17 +952,17 @@ onMounted(async () => {
     <div v-else class="main-content">
       <div class="channel-list-panel">
         <div class="panel-header">
-          <span class="panel-title">通道列表</span>
-          <span class="channel-count">{{ filteredChannels.length }} 个通道</span>
+          <span class="panel-title">{{ $t('channels.channelList') }}</span>
+          <span class="channel-count">{{ filteredChannels.length }} {{ $t('channels.channelsCount') }}</span>
         </div>
         
         <div v-if="channelStore.loading && channelStore.channels.length === 0" class="loading-state">
           <el-icon class="is-loading" :size="32"><Refresh /></el-icon>
-          <p>加载通道列表...</p>
+          <p>{{ $t('channels.loadingChannelList') }}</p>
         </div>
 
         <div v-else-if="filteredChannels.length === 0" class="empty-state">
-          <p>暂无通道</p>
+          <p>{{ $t('channels.noChannels') }}</p>
         </div>
 
         <div v-else class="channel-list">
@@ -993,7 +986,7 @@ onMounted(async () => {
               </div>
               <div class="channel-item-meta">
                 <span>{{ channel.protocol.toUpperCase() }}</span>
-                <span>{{ channel.uploadRate }} 条/分</span>
+                <span>{{ channel.uploadRate }} {{ $t('channels.itemsPerMin') }}</span>
                 <span>{{ channel.successRate }}%</span>
               </div>
             </div>
@@ -1015,11 +1008,11 @@ onMounted(async () => {
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="edit" :icon="Edit">编辑</el-dropdown-item>
-                    <el-dropdown-item command="test" :icon="Connection">测试连接</el-dropdown-item>
-                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="restart" :icon="RefreshRight">重启</el-dropdown-item>
+                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="edit" :icon="Edit">{{ $t('common.edit') }}</el-dropdown-item>
+                    <el-dropdown-item command="test" :icon="Connection">{{ $t('channels.testConnection') }}</el-dropdown-item>
+                    <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="restart" :icon="RefreshRight">{{ $t('channels.restart') }}</el-dropdown-item>
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'delete')" command="delete" :icon="Delete" divided>
-                      <span class="danger-text">删除</span>
+                      <span class="danger-text">{{ $t('common.delete') }}</span>
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -1032,7 +1025,7 @@ onMounted(async () => {
       <div class="details-panel">
         <div v-if="!selectedChannelId" class="empty-details">
           <el-icon :size="48"><Connection /></el-icon>
-          <p>请从左侧选择一个通道查看详情</p>
+          <p>{{ $t('channels.selectChannelFromLeft') }}</p>
         </div>
         
         <template v-else>
@@ -1042,15 +1035,15 @@ onMounted(async () => {
               <span class="status-dot" :class="{ online: selectedChannel?.status === 'online' }"></span>
               <span class="protocol-tag">{{ selectedChannel?.protocol?.toUpperCase() }}</span>
               <el-tag :type="selectedChannel?.enabled ? 'success' : 'info'" size="small">
-                {{ selectedChannel?.enabled ? '已启用' : '已禁用' }}
+                {{ selectedChannel?.enabled ? $t('channels.enabled') : $t('channels.disabled') }}
               </el-tag>
             </div>
             <div class="header-actions">
               <el-button v-if="userStore.hasPermission('devices', 'update')" type="primary" size="small" plain @click="handleTestConnection(selectedChannelId!)">
-                测试连接
+                {{ $t('channels.testConnection') }}
               </el-button>
               <el-button v-if="userStore.hasPermission('devices', 'update')" type="warning" size="small" plain @click="handleRestartChannel(selectedChannelId!)">
-                重启
+                {{ $t('channels.restart') }}
               </el-button>
             </div>
           </div>
@@ -1063,42 +1056,42 @@ onMounted(async () => {
                 <div class="stat-icon upload-icon">↑</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.upload_rate }}</div>
-                  <div class="stat-label">条/分钟</div>
+                  <div class="stat-label">{{ $t('channels.itemsPerMin') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon success-icon">✓</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.success_rate }}%</div>
-                  <div class="stat-label">成功率</div>
+                  <div class="stat-label">{{ $t('channels.successRate') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon backlog-icon">⏳</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ selectedChannel.statistics.backlog_count }}</div>
-                  <div class="stat-label">积压</div>
+                  <div class="stat-label">{{ $t('channels.backlog') }}</div>
                 </div>
               </div>
               <div class="stat-item">
                 <div class="stat-icon total-icon">📊</div>
                 <div class="stat-content">
                   <div class="stat-value">{{ formatNumber(selectedChannel.statistics.total_uploaded) }}</div>
-                  <div class="stat-label">总上传</div>
+                  <div class="stat-label">{{ $t('channels.totalUploaded') }}</div>
                 </div>
               </div>
             </div>
 
             <!-- 连接配置（合并基本信息） -->
             <div class="config-section">
-              <div class="section-title">连接配置</div>
+              <div class="section-title">{{ $t('channels.connectionConfig') }}</div>
               <div class="config-grid">
                 <div class="config-item">
-                  <span class="config-label">通道ID</span>
+                  <span class="config-label">{{ $t('channels.channelId') }}</span>
                   <span class="config-value">{{ selectedChannel.id }}</span>
                 </div>
                 <div class="config-item">
-                  <span class="config-label">名称</span>
+                  <span class="config-label">{{ $t('channels.name') }}</span>
                   <span class="config-value">{{ selectedChannel.name }}</span>
                 </div>
                 <template v-if="selectedChannel.protocol === 'mqtt'">
@@ -1107,11 +1100,11 @@ onMounted(async () => {
                     <span class="config-value">{{ selectedChannel.connection.broker }}:{{ selectedChannel.connection.port }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">客户端ID</span>
+                    <span class="config-label">{{ $t('channels.clientId') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.client_id }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">主题</span>
+                    <span class="config-label">{{ $t('channels.topic') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.topic }}</span>
                   </div>
                   <div class="config-item">
@@ -1119,88 +1112,88 @@ onMounted(async () => {
                     <span class="config-value">{{ selectedChannel.connection.qos }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">保活</span>
-                    <span class="config-value">{{ selectedChannel.connection.keepalive }}秒</span>
+                    <span class="config-label">{{ $t('channels.keepalive') }}</span>
+                    <span class="config-value">{{ selectedChannel.connection.keepalive }}{{ $t('channels.seconds') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">适配器</span>
+                    <span class="config-label">{{ $t('channels.adapter') }}</span>
                     <span class="config-value">
                       <el-tag v-if="selectedChannel.adapter.adapter" size="small" type="primary">{{ selectedChannel.adapter.adapter }}</el-tag>
-                      <span v-else class="muted">标准</span>
+                      <span v-else class="muted">{{ $t('channels.standard') }}</span>
                     </span>
                   </div>
                   <div v-if="selectedChannel.connection.username" class="config-item">
-                    <span class="config-label">用户名</span>
+                    <span class="config-label">{{ $t('channels.username') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.username }}</span>
                   </div>
                 </template>
                 <template v-if="selectedChannel.protocol === 'xnc'">
                   <div class="config-item">
-                    <span class="config-label">本地端口</span>
+                    <span class="config-label">{{ $t('channels.localPort') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.local_port }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">远程主机</span>
+                    <span class="config-label">{{ $t('channels.remoteHost') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.remote_host || '--' }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">远程端口</span>
+                    <span class="config-label">{{ $t('channels.remotePort') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.remote_port || '--' }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">重连间隔</span>
-                    <span class="config-value">{{ selectedChannel.connection.reconnect_interval || 5 }}秒</span>
+                    <span class="config-label">{{ $t('channels.reconnectInterval') }}</span>
+                    <span class="config-value">{{ selectedChannel.connection.reconnect_interval || 5 }}{{ $t('channels.seconds') }}</span>
                   </div>
                 </template>
                 <template v-if="selectedChannel.protocol === 'http'">
                   <div class="config-item full-width">
-                    <span class="config-label">端点</span>
+                    <span class="config-label">{{ $t('channels.endpoint') }}</span>
                     <span class="config-value code">{{ selectedChannel.connection.endpoint }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">方法</span>
+                    <span class="config-label">{{ $t('channels.method') }}</span>
                     <span class="config-value">{{ selectedChannel.connection.method }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">超时</span>
-                    <span class="config-value">{{ selectedChannel.connection.timeout }}秒</span>
+                    <span class="config-label">{{ $t('channels.timeout') }}</span>
+                    <span class="config-value">{{ selectedChannel.connection.timeout }}{{ $t('channels.seconds') }}</span>
                   </div>
                 </template>
               </div>
               <!-- 适配器配置JSON -->
               <div v-if="selectedChannel.protocol === 'mqtt' && selectedChannel.adapter.config && Object.keys(selectedChannel.adapter.config).length > 0" class="adapter-config">
-                <div class="adapter-config-title">适配器配置</div>
+                <div class="adapter-config-title">{{ $t('channels.adapterConfig') }}</div>
                 <pre class="json-config">{{ JSON.stringify(selectedChannel.adapter.config, null, 2) }}</pre>
               </div>
             </div>
 
             <!-- 上传策略（可折叠） -->
             <el-collapse class="detail-collapse">
-              <el-collapse-item title="上传策略">
+              <el-collapse-item :title="$t('channels.uploadStrategy')">
                 <div class="config-grid">
                   <div class="config-item">
-                    <span class="config-label">立即上传</span>
+                    <span class="config-label">{{ $t('channels.immediateUpload') }}</span>
                     <span class="config-value">
                       <el-tag :type="selectedChannel.upload_strategy.immediate_upload ? 'success' : 'info'" size="small">
-                        {{ selectedChannel.upload_strategy.immediate_upload ? '是' : '否' }}
+                        {{ selectedChannel.upload_strategy.immediate_upload ? $t('common.yes') : $t('common.no') }}
                       </el-tag>
                     </span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">批量大小</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} 条</span>
+                    <span class="config-label">{{ $t('channels.batchSize') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.batch_size }} {{ $t('channels.items') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">上传间隔</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} 秒</span>
+                    <span class="config-label">{{ $t('channels.uploadInterval') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.interval }} {{ $t('channels.seconds') }}</span>
                   </div>
                   <div class="config-item">
-                    <span class="config-label">重试次数</span>
-                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} 次</span>
+                    <span class="config-label">{{ $t('channels.retryTimes') }}</span>
+                    <span class="config-value">{{ selectedChannel.upload_strategy.retry_times }} {{ $t('channels.times') }}</span>
                   </div>
                 </div>
               </el-collapse-item>
-              <el-collapse-item v-if="selectedChannel.description" title="描述">
+              <el-collapse-item v-if="selectedChannel.description" :title="$t('channels.description')">
                 <p class="description-text">{{ selectedChannel.description }}</p>
               </el-collapse-item>
             </el-collapse>
@@ -1211,7 +1204,7 @@ onMounted(async () => {
     
     <el-dialog
       v-model="showChannelDialog"
-      :title="isEditing ? '编辑通道' : '新增通道'"
+      :title="isEditing ? $t('channels.editChannel') : $t('channels.addChannel')"
       width="min(900px, 90vw)"
       :close-on-click-modal="false"
     >
@@ -1221,30 +1214,30 @@ onMounted(async () => {
         <el-card class="config-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">基本信息</span>
-              <el-tag type="danger" size="small">必填</el-tag>
+              <span class="card-title">{{ $t('channels.basicInfo') }}</span>
+              <el-tag type="danger" size="small">{{ $t('channels.required') }}</el-tag>
             </div>
           </template>
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-form-item label="通道ID" prop="id">
+              <el-form-item :label="$t('channels.channelId')" prop="id">
                 <el-input
                   v-model="channelForm.id"
-                  placeholder="仅允许字母、数字、下划线、连字符"
+                  :placeholder="$t('channels.channelIdHint')"
                   :disabled="isEditing"
                 />
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="通道名称" prop="name">
-                <el-input v-model="channelForm.name" placeholder="请输入通道名称" />
+              <el-form-item :label="$t('channels.channelName')" prop="name">
+                <el-input v-model="channelForm.name" :placeholder="$t('channels.channelNameHint')" />
               </el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-form-item label="协议类型" prop="protocol">
-                <el-select v-model="channelForm.protocol" placeholder="请选择协议" @change="handleProtocolChange">
+              <el-form-item :label="$t('channels.protocolType')" prop="protocol">
+                <el-select v-model="channelForm.protocol" :placeholder="$t('channels.selectProtocol')" @change="handleProtocolChange">
                   <el-option
                     v-for="opt in protocolOptions"
                     :key="opt.value"
@@ -1255,13 +1248,13 @@ onMounted(async () => {
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="启用">
+              <el-form-item :label="$t('channels.enable')">
                 <el-switch v-model="channelForm.enabled" />
               </el-form-item>
             </el-col>
           </el-row>
-          <el-form-item label="描述">
-            <el-input v-model="channelForm.description" type="textarea" :rows="2" placeholder="请输入通道描述" />
+          <el-form-item :label="$t('channels.description')">
+            <el-input v-model="channelForm.description" type="textarea" :rows="2" :placeholder="$t('channels.descriptionHint')" />
           </el-form-item>
         </el-card>
 
@@ -1269,8 +1262,8 @@ onMounted(async () => {
         <el-card class="config-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">连接配置</span>
-              <el-tag type="danger" size="small">必填</el-tag>
+              <span class="card-title">{{ $t('channels.connectionConfig') }}</span>
+              <el-tag type="danger" size="small">{{ $t('channels.required') }}</el-tag>
             </div>
           </template>
 
@@ -1278,25 +1271,25 @@ onMounted(async () => {
           <template v-if="channelForm.protocol !== 'xnc'">
             <el-row :gutter="20">
               <el-col :span="16">
-                <el-form-item label="主机地址" prop="host">
-                  <el-input v-model="channelForm.host" placeholder="请输入主机地址，如 mqtt.example.com" />
+                <el-form-item :label="$t('channels.hostAddress')" prop="host">
+                  <el-input v-model="channelForm.host" :placeholder="$t('channels.hostAddressHint')" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="端口">
+                <el-form-item :label="$t('channels.port')">
                   <el-input-number v-model="channelForm.port" :min="1" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
             </el-row>
             <el-row :gutter="20">
               <el-col :span="12">
-                <el-form-item label="用户名">
-                  <el-input v-model="channelForm.username" placeholder="可选" />
+                <el-form-item :label="$t('channels.username')">
+                  <el-input v-model="channelForm.username" :placeholder="$t('common.optional')" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="密码">
-                  <el-input v-model="channelForm.password" type="password" placeholder="可选" show-password />
+                <el-form-item :label="$t('channels.password')">
+                  <el-input v-model="channelForm.password" type="password" :placeholder="$t('common.optional')" show-password />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -1306,17 +1299,17 @@ onMounted(async () => {
           <template v-if="channelForm.protocol === 'xnc'">
             <el-row :gutter="20">
               <el-col :span="8">
-                <el-form-item label="本地端口">
+                <el-form-item :label="$t('channels.localPort')">
                   <el-input-number v-model="channelForm.local_port" :min="1024" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="远程主机">
-                  <el-input v-model="channelForm.remote_host" placeholder="XNC服务器地址" />
+                <el-form-item :label="$t('channels.remoteHost')">
+                  <el-input v-model="channelForm.remote_host" :placeholder="$t('channels.remoteHostHint')" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="远程端口">
+                <el-form-item :label="$t('channels.remotePort')">
                   <el-input-number v-model="channelForm.remote_port" :min="1" :max="65535" class="full-width" />
                 </el-form-item>
               </el-col>
@@ -1328,15 +1321,15 @@ onMounted(async () => {
         <el-card v-if="channelForm.protocol === 'mqtt'" class="config-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">适配器配置</span>
-              <el-tag v-if="channelForm.adapter === 'C001'" type="danger" size="small">必填</el-tag>
-              <el-tag v-else type="info" size="small">可选</el-tag>
+              <span class="card-title">{{ $t('channels.adapterConfig') }}</span>
+              <el-tag v-if="channelForm.adapter === 'C001'" type="danger" size="small">{{ $t('channels.required') }}</el-tag>
+              <el-tag v-else type="info" size="small">{{ $t('common.optional') }}</el-tag>
             </div>
           </template>
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-form-item label="适配器">
-                <el-select v-model="channelForm.adapter" placeholder="选择适配器或客户编号" filterable allow-create @change="handleAdapterChange">
+              <el-form-item :label="$t('channels.adapter')">
+                <el-select v-model="channelForm.adapter" :placeholder="$t('channels.adapterHint')" filterable allow-create @change="handleAdapterChange">
                   <el-option
                     v-for="opt in mqttAdapterOptions"
                     :key="opt.value"
@@ -1348,18 +1341,18 @@ onMounted(async () => {
                   </el-option>
                 </el-select>
                 <div class="form-hint">
-                  可选择预置适配器，也可直接输入客户编号
+                  {{ $t('channels.adapterHintText') }}
                 </div>
               </el-form-item>
             </el-col>
             <el-col :span="12" v-if="channelForm.adapter === 'C001'">
-              <el-form-item label="产品Key" required>
+              <el-form-item :label="$t('channels.productKey')" required>
                 <el-input
                   v-model="productKey"
-                  placeholder="请输入产品Key，如: al12345"
+                  :placeholder="$t('channels.productKeyHint')"
                 />
                 <div class="form-hint">
-                  客户A平台的产品标识
+                  {{ $t('channels.productKeyDesc') }}
                 </div>
               </el-form-item>
             </el-col>
@@ -1368,30 +1361,30 @@ onMounted(async () => {
           <!-- 客户A模板配置 -->
           <el-form-item v-if="channelForm.adapter === 'C001'" label=" ">
             <el-collapse class="full-width">
-              <el-collapse-item title="模板配置（通常无需修改）">
+              <el-collapse-item :title="$t('channels.templateConfig')">
                 <el-alert type="info" :closable="false" class="alert-with-margin">
-                  Topic模板已使用客户A协议默认值，通常无需修改
+                  {{ $t('channels.templateConfigHint') }}
                 </el-alert>
                 <el-input
                   v-model="channelForm.adapter_config"
                   type="textarea"
                   :rows="15"
-                  placeholder="JSON格式配置"
+                  :placeholder="$t('channels.jsonConfigHint')"
                 />
               </el-collapse-item>
             </el-collapse>
           </el-form-item>
 
           <!-- 其他适配器JSON配置 -->
-          <el-form-item v-else-if="channelForm.adapter !== 'standard'" label="适配器配置">
+          <el-form-item v-else-if="channelForm.adapter !== 'standard'" :label="$t('channels.adapterConfig')">
             <el-input
               v-model="channelForm.adapter_config"
               type="textarea"
               :rows="5"
-              placeholder='JSON格式，如 {"productKey": "al12345", "topic_templates": {...}}'
+              :placeholder="$t('channels.adapterConfigHint')"
             />
             <div class="form-hint">
-              适配器专属配置，不同适配器支持不同参数
+              {{ $t('channels.adapterConfigHintText') }}
             </div>
           </el-form-item>
         </el-card>
@@ -1400,55 +1393,55 @@ onMounted(async () => {
         <el-card class="config-card optional" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">高级配置</span>
-              <el-tag type="info" size="small">可选</el-tag>
+              <span class="card-title">{{ $t('channels.advancedConfig') }}</span>
+              <el-tag type="info" size="small">{{ $t('common.optional') }}</el-tag>
             </div>
           </template>
           <el-collapse>
             <!-- MQTT高级参数 -->
-            <el-collapse-item v-if="channelForm.protocol === 'mqtt'" title="MQTT参数">
+            <el-collapse-item v-if="channelForm.protocol === 'mqtt'" :title="$t('channels.mqttParams')">
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="客户端ID">
-                    <el-input v-model="channelForm.client_id" placeholder="客户端标识符" />
+                  <el-form-item :label="$t('channels.clientId')">
+                    <el-input v-model="channelForm.client_id" :placeholder="$t('channels.clientIdHint')" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="QoS">
                     <el-radio-group v-model="channelForm.qos">
-                      <el-radio :value="0">0 - 最多一次</el-radio>
-                      <el-radio :value="1">1 - 至少一次</el-radio>
-                      <el-radio :value="2">2 - 恰好一次</el-radio>
+                      <el-radio :value="0">{{ $t('channels.qos0') }}</el-radio>
+                      <el-radio :value="1">{{ $t('channels.qos1') }}</el-radio>
+                      <el-radio :value="2">{{ $t('channels.qos2') }}</el-radio>
                     </el-radio-group>
                   </el-form-item>
                 </el-col>
               </el-row>
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="保活时间">
+                  <el-form-item :label="$t('channels.keepaliveTime')">
                     <el-input-number v-model="channelForm.keepalive" :min="10" :max="3600" />
-                    <span class="unit-hint">秒</span>
+                    <span class="unit-hint">{{ $t('channels.seconds') }}</span>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="清除会话">
+                  <el-form-item :label="$t('channels.cleanSession')">
                     <el-switch v-model="channelForm.clean_session" />
                   </el-form-item>
                 </el-col>
               </el-row>
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="发布模式">
+                  <el-form-item :label="$t('channels.publishMode')">
                     <el-radio-group v-model="channelForm.publish_mode">
-                      <el-radio value="single">单条发送</el-radio>
-                      <el-radio value="batch">批量发送</el-radio>
+                      <el-radio value="single">{{ $t('channels.singleSend') }}</el-radio>
+                      <el-radio value="batch">{{ $t('channels.batchSend') }}</el-radio>
                     </el-radio-group>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="命令超时">
+                  <el-form-item :label="$t('channels.commandTimeout')">
                     <el-input-number v-model="channelForm.command_timeout" :min="5" :max="300" />
-                    <span class="unit-hint">秒</span>
+                    <span class="unit-hint">{{ $t('channels.seconds') }}</span>
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -1456,13 +1449,13 @@ onMounted(async () => {
               <template v-if="channelForm.adapter !== 'C001'">
                 <el-row :gutter="20">
                   <el-col :span="12">
-                    <el-form-item label="主题">
-                      <el-input v-model="channelForm.topic" placeholder="数据上传主题，如 data/upload" />
+                    <el-form-item :label="$t('channels.topic')">
+                      <el-input v-model="channelForm.topic" :placeholder="$t('channels.topicHint')" />
                     </el-form-item>
                   </el-col>
                   <el-col :span="12">
-                    <el-form-item label="命令主题">
-                      <el-input v-model="channelForm.command_topic" placeholder="命令订阅主题，如 xagent/command" />
+                    <el-form-item :label="$t('channels.commandTopic')">
+                      <el-input v-model="channelForm.command_topic" :placeholder="$t('channels.commandTopicHint')" />
                     </el-form-item>
                   </el-col>
                 </el-row>
@@ -1470,37 +1463,37 @@ onMounted(async () => {
             </el-collapse-item>
 
             <!-- XNC高级参数 -->
-            <el-collapse-item v-if="channelForm.protocol === 'xnc'" title="XNC参数">
-              <el-form-item label="重连间隔">
+            <el-collapse-item v-if="channelForm.protocol === 'xnc'" :title="$t('channels.xncParams')">
+              <el-form-item :label="$t('channels.reconnectInterval')">
                 <el-input-number v-model="channelForm.reconnect_interval" :min="1" :max="300" />
-                <span class="unit-hint">秒（与服务器断开后重连）</span>
+                <span class="unit-hint">{{ $t('channels.reconnectIntervalHint') }}</span>
               </el-form-item>
-              <el-form-item label="映射配置">
+              <el-form-item :label="$t('channels.mappingConfig')">
                 <el-input
                   v-model="channelForm.mapping_config"
                   type="textarea"
                   :rows="6"
-                  placeholder='点击下方"填充模板"按钮'
+                  :placeholder="$t('channels.mappingConfigHint')"
                 />
                 <div class="mapping-help">
                   <div class="mapping-help-text">
-                    用于Protobuf格式的设备ID和点位映射。留空则自动分配。
+                    {{ $t('channels.mappingConfigHintText') }}
                   </div>
                   <el-button type="primary" link size="small" @click="fillMappingTemplate">
-                    填充模板
+                    {{ $t('channels.fillTemplate') }}
                   </el-button>
                 </div>
               </el-form-item>
             </el-collapse-item>
 
             <!-- HTTP高级参数 -->
-            <el-collapse-item v-if="channelForm.protocol === 'http'" title="HTTP参数">
-              <el-form-item label="端点URL">
-                <el-input v-model="channelForm.endpoint" placeholder="如 https://api.example.com/data" />
+            <el-collapse-item v-if="channelForm.protocol === 'http'" :title="$t('channels.httpParams')">
+              <el-form-item :label="$t('channels.endpointUrl')">
+                <el-input v-model="channelForm.endpoint" :placeholder="$t('channels.endpointUrlHint')" />
               </el-form-item>
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="请求方法">
+                  <el-form-item :label="$t('channels.requestMethod')">
                     <el-radio-group v-model="channelForm.method">
                       <el-radio value="GET">GET</el-radio>
                       <el-radio value="POST">POST</el-radio>
@@ -1509,59 +1502,59 @@ onMounted(async () => {
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="超时时间">
+                  <el-form-item :label="$t('channels.timeoutTime')">
                     <el-input-number v-model="channelForm.timeout" :min="1" :max="300" />
-                    <span class="unit-hint">秒</span>
+                    <span class="unit-hint">{{ $t('channels.seconds') }}</span>
                   </el-form-item>
                 </el-col>
               </el-row>
-              <el-form-item label="请求头">
+              <el-form-item :label="$t('channels.requestHeaders')">
                 <el-input
                   v-model="channelForm.headers"
                   type="textarea"
                   :rows="3"
-                  placeholder='JSON格式，如 {"Content-Type": "application/json"}'
+                  :placeholder="$t('channels.requestHeadersHint')"
                 />
               </el-form-item>
             </el-collapse-item>
 
             <!-- 上传策略 -->
-            <el-collapse-item title="上传策略">
+            <el-collapse-item :title="$t('channels.uploadStrategy')">
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="立即上传">
+                  <el-form-item :label="$t('channels.immediateUpload')">
                     <el-switch v-model="channelForm.immediate_upload" />
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="批量大小">
+                  <el-form-item :label="$t('channels.batchSize')">
                     <el-input-number v-model="channelForm.batch_size" :min="1" :max="10000" />
                   </el-form-item>
                 </el-col>
               </el-row>
               <el-row :gutter="20">
                 <el-col :span="12">
-                  <el-form-item label="上传间隔">
+                  <el-form-item :label="$t('channels.uploadInterval')">
                     <el-input-number v-model="channelForm.interval" :min="1" :max="3600" />
-                    <span class="unit-hint">秒</span>
+                    <span class="unit-hint">{{ $t('channels.seconds') }}</span>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="重试次数">
+                  <el-form-item :label="$t('channels.retryTimes')">
                     <el-input-number v-model="channelForm.retry_times" :min="0" :max="10" />
                   </el-form-item>
                 </el-col>
               </el-row>
-              <el-form-item label="重试间隔">
+              <el-form-item :label="$t('channels.retryInterval')">
                 <el-input-number v-model="channelForm.retry_interval" :min="1" :max="300" />
-                <span class="unit-hint">秒（数据发送失败后重试）</span>
+                <span class="unit-hint">{{ $t('channels.retryIntervalHint') }}</span>
               </el-form-item>
             </el-collapse-item>
 
             <!-- 其他配置 -->
-            <el-collapse-item title="其他配置">
-              <el-form-item label="标签">
-                <el-input v-model="channelForm.tags" placeholder="多个标签用逗号分隔，如: 生产环境,重要" />
+            <el-collapse-item :title="$t('channels.otherConfig')">
+              <el-form-item :label="$t('channels.tags')">
+                <el-input v-model="channelForm.tags" :placeholder="$t('channels.tagsHint')" />
               </el-form-item>
             </el-collapse-item>
           </el-collapse>
@@ -1569,8 +1562,8 @@ onMounted(async () => {
 
       </el-form>
       <template #footer>
-        <el-button @click="showChannelDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveChannel" :loading="saving">保存</el-button>
+        <el-button @click="showChannelDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveChannel" :loading="saving">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
