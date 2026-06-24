@@ -1,31 +1,34 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FullScreen, View, Upload } from '@element-plus/icons-vue'
+import { FullScreen, View, Upload, ArrowLeft } from '@element-plus/icons-vue'
 import ComponentPalette from '@/components/ComponentPalette.vue'
 import ScadaCanvas from '@/components/ScadaCanvas.vue'
 import ComponentConfig from '@/components/ComponentConfig.vue'
 
+const route = useRoute()
+const router = useRouter()
 const scadaStore = useScadaStore()
 const userStore = useUserStore()
 
-const showNewPanelDialog = ref(false)
-const newPanelName = ref('')
-const newPanelDescription = ref('')
-const newPanelWidth = ref(1200)
-const newPanelHeight = ref(800)
 const isPreviewMode = ref(false)
-const canvasWidth = ref(1200)
-const canvasHeight = ref(800)
 
-const panels = computed(() => scadaStore.panels)
 const currentPanel = computed(() => scadaStore.currentPanel)
 
+// Get project ID from route params and select it
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    scadaStore.selectPanel(newId as string)
+  }
+}, { immediate: true })
+
 onMounted(() => {
-  if (panels.value.length > 0 && !scadaStore.currentPanelId) {
-    scadaStore.selectPanel(panels.value[0].id)
+  const projectId = route.params.id as string
+  if (projectId) {
+    scadaStore.selectPanel(projectId)
   }
   
   document.addEventListener('fullscreenchange', handleFullscreenChange)
@@ -35,51 +38,16 @@ onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 
+const handleGoBack = () => {
+  router.push({ name: 'ScadaList' })
+}
+
 const handleFullscreenChange = () => {
   if (!document.fullscreenElement && scadaStore.isFullscreenPreview) {
     scadaStore.isFullscreenPreview = false
     isPreviewMode.value = false
     scadaStore.isEditing = true
   }
-}
-
-const handleSelectPanel = (id: string) => {
-  scadaStore.selectPanel(id)
-  if (currentPanel.value) {
-    canvasWidth.value = currentPanel.value.width
-    canvasHeight.value = currentPanel.value.height
-  }
-}
-
-const handleCreatePanel = () => {
-  if (!newPanelName.value.trim()) {
-    ElMessage.warning('请输入面板名称')
-    return
-  }
-  
-  const panel = scadaStore.createPanel(newPanelName.value, newPanelDescription.value, newPanelWidth.value, newPanelHeight.value)
-  scadaStore.selectPanel(panel.id)
-  canvasWidth.value = newPanelWidth.value
-  canvasHeight.value = newPanelHeight.value
-  
-  newPanelName.value = ''
-  newPanelDescription.value = ''
-  newPanelWidth.value = 1200
-  newPanelHeight.value = 800
-  showNewPanelDialog.value = false
-  
-  ElMessage.success('面板创建成功')
-}
-
-const handleDeletePanel = (id: string, name: string) => {
-  ElMessageBox.confirm(
-    `确定要删除面板 "${name}" 吗？`,
-    '删除确认',
-    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
-  ).then(() => {
-    scadaStore.deletePanel(id)
-    ElMessage.success('面板已删除')
-  }).catch(() => {})
 }
 
 const handleZoomIn = () => {
@@ -151,14 +119,15 @@ const handleExport = () => {
 <template>
   <div class="scada-page" :class="{ 'preview-mode': isPreviewMode }">
     <div v-if="!isPreviewMode" class="page-header">
+      <div class="header-left">
+        <el-button :icon="ArrowLeft" @click="handleGoBack">返回列表</el-button>
+        <span class="project-name">{{ currentPanel?.name }}</span>
+      </div>
       <div class="header-actions">
         <el-button :icon="View" @click="handlePreview">预览</el-button>
         <el-button :icon="FullScreen" @click="handleFullscreen">全屏</el-button>
         <el-button @click="handleExport">导出</el-button>
         <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">发布</el-button>
-        <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="showNewPanelDialog = true">
-          + 新建面板
-        </el-button>
         <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">保存</el-button>
       </div>
     </div>
@@ -167,19 +136,6 @@ const handleExport = () => {
       <span class="preview-title">{{ currentPanel?.name }}</span>
       <div class="preview-actions">
         <el-button size="small" @click="handleExitPreview">退出预览</el-button>
-      </div>
-    </div>
-    
-    <div v-if="!isPreviewMode" class="panel-tabs">
-      <div 
-        v-for="panel in panels" 
-        :key="panel.id"
-        class="panel-tab"
-        :class="{ active: scadaStore.currentPanelId === panel.id }"
-        @click="handleSelectPanel(panel.id)"
-      >
-        <span class="tab-name">{{ panel.name }}</span>
-        <span class="tab-close" v-if="userStore.hasPermission('scada', 'delete')" @click.stop="handleDeletePanel(panel.id, panel.name)">×</span>
       </div>
     </div>
     
@@ -215,25 +171,10 @@ const handleExport = () => {
     </div>
     
     <div v-else class="empty-state">
-      <span class="empty-icon">📊</span>
-      <p>请选择或创建一个组态面板</p>
-      <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="showNewPanelDialog = true">创建面板</el-button>
+      <el-empty description="项目不存在或已被删除">
+        <el-button type="primary" @click="handleGoBack">返回项目列表</el-button>
+      </el-empty>
     </div>
-    
-    <el-dialog v-model="showNewPanelDialog" title="新建组态面板" width="min(400px, 90vw)">
-      <el-form label-width="80px">
-        <el-form-item label="面板名称">
-          <el-input v-model="newPanelName" placeholder="请输入面板名称" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="newPanelDescription" type="textarea" placeholder="可选描述" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showNewPanelDialog = false">取消</el-button>
-        <el-button type="primary" v-if="userStore.hasPermission('scada', 'create')" @click="handleCreatePanel">创建</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -253,12 +194,24 @@ const handleExport = () => {
 
 .page-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #303133;
 }
 
 .header-actions {

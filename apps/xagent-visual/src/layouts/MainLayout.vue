@@ -51,7 +51,7 @@ const allMenuItems = [
   { path: '/channels', title: '通道管理', icon: Connection, resource: 'channels' },
   { path: '/rules', title: '规则引擎', icon: Connection, resource: 'rules' },
   { path: '/alerts', title: '告警配置', icon: Bell, resource: 'alerts' },
-  { path: '/scada', title: '组态面板', icon: PictureFilled, resource: 'scada' },
+  { path: '/scada', title: '项目管理', icon: PictureFilled, resource: 'scada' },
   { path: '/settings', title: '系统设置', icon: Setting, resource: 'settings' }
 ]
 

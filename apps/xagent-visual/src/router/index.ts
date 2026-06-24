@@ -11,6 +11,18 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/settings': 'settings',
 }
 
+// Match routes with dynamic segments
+function matchRoute(path: string): string | null {
+  if (ROUTE_PERMISSION_MAP[path]) {
+    return ROUTE_PERMISSION_MAP[path]
+  }
+  // Handle /scada/:id
+  if (path.startsWith('/scada/')) {
+    return ROUTE_PERMISSION_MAP['/scada']
+  }
+  return null
+}
+
 const routes = [
   {
     path: '/login',
@@ -54,9 +66,15 @@ const routes = [
   },
   {
     path: '/scada',
-    name: 'Scada',
+    name: 'ScadaList',
+    component: () => import('@/views/ProjectList.vue'),
+    meta: { title: '项目管理', icon: 'Folder' }
+  },
+  {
+    path: '/scada/:id',
+    name: 'ScadaEdit',
     component: () => import('@/views/Scada.vue'),
-    meta: { title: '组态面板', icon: 'PictureFilled' }
+    meta: { title: '组态编辑', icon: 'PictureFilled' }
   },
   {
     path: '/settings',
@@ -112,7 +130,7 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  const resource = ROUTE_PERMISSION_MAP[to.path]
+  const resource = matchRoute(to.path)
   if (resource && !userStore.hasPermission(resource, 'view')) {
     const allowed = findFirstAllowedPath(userStore)
     if (allowed === to.path) {
