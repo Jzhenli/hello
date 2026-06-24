@@ -1207,7 +1207,13 @@
     "publishConfirmTitle": "發布確認",
     "publishSuccess": "面板已發布成功！",
     "exportSuccess": "面板已匯出",
-    "savePanelSuccess": "面板已保存"
+    "savePanelSuccess": "面板已保存",
+    "projectType": "專案類型",
+    "selectProjectType": "請選擇專案類型",
+    "dashboardType": "Dashboard",
+    "graphicType": "Graphic",
+    "graphicEditor": "圖形編輯",
+    "graphicPlaceholder": "圖形編輯器正在開發中..."
   },
   "ruleEditor": {
     "defaultRuleName": "新規則",

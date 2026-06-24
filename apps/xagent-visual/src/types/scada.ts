@@ -90,9 +90,12 @@ export interface ScadaComponent {
   visible: boolean
 }
 
+export type PanelType = 'Dashboard' | 'Graphic'
+
 export interface ScadaPanel {
   id: string
   name: string
+  type: PanelType
   description?: string
   width: number
   height: number

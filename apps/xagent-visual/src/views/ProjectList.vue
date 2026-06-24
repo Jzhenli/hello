@@ -14,9 +14,10 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const formName = ref('')
 const formDescription = ref('')
-const formWidth = ref(1200)
-const formHeight = ref(800)
+const formWidth = ref(1920)
+const formHeight = ref(1080)
 const editingPanelId = ref<string | null>(null)
+const formType = ref<'Dashboard' | 'Graphic'>('Dashboard')
 
 const projects = computed(() => scadaStore.panels)
 
@@ -28,6 +29,7 @@ const handleCreate = async () => {
   
   scadaStore.createPanel(
     formName.value,
+    formType.value,
     formDescription.value,
     formWidth.value,
     formHeight.value
@@ -38,8 +40,12 @@ const handleCreate = async () => {
   resetForm()
 }
 
-const handleEdit = (id: string) => {
-  router.push({ name: 'ScadaEdit', params: { id } })
+const handleEdit = (panel: any) => {
+  if (panel.type === 'Graphic') {
+    router.push({ name: 'GraphicEdit', params: { id: panel.id } })
+  } else {
+    router.push({ name: 'ScadaEdit', params: { id: panel.id } })
+  }
 }
 
 const handleDelete = async (id: string) => {
@@ -94,9 +100,10 @@ const handleSaveEdit = async () => {
 const resetForm = () => {
   formName.value = ''
   formDescription.value = ''
-  formWidth.value = 1200
-  formHeight.value = 800
+  formWidth.value = 1920
+  formHeight.value = 1080
   editingPanelId.value = null
+  formType.value = 'Dashboard'
 }
 
 const formatTime = (timestamp: number) => {
@@ -127,7 +134,12 @@ const formatTime = (timestamp: number) => {
         shadow="hover"
       >
         <div class="project-info">
-          <h3 class="project-name">{{ panel.name }}</h3>
+          <div class="project-title-row">
+            <h3 class="project-name">{{ panel.name }}</h3>
+            <el-tag :type="panel.type === 'Dashboard' ? '' : 'warning'" size="small" class="type-tag">
+              {{ panel.type === 'Dashboard' ? $t('scada.dashboardType') : $t('scada.graphicType') }}
+            </el-tag>
+          </div>
           <p class="project-desc">{{ panel.description || $t('scada.noDescription') }}</p>
           <div class="project-meta">
             <span>{{ $t('scada.componentCount') }}: {{ panel.components?.length || 0 }}</span>
@@ -139,7 +151,7 @@ const formatTime = (timestamp: number) => {
             type="primary" 
             :icon="Edit"
             size="small"
-            @click="handleEdit(panel.id)"
+            @click="handleEdit(panel)"
           >
             {{ $t('scada.edit') }}
           </el-button>
@@ -173,6 +185,12 @@ const formatTime = (timestamp: number) => {
         <el-form-item :label="$t('scada.projectName')" required>
           <el-input v-model="formName" :placeholder="$t('scada.enterProjectName')" />
         </el-form-item>
+        <el-form-item :label="$t('scada.projectType')" required>
+          <el-select v-model="formType" :placeholder="$t('scada.selectProjectType')">
+            <el-option :label="$t('scada.dashboardType')" value="Dashboard" />
+            <el-option :label="$t('scada.graphicType')" value="Graphic" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="$t('scada.projectDesc')">
           <el-input
             v-model="formDescription"
@@ -181,18 +199,6 @@ const formatTime = (timestamp: number) => {
             :rows="3"
           />
         </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item :label="$t('scada.canvasWidth')">
-              <el-input-number v-model="formWidth" :min="400" :max="4000" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('scada.canvasHeight')">
-              <el-input-number v-model="formHeight" :min="300" :max="3000" />
-            </el-form-item>
-          </el-col>
-        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="showCreateDialog = false">{{ $t('common.cancel') }}</el-button>
@@ -285,10 +291,21 @@ const formatTime = (timestamp: number) => {
 }
 
 .project-name {
-  margin: 0 0 8px 0;
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: #303133;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.type-tag {
+  flex-shrink: 0;
 }
 
 .project-desc {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ScadaPanel, ScadaComponent, ComponentType, PointBinding } from '@/types/scada'
+import type { ScadaPanel, ScadaComponent, ComponentType, PanelType, PointBinding } from '@/types/scada'
 import { COMPONENT_TEMPLATES } from '@/types/scada'
 
 function generateId(): string {
@@ -12,6 +12,7 @@ export const useScadaStore = defineStore('scada', () => {
     {
       id: 'panel-001',
       name: '暖通空调监控',
+      type: 'Dashboard',
       description: 'HVAC系统监控面板',
       width: 1200,
       height: 800,
@@ -85,6 +86,7 @@ export const useScadaStore = defineStore('scada', () => {
     {
       id: 'panel-002',
       name: '电力监控',
+      type: 'Dashboard',
       description: '电力系统监控面板',
       width: 1200,
       height: 800,
@@ -142,10 +144,11 @@ export const useScadaStore = defineStore('scada', () => {
     return currentPanel.value.components.find(c => c.id === selectedComponentId.value) || null
   })
 
-  const createPanel = (name: string, description?: string, width?: number, height?: number) => {
+  const createPanel = (name: string, type: PanelType = 'Dashboard', description?: string, width?: number, height?: number) => {
     const panel: ScadaPanel = {
       id: `panel-${Date.now()}`,
       name,
+      type,
       description,
       width: width || 1200,
       height: height || 800,

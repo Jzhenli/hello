@@ -1207,7 +1207,13 @@
     "publishConfirmTitle": "Publish Confirmation",
     "publishSuccess": "Panel published successfully!",
     "exportSuccess": "Panel exported",
-    "savePanelSuccess": "Panel saved"
+    "savePanelSuccess": "Panel saved",
+    "projectType": "Project Type",
+    "selectProjectType": "Please select project type",
+    "dashboardType": "Dashboard",
+    "graphicType": "Graphic",
+    "graphicEditor": "Graphic Editor",
+    "graphicPlaceholder": "Graphic editor is under development..."
   },
   "ruleEditor": {
     "defaultRuleName": "New Rule",

@@ -20,6 +20,10 @@ function matchRoute(path: string): string | null {
   if (path.startsWith('/scada/')) {
     return ROUTE_PERMISSION_MAP['/scada']
   }
+  // Handle /graphic/:id
+  if (path.startsWith('/graphic/')) {
+    return ROUTE_PERMISSION_MAP['/scada']
+  }
   return null
 }
 
@@ -75,6 +79,12 @@ const routes = [
     name: 'ScadaEdit',
     component: () => import('@/views/Scada.vue'),
     meta: { title: '组态编辑', icon: 'PictureFilled' }
+  },
+  {
+    path: '/graphic/:id',
+    name: 'GraphicEdit',
+    component: () => import('@/views/Graphic.vue'),
+    meta: { title: '图形编辑', icon: 'PictureFilled' }
   },
   {
     path: '/settings',
