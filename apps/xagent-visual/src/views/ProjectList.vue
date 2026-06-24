@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useScadaStore } from '@/stores/scada'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Setting } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const scadaStore = useScadaStore()
@@ -143,7 +143,7 @@ const formatTime = (timestamp: number) => {
           </el-button>
           <el-button 
             type="warning" 
-            :icon="Edit"
+            :icon="Setting"
             size="small"
             @click="openEditDialog(panel)"
           >

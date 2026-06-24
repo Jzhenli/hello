@@ -26,11 +26,6 @@ watch(() => route.params.id, (newId) => {
 }, { immediate: true })
 
 onMounted(() => {
-  const projectId = route.params.id as string
-  if (projectId) {
-    scadaStore.selectPanel(projectId)
-  }
-  
   document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
