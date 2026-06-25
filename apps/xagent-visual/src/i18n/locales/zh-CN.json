@@ -1373,8 +1373,7 @@
     "small": "小",
     "medium": "中",
     "large": "大",
-    "extraWide": "超宽",
-    "": "组件配置"
+    "extraWide": "超宽"
   },
   "scadaComponentCategories": {
     "gauge": "仪表",

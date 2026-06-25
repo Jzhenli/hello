@@ -1373,8 +1373,7 @@
     "small": "Small",
     "medium": "Medium",
     "large": "Large",
-    "extraWide": "Extra Wide",
-    "": "Component Config"
+    "extraWide": "Extra Wide"
   },
   "scadaComponentCategories": {
     "gauge": "Gauges",
