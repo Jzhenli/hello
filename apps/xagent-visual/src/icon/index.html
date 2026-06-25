@@ -1,0 +1,107 @@
+<html>
+<head>
+    <link href="./style.css" rel="stylesheet">
+    <link href="./x-icon-color.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        .fa-stack{
+            width: 1em; height: 1em; line-height: 1em; vertical-align: top;
+        }
+        .icon-cpnt-container{
+            font-size: 32px;
+        }
+        i {
+            vertical-align: top;
+        }
+        .neoIconsColorful{
+            display: inline-block; width: 32px; height: 32px; vertical-align: top;
+        }
+    </style>
+</head>
+<body>
+    <div>TF > HF > FF > FL > HL > TL</div>
+    <div id="animationContainer"></div>
+    <script src="./x-icon.esm.js"></script>
+    <script type="text/template" id="icon-line">
+        <div>{{ name }}</div>
+        <div class="icon-cpnt-container">
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_FL"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_HL"></i>
+            </span>
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_FL"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_HL" style="color: #3399ff;"></i>
+            </span>
+
+            
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_TF"></i>
+            </span>
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_HF" style="color: #3399ff;"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_FF"></i>
+            </span>
+
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_HF" style="color: #3399ff;"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_FL"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_HL"></i>
+            </span>
+            <span class="fa-stack">
+                <i class="fa-stack-1x xicon_{{ name }}_TF" style="color: #3399ff;"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_FL"></i>
+                <i class="fa-stack-1x xicon_{{ name }}_HL"></i>
+            </span>
+        </div>
+    </script>
+    <script type="text/template" id="icon-color">
+        <span class="neoIconsColorful {{ name }}"></span>
+    </script>
+    <script>
+        console.log(iconColorSpecialList, iconFontList);
+        const template = document.getElementById('icon-line').innerHTML;
+        const templateColor = document.getElementById('icon-color').innerHTML;
+        const leftColorful = iconColorSpecialList.concat([]);
+        iconFontList.forEach(fontName => {
+            let innerStr = template.replaceAll('{{ name }}', fontName);
+            const div = document.createElement('div');
+            document.body.appendChild(div);
+            const cIdx = leftColorful.indexOf('xicon_' + fontName + '_c');
+            if(cIdx != -1){
+                console.log(cIdx);
+                const findColorful = leftColorful[cIdx];
+                colorItemStr = templateColor.replaceAll('{{ name }}', 'xicon_' + fontName + '_c');
+                const insertPos = innerStr.lastIndexOf('span') + 5;
+                innerStr = innerStr.substring(0, insertPos) + colorItemStr + innerStr.substring(insertPos);
+                leftColorful.splice(cIdx, 1);
+            }
+            div.innerHTML = innerStr;
+        });
+        const div = document.createElement('div');
+        let colorDivStr = '';
+        leftColorful.forEach(item=>{
+            colorDivStr += templateColor.replaceAll('{{ name }}', item);
+        });
+        div.innerHTML = colorDivStr;
+        document.body.appendChild(div);
+
+        importSvgData('animation/loading.svg');
+        function importSvgData(src){
+            const request = new XMLHttpRequest();
+            request.addEventListener('load', ()=>{
+                console.log(request.responseText);
+                const div = document.createElement('div');
+                div.style.width = '120px';
+                div.style.height = '120px';
+                div.innerHTML = request.responseText;
+                const container = document.querySelector("#animationContainer");
+                container.appendChild(div);
+            });
+            request.open("GET", src);
+            request.send();
+        }
+        
+    </script>
+</body>
+</html>

@@ -7,108 +7,78 @@ function generateId(): string {
   return `comp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
-export const useScadaStore = defineStore('scada', () => {
-  const panels = ref<ScadaPanel[]>([
-    {
-      id: 'panel-001',
-      name: '暖通空调监控',
-      type: 'Dashboard',
-      description: 'HVAC系统监控面板',
-      width: 1200,
-      height: 800,
+// 生成样例面板数据
+function generateSamplePanels(): ScadaPanel[] {
+  const panelNames = [
+    '暖通空调监控', '电力监控', '给排水监控', '照明控制', '电梯监控',
+    '消防报警', '安防监控', '能耗分析', '环境监测', '停车场管理',
+    '门禁管理', '视频监控', '新风系统', '冷站监控', '热站监控',
+    '变配电监控', 'UPS监控', '发电机监控', '太阳能监控', '风能监控',
+    '空气质量监测', '水质监测', '噪声监测', '振动监测', '温度分布',
+    '湿度分布', '压力监测', '流量监测', '液位监测', '气体检测',
+    '火灾报警', '入侵报警', '紧急广播', '公共广播', '会议系统',
+    '楼宇自控', '智能照明', '窗帘控制', '地暖控制', '中央空调',
+    '新风换气', '除湿系统', '加湿系统', '排风系统', '送风系统',
+    '冷却塔监控', '水泵监控', '风机监控', '阀门控制', '风阀控制'
+  ]
+
+  const descriptions = [
+    'HVAC系统监控面板', '电力系统监控面板', '给排水系统监控', '照明系统控制面板',
+    '电梯运行状态监控', '消防安全监控中心', '安防系统监控面板', '能源消耗分析面板',
+    '环境参数监控面板', '停车场管理面板', '门禁系统控制面板', '视频监控系统面板',
+    '新风系统监控面板', '冷站系统监控面板', '热站系统监控面板', '变配电监控面板',
+    'UPS电源监控面板', '发电机监控面板', '太阳能监控面板', '风能监控面板',
+    '空气质量监测面板', '水质监测面板', '噪声监测面板', '振动监测面板',
+    '温度分布监控面板', '湿度分布监控面板', '压力监测面板', '流量监测面板',
+    '液位监测面板', '气体检测面板', '火灾报警面板', '入侵报警面板',
+    '紧急广播控制面板', '公共广播控制面板', '会议系统控制面板', '楼宇自控面板',
+    '智能照明面板', '窗帘控制面板', '地暖控制面板', '中央空调面板',
+    '新风换气面板', '除湿系统面板', '加湿系统面板', '排风系统面板',
+    '送风系统面板', '冷却塔监控面板', '水泵监控面板', '风机监控面板',
+    '阀门控制面板', '风阀控制面板'
+  ]
+
+  const panelTypes: PanelType[] = ['Dashboard', 'Graphic']
+  const backgroundColors = ['#f0f2f5', '#1a1a2e', '#0f1419', '#2c3e50', '#34495e', '#1e272e', '#2d3436', '#636e72']
+
+  const panels: ScadaPanel[] = []
+
+  for (let i = 0; i < 50; i++) {
+    const type = panelTypes[i % 2]
+    const bgColor = backgroundColors[i % backgroundColors.length]
+    const daysAgo = 50 - i
+
+    panels.push({
+      id: `panel-${String(i + 1).padStart(3, '0')}`,
+      name: panelNames[i],
+      type,
+      description: descriptions[i],
+      width: 1200 + (i % 5) * 100,
+      height: 800 + (i % 4) * 50,
       grid: 20,
-      backgroundColor: '#f0f2f5',
+      backgroundColor: bgColor,
       components: [
         {
-          id: 'comp-001',
+          id: `comp-${String(i + 1).padStart(3, '0')}-01`,
           type: 'gauge',
-          name: '温度仪表',
+          name: `${panelNames[i]}-仪表`,
           x: 100,
           y: 100,
           style: { width: 150, height: 150 },
-          binding: { deviceId: 'KNX-01', pointName: 'temperature_1', pointDescription: '一楼大厅温度', unit: '°C' },
-          gaugeConfig: {
-            min: 0,
-            max: 50,
-            unit: '°C',
-            thresholds: [
-              { value: 18, color: '#3498db' },
-              { value: 26, color: '#27ae60' },
-              { value: 50, color: '#e74c3c' }
-            ],
-            showValue: true
+          binding: {
+            deviceId: `DEV-${String(i + 1).padStart(2, '0')}`,
+            pointName: `point_${i + 1}`,
+            pointDescription: `${panelNames[i]}测点`,
+            unit: i % 3 === 0 ? '°C' : i % 3 === 1 ? '%' : 'kW'
           },
-          locked: false,
-          visible: true
-        },
-        {
-          id: 'comp-002',
-          type: 'gauge',
-          name: '湿度仪表',
-          x: 300,
-          y: 100,
-          style: { width: 150, height: 150 },
-          binding: { deviceId: 'KNX-01', pointName: 'humidity_1', pointDescription: '一楼大厅湿度', unit: '%' },
           gaugeConfig: {
             min: 0,
             max: 100,
-            unit: '%',
+            unit: i % 3 === 0 ? '°C' : i % 3 === 1 ? '%' : 'kW',
             thresholds: [
-              { value: 30, color: '#f39c12' },
+              { value: 30, color: '#3498db' },
               { value: 70, color: '#27ae60' },
-              { value: 100, color: '#3498db' }
-            ],
-            showValue: true
-          },
-          locked: false,
-          visible: true
-        },
-        {
-          id: 'comp-003',
-          type: 'indicator',
-          name: '人体感应',
-          x: 500,
-          y: 120,
-          style: { width: 60, height: 60 },
-          binding: { deviceId: 'KNX-01', pointName: 'presence_1', pointDescription: '一楼大厅人体感应' },
-          indicatorConfig: {
-            onColor: '#27ae60',
-            offColor: '#95a5a6',
-            blinkOnAlarm: false
-          },
-          locked: false,
-          visible: true
-        }
-      ],
-      createdAt: Date.now() - 86400000,
-      updatedAt: Date.now()
-    },
-    {
-      id: 'panel-002',
-      name: '电力监控',
-      type: 'Dashboard',
-      description: '电力系统监控面板',
-      width: 1200,
-      height: 800,
-      grid: 20,
-      backgroundColor: '#1a1a2e',
-      components: [
-        {
-          id: 'comp-006',
-          type: 'gauge',
-          name: '总功率',
-          x: 100,
-          y: 100,
-          style: { width: 180, height: 180 },
-          binding: { deviceId: 'MODBUS-01', pointName: 'power_total', pointDescription: '总功率', unit: 'kW' },
-          gaugeConfig: {
-            min: 0,
-            max: 500,
-            unit: 'kW',
-            thresholds: [
-              { value: 200, color: '#27ae60' },
-              { value: 400, color: '#f39c12' },
-              { value: 500, color: '#e74c3c' }
+              { value: 100, color: '#e74c3c' }
             ],
             showValue: true
           },
@@ -116,10 +86,16 @@ export const useScadaStore = defineStore('scada', () => {
           visible: true
         }
       ],
-      createdAt: Date.now() - 86400000 * 2,
-      updatedAt: Date.now() - 3600000
-    }
-  ])
+      createdAt: Date.now() - daysAgo * 86400000,
+      updatedAt: Date.now() - (i % 10) * 3600000
+    })
+  }
+
+  return panels
+}
+
+export const useScadaStore = defineStore('scada', () => {
+  const panels = ref<ScadaPanel[]>(generateSamplePanels())
 
   const _currentPanelId = ref<string | null>(null)
   const selectedComponentId = ref<string | null>(null)

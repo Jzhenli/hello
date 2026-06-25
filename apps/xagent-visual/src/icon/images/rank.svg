@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 150 120">
+  <!-- Generator: Adobe Illustrator 29.4.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 152)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #fff;
+        fill-opacity: 0;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        fill-rule: evenodd;
+      }
+
+      .st1 {
+        fill: url(#linear-gradient);
+      }
+
+      .st2 {
+        fill: url(#linear-gradient1);
+      }
+
+      .st3 {
+        fill: url(#linear-gradient2);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="-1749.5" y1="121" x2="-1750.5" y2="121" gradientTransform="translate(173325 -946.5) scale(99 8)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0498fe"/>
+      <stop offset="1" stop-color="#0498fe" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient1" x1="-1743.1" y1="121.2" x2="-1744.1" y2="121.2" gradientTransform="translate(127344 -910.5) scale(73 8)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ccf6fe"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient2" x1="-1736.8" y1="121.5" x2="-1737.8" y2="121.5" gradientTransform="translate(100816.5 -874.5) scale(58 8)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ccf6fe"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path id="_矩形" class="st0" d="M26.7,17h96.6c2.3,0,4.2,1.9,4.2,4.2h0c0,2.3-1.9,4.2-4.2,4.2H26.7c-2.3,0-4.2-1.9-4.2-4.2h0c0-2.3,1.9-4.2,4.2-4.2Z"/>
+  <path id="_矩形备份-14" class="st1" d="M26.7,17h96.6c2.3,0,4.2,1.9,4.2,4.2h0c0,2.3-1.9,4.2-4.2,4.2H26.7c-2.3,0-4.2-1.9-4.2-4.2h0c0-2.3,1.9-4.2,4.2-4.2Z"/>
+  <path id="_矩形备份-15" class="st2" d="M26.7,55.2h69c2.3,0,4.2,1.9,4.2,4.2h0c0,2.3-1.9,4.2-4.2,4.2H26.7c-2.3,0-4.2-1.9-4.2-4.2h0c0-2.3,1.9-4.2,4.2-4.2Z"/>
+  <path id="_矩形备份-151" class="st3" d="M26.7,93.5h53.1c2.3,0,4.2,1.9,4.2,4.2h0c0,2.3-1.9,4.2-4.2,4.2H26.7c-2.3,0-4.2-1.9-4.2-4.2h0c0-2.3,1.9-4.2,4.2-4.2Z"/>
+</svg>

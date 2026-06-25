@@ -11,6 +11,10 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
+import './icon/style.css'
+import './icon/x-icon-color.css'
+import '@fortawesome/fontawesome-free/css/all.min.css'
+
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'

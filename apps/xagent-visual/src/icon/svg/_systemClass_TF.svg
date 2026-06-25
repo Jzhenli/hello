@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="TF" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <rect x="3.05" y="3.05" width="8" height="8" rx="2.05" ry="2.05" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="3.05" y="12.95" width="8" height="8" rx="2.05" ry="2.05" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="12.95" y="12.95" width="8" height="8" rx="2.05" ry="2.05" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M16.95,11.05c2.21,0,4-1.79,4-4s-1.79-4-4-4-4,1.79-4,4,1.79,4,4,4Z" style="fill: #404040; stroke-width: 0px;"/>
+</svg>

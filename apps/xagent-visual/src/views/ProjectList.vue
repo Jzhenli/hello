@@ -120,13 +120,16 @@ const formatTime = (timestamp: number) => {
       </el-button>
     </div>
 
-    <div v-if="projects.length === 0" class="empty-state">
-      <el-empty :description="$t('scada.noProjects')">
-        <el-button type="primary" @click="showCreateDialog = true">{{ $t('scada.createProject') }}</el-button>
-      </el-empty>
+    <div v-if="projects.length === 0" class="scrollable-content">
+      <div class="empty-state">
+        <el-empty :description="$t('scada.noProjects')">
+          <el-button type="primary" @click="showCreateDialog = true">{{ $t('scada.createProject') }}</el-button>
+        </el-empty>
+      </div>
     </div>
 
-    <div v-else class="project-grid">
+    <div v-else class="scrollable-content">
+      <div class="project-grid">
       <el-card 
         v-for="panel in projects" 
         :key="panel.id" 
@@ -136,7 +139,7 @@ const formatTime = (timestamp: number) => {
         <div class="project-info">
           <div class="project-title-row">
             <h3 class="project-name">{{ panel.name }}</h3>
-            <el-tag :type="panel.type === 'Dashboard' ? '' : 'warning'" size="small" class="type-tag">
+            <el-tag :type="panel.type === 'Dashboard' ? 'info' : 'warning'" size="small" class="type-tag">
               {{ panel.type === 'Dashboard' ? $t('scada.dashboardType') : $t('scada.graphicType') }}
             </el-tag>
           </div>
@@ -173,6 +176,7 @@ const formatTime = (timestamp: number) => {
           </el-button>
         </div>
       </el-card>
+      </div>
     </div>
 
     <!-- 创建项目对话框 -->
@@ -224,18 +228,6 @@ const formatTime = (timestamp: number) => {
             :rows="3"
           />
         </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item :label="$t('scada.canvasWidth')">
-              <el-input-number v-model="formWidth" :min="400" :max="4000" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('scada.canvasHeight')">
-              <el-input-number v-model="formHeight" :min="300" :max="3000" />
-            </el-form-item>
-          </el-col>
-        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">{{ $t('common.cancel') }}</el-button>
@@ -247,9 +239,11 @@ const formatTime = (timestamp: number) => {
 
 <style scoped>
 .project-list-container {
-  padding: 20px;
-  min-height: calc(100vh - 60px);
+  height: calc(100vh - 100px - 32px);
   background-color: #f5f7fa;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
@@ -257,6 +251,7 @@ const formatTime = (timestamp: number) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .header h2 {
@@ -270,6 +265,12 @@ const formatTime = (timestamp: number) => {
   background: white;
   border-radius: 8px;
   padding: 60px 20px;
+}
+
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .project-grid {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="TF" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M19.9,4.45H4.1c-1.13,0-2.05.92-2.05,2.05v1.5c0,.3.25.55.55.55h18.8c.3,0,.55-.25.55-.55v-1.5c0-1.13-.92-2.05-2.05-2.05Z" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="12.55" y="16.7" width="3.9" height="2.85" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="7.55" y="16.7" width="3.9" height="2.85" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="7.55" y="13.4" width="3.9" height="2.2" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="2.05" y="13.4" width="4.4" height="2.2" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="7.55" y="9.45" width="3.9" height="2.85" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="12.55" y="13.4" width="3.9" height="2.2" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M21.4,9.45h-3.85v2.85h4.4v-2.3c0-.3-.25-.55-.55-.55Z" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="12.55" y="9.45" width="3.9" height="2.85" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M17.55,19.55h2.35c1.13,0,2.05-.92,2.05-2.05v-.8h-4.4v2.85Z" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M2.05,17.5c0,1.13.92,2.05,2.05,2.05h2.35v-2.85H2.05v.8Z" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="17.55" y="13.4" width="4.4" height="2.2" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M2.05,10v2.3h4.4v-2.85h-3.85c-.3,0-.55.25-.55.55Z" style="fill: #404040; stroke-width: 0px;"/>
+</svg>

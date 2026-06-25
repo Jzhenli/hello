@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="TF" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M18.9,3.05H5.1c-1.13,0-2.05.92-2.05,2.05v3.8c0,.3.25.55.55.55h7c2.18,0,3.95,1.77,3.95,3.95v7c0,.3.25.55.55.55h3.8c1.13,0,2.05-.92,2.05-2.05V5.1c0-1.13-.92-2.05-2.05-2.05Z" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="3.05" y="11.35" width="9.6" height="9.6" rx="2.05" ry="2.05" style="fill: #404040; stroke-width: 0px;"/>
+</svg>

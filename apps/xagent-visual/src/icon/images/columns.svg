@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 150 120">
+  <!-- Generator: Adobe Illustrator 29.4.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 152)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#linear-gradient2);
+      }
+
+      .st1 {
+        fill: url(#linear-gradient1);
+      }
+
+      .st2 {
+        fill: url(#linear-gradient3);
+      }
+
+      .st3 {
+        fill: url(#linear-gradient);
+      }
+
+      .st4 {
+        fill: #888;
+        fill-opacity: 0.27;
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="-839.2" y1="593.5" x2="-839.2" y2="592.5" gradientTransform="translate(16814.5 40983) scale(20 -69)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0498fe"/>
+      <stop offset="1" stop-color="#ccf6fe"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient1" x1="-839.1" y1="589" x2="-839.1" y2="587.9" gradientTransform="translate(16842.5 24796.5) scale(20 -42)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0498fe"/>
+      <stop offset="1" stop-color="#ccf6fe"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient2" x1="-839.1" y1="583.8" x2="-839.1" y2="582.8" gradientTransform="translate(16870.5 17003) scale(20 -29)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0498fe"/>
+      <stop offset="1" stop-color="#ccf6fe"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient3" x1="-839" y1="590.2" x2="-839" y2="589.2" gradientTransform="translate(16898.5 27794) scale(20 -47)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0498fe"/>
+      <stop offset="1" stop-color="#ccf6fe"/>
+    </linearGradient>
+  </defs>
+  <rect id="_矩形" data-name="矩形" class="st4" x="19.2" y="18.1" width="21.2" height="85"/>
+  <rect id="_矩形备份-19" data-name="矩形备份-19" class="st3" x="19.2" y="29.7" width="21.2" height="73.3"/>
+  <rect id="_矩形1" data-name="矩形" class="st4" x="49" y="41.4" width="21.2" height="61.6"/>
+  <rect id="_矩形备份-20" data-name="矩形备份-20" class="st1" x="49" y="58.4" width="21.2" height="44.6"/>
+  <rect id="_矩形2" data-name="矩形" class="st4" x="78.7" y="60.5" width="21.2" height="42.5"/>
+  <rect id="_矩形备份-201" data-name="矩形备份-20" class="st0" x="78.7" y="72.2" width="21.2" height="30.8"/>
+  <rect id="_矩形3" data-name="矩形" class="st4" x="108.5" y="34" width="21.2" height="69"/>
+  <rect id="_矩形备份-202" data-name="矩形备份-20" class="st2" x="108.5" y="53.1" width="21.2" height="49.9"/>
+</svg>

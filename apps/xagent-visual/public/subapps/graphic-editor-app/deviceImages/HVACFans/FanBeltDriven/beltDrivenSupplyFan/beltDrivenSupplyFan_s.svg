@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1248 888">
+  <defs>
+    <clipPath id="clippath">
+      <rect x="-34.35" y="215.74" width="1318.65" height="620.44" transform="translate(-51.55 68.21) rotate(-6)" style="fill: none;"/>
+    </clipPath>
+    <filter id="AI_GaussianBlur_64" x="-200%" y="-200%" width="600%" height="600%">
+      <feGaussianBlur stdDeviation="64"/>
+    </filter>
+  </defs>
+  <g style="clip-path: url(#clippath);">
+    <g style="filter: url(#AI_GaussianBlur_64); opacity: .27;">
+      <polygon points="494.5 848.17 406 840.97 209.3 746.08 120.8 738.88 120.8 608.88 181.2 602.53 181.2 537.53 241.6 531.18 241.6 336.18 362.4 323.48 362.4 258.48 422.8 122.13 543.6 44.44 845.6 12.7 845.6 662.7 934.1 669.9 1158.9 778.34 494.5 848.17"/>
+    </g>
+  </g>
+</svg>

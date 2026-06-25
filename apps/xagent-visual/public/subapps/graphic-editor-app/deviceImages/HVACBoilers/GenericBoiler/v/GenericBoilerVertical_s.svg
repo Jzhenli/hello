@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="shadow" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 2233 2086">
+  <defs>
+    <filter id="AI_GaussianBlur_64" x="-200%" y="-200%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="64"/>
+    </filter>
+  </defs>
+  <g style="filter: url(#AI_GaussianBlur_64); opacity: .27;">
+    <polygon points="1220.38 1840.02 1400.06 1869.21 1991 1710.87 1314.5 1041.43 1134.81 1012.24 1011.81 890.53 652.44 832.15 416.06 895.49 539.06 1017.2 657.25 985.53 780.25 1107.25 543.88 1170.59 974.38 1596.59 856.19 1628.26 917.69 1689.12 1097.38 1718.31 1220.38 1840.02" style="fill: #000; fill-rule: evenodd; stroke-width: 0px;"/>
+  </g>
+</svg>

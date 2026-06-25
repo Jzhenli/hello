@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 150 120">
+  <!-- Generator: Adobe Illustrator 29.4.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 152)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: #ccf6fe;
+      }
+
+      .st0, .st1, .st2 {
+        fill: none;
+        stroke-linecap: round;
+        stroke-miterlimit: 10;
+        stroke-width: 4px;
+      }
+
+      .st3 {
+        filter: url(#filter-2);
+      }
+
+      .st4 {
+        filter: url(#filter-21);
+      }
+
+      .st1 {
+        stroke: #000;
+      }
+
+      .st2 {
+        stroke: #0498fe;
+      }
+    </style>
+    <filter id="filter-2" x="-17.1%" y="-27.5%" width="134.2%" height="165.0%">
+      <feOffset dx="0" dy="3" in="SourceAlpha" result="shadowOffsetOuter1"/>
+      <feGaussianBlur in="shadowOffsetOuter1" result="shadowBlurOuter1" stdDeviation="6"/>
+      <feColorMatrix in="shadowBlurOuter1" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.4 0"/>
+    </filter>
+    <filter id="filter-21" data-name="filter-2" x="-17.1%" y="-27.5%" width="134.2%" height="165.0%">
+      <feOffset dx="0" dy="3" in="SourceAlpha" result="shadowOffsetOuter1"/>
+      <feGaussianBlur in="shadowOffsetOuter1" result="shadowBlurOuter1" stdDeviation="6"/>
+      <feColorMatrix in="shadowBlurOuter1" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.4 0"/>
+    </filter>
+  </defs>
+  <g class="st3">
+    <path class="st1" d="M14.5,90.1c16.1,2.4,16.9-20.2,27.9-25.7s29.3,8,44.3,4.2,36.3-39.9,48.8-38.8"/>
+  </g>
+  <path class="st0" d="M14.5,90.1c16.1,2.4,16.9-20.2,27.9-25.7s29.3,8,44.3,4.2,36.3-39.9,48.8-38.8"/>
+  <g class="st4">
+    <path class="st1" d="M15.4,56.5s7.8,23.4,23.8,23.4c25.8,0,22.8-50.2,49.2-50.2s45.9,62,45.9,62"/>
+  </g>
+  <path class="st2" d="M15.4,56.5s7.8,23.4,23.8,23.4c25.8,0,22.8-50.2,49.2-50.2s45.9,62,45.9,62"/>
+</svg>

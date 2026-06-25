@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="TF" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <rect x="13.45" y="7.45" width="5.1" height="8.1" rx=".55" ry=".55" style="fill: #404040; stroke-width: 0px;"/>
+  <rect x="5.45" y="7.45" width="5.1" height="12.1" rx=".55" ry=".55" style="fill: #404040; stroke-width: 0px;"/>
+  <path d="M21.4,4.45H2.6c-.3,0-.55.25-.55.55s.25.55.55.55h18.8c.3,0,.55-.25.55-.55s-.25-.55-.55-.55Z" style="fill: #404040; stroke-width: 0px;"/>
+</svg>

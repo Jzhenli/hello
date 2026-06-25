@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="HL" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <circle cx="4.35" cy="4.35" r="1.4" style="fill: #66f; stroke-width: 0px;"/>
+  <circle cx="19.65" cy="4.35" r="1.4" style="fill: #66f; stroke-width: 0px;"/>
+  <circle cx="4.35" cy="19.75" r="1.4" style="fill: #66f; stroke-width: 0px;"/>
+  <circle cx="19.65" cy="19.75" r="1.4" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M15.33,3.7h-1.66c-.36,0-.65.29-.65.65s.29.65.65.65h1.66c.36,0,.65-.29.65-.65s-.29-.65-.65-.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M10.34,3.7h-1.66c-.36,0-.65.29-.65.65s.29.65.65.65h1.66c.36,0,.65-.29.65-.65s-.29-.65-.65-.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M3.7,15.32c0,.36.29.65.65.65s.65-.29.65-.65v-1.66c0-.36-.29-.65-.65-.65s-.65.29-.65.65v1.66Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M4.35,10.99c.36,0,.65-.29.65-.65v-1.66c0-.36-.29-.65-.65-.65s-.65.29-.65.65v1.66c0,.36.29.65.65.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M15.33,19h-1.66c-.36,0-.65.29-.65.65s.29.65.65.65h1.66c.36,0,.65-.29.65-.65s-.29-.65-.65-.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M10.34,19h-1.66c-.36,0-.65.29-.65.65s.29.65.65.65h1.66c.36,0,.65-.29.65-.65s-.29-.65-.65-.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M19.65,13.01c-.36,0-.65.29-.65.65v1.66c0,.36.29.65.65.65s.65-.29.65-.65v-1.66c0-.36-.29-.65-.65-.65Z" style="fill: #66f; stroke-width: 0px;"/>
+  <path d="M20.3,8.68c0-.36-.29-.65-.65-.65s-.65.29-.65.65v1.66c0,.36.29.65.65.65s.65-.29.65-.65v-1.66Z" style="fill: #66f; stroke-width: 0px;"/>
+</svg>

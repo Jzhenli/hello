@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="TL" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <g>
+    <circle cx="4.35" cy="4.35" r="1.4" style="fill: #000; stroke-width: 0px;"/>
+    <circle cx="19.65" cy="4.35" r="1.4" style="fill: #000; stroke-width: 0px;"/>
+    <circle cx="4.35" cy="19.75" r="1.4" style="fill: #000; stroke-width: 0px;"/>
+    <circle cx="19.65" cy="19.75" r="1.4" style="fill: #000; stroke-width: 0px;"/>
+  </g>
+  <g>
+    <path d="M16.5,12.85H7.5c-.36,0-.65.29-.65.65v3c0,.36.29.65.65.65h9c.36,0,.65-.29.65-.65v-3c0-.36-.29-.65-.65-.65ZM15.85,15.85h-7.7v-1.7h7.7v1.7Z" style="fill: #000; stroke-width: 0px;"/>
+    <path d="M16.5,6.85H7.5c-.36,0-.65.29-.65.65v3c0,.36.29.65.65.65h9c.36,0,.65-.29.65-.65v-3c0-.36-.29-.65-.65-.65ZM15.85,9.85h-7.7v-1.7h7.7v1.7Z" style="fill: #000; stroke-width: 0px;"/>
+  </g>
+</svg>
