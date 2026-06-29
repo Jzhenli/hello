@@ -53,7 +53,10 @@
     "logout": "退出登录",
     "copyright": "© 2026 XAgent 数据采集网关系统",
     "icp": "京ICP备XXXXXXXX号",
-    "version": "v1.0.0"
+    "version": "v1.0.0",
+    "theme": "主题切换",
+    "lightTheme": "浅色主题",
+    "darkTheme": "深色主题"
   },
   "login": {
     "title": "XAgent",

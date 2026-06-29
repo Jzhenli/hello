@@ -62,25 +62,25 @@ const categories = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--bg-container);
 }
 
 .palette-header {
   padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--bg-hover);
   flex-shrink: 0;
 }
 
 .palette-header h3 {
   margin: 0 0 4px 0;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .palette-header .hint {
   font-size: 11px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .palette-body {
@@ -96,7 +96,7 @@ const categories = computed(() => {
 .category-title {
   font-size: 11px;
   font-weight: 600;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 6px;
@@ -114,18 +114,18 @@ const categories = computed(() => {
   flex-direction: column;
   align-items: center;
   padding: 8px 4px;
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   cursor: grab;
   transition: all 0.2s;
 }
 
 .component-item:hover {
-  background: #e8f4fc;
-  border-color: #3498db;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+  box-shadow: var(--shadow-light);
 }
 
 .component-item:active {
@@ -140,7 +140,7 @@ const categories = computed(() => {
 
 .component-name {
   font-size: 11px;
-  color: #2c3e50;
+  color: var(--text-primary);
   text-align: center;
   line-height: 1.2;
 }

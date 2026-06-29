@@ -57,7 +57,7 @@ onMounted(() => {
       <path
         d="M 10 60 A 40 40 0 0 1 90 60"
         fill="none"
-        stroke="#e0e0e0"
+        stroke="var(--border-base)"
         stroke-width="8"
         stroke-linecap="round"
       />
@@ -96,7 +96,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  background: linear-gradient(135deg, var(--bg-container) 0%, var(--bg-hover) 100%);
   border-radius: 8px;
   padding: 10px;
 }
@@ -124,7 +124,7 @@ onMounted(() => {
 
 .gauge-label {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   margin-top: 4px;
   text-align: center;
   max-width: 90%;

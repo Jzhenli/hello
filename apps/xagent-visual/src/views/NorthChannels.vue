@@ -1588,18 +1588,18 @@ onMounted(async () => {
 /* 配置卡片样式 */
 .config-card {
   margin-bottom: 16px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-base);
 }
 
 .config-card.optional {
-  border-color: #e4e7ed;
-  background: #fafafa;
+  border-color: var(--border-base);
+  background: var(--bg-hover);
 }
 
 .config-card :deep(.el-card__header) {
   padding: 12px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-base);
 }
 
 .config-card :deep(.el-card__body) {
@@ -1615,7 +1615,7 @@ onMounted(async () => {
 .card-title {
   font-weight: 600;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 /* 折叠面板样式 */
@@ -1624,19 +1624,19 @@ onMounted(async () => {
 }
 
 .config-card :deep(.el-collapse-item__header) {
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-base);
   border-radius: 4px;
   padding: 0 12px;
   height: 40px;
   line-height: 40px;
   font-size: 13px;
   font-weight: 500;
-  color: #606266;
+  color: var(--text-primary);
 }
 
 .config-card :deep(.el-collapse-item__wrap) {
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-base);
   border-top: none;
   border-radius: 0 0 4px 4px;
 }
@@ -1653,9 +1653,9 @@ onMounted(async () => {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   flex-shrink: 0;
 }
 
@@ -1680,7 +1680,7 @@ onMounted(async () => {
   gap: 4px;
   margin-left: 8px;
   padding-left: 12px;
-  border-left: 1px solid #ebeef5;
+  border-left: 1px solid var(--border-light);
 }
 
 .stat-item {
@@ -1692,22 +1692,22 @@ onMounted(async () => {
 .stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .stat-divider {
-  color: #dcdfe6;
+  color: var(--border-base);
   font-size: 14px;
   margin: 0 2px;
 }
 
 .stat-online .stat-value {
-  color: #27ae60;
+  color: var(--color-success);
 }
 
 .toolbar-right {
@@ -1729,12 +1729,12 @@ onMounted(async () => {
 
 .compact-tabs {
   display: flex;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
   padding: 4px;
   gap: 4px;
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
 }
 
 .compact-tab {
@@ -1745,7 +1745,7 @@ onMounted(async () => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #606266;
+  color: var(--text-primary);
   background: transparent;
   transition: all 0.2s ease;
   display: flex;
@@ -1755,12 +1755,12 @@ onMounted(async () => {
 }
 
 .compact-tab:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .compact-tab.active {
-  background: #409eff;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-white);
 }
 
 .compact-tab.disabled {
@@ -1780,15 +1780,15 @@ onMounted(async () => {
 }
 
 .compact-tab:not(.active) .tab-badge {
-  background: #e6f7ff;
-  color: #409eff;
+  background: var(--color-info-light, #e6f7ff);
+  color: var(--color-info, #409eff);
 }
 
 .compact-panel {
   flex: 1;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1808,20 +1808,20 @@ onMounted(async () => {
 .channel-card-compact {
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  background: #fff;
+  border: 1px solid var(--border-base);
+  background: var(--bg-container);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .channel-card-compact:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px var(--color-primary-light);
 }
 
 .channel-card-compact.selected {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .channel-card-compact.offline {
@@ -1843,13 +1843,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #ffebee;
-  color: #e74c3c;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .channel-card-status.online {
-  background: #e8f5e9;
-  color: #27ae60;
+  background: var(--color-success-light);
+  color: var(--color-success);
 }
 
 .channel-card-info {
@@ -1860,7 +1860,7 @@ onMounted(async () => {
 .channel-card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1871,7 +1871,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .channel-card-stats {
@@ -1879,7 +1879,7 @@ onMounted(async () => {
   gap: 16px;
   margin-bottom: 12px;
   padding: 8px;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 
@@ -1891,13 +1891,13 @@ onMounted(async () => {
 
 .stat-mini-label {
   font-size: 11px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .stat-mini-value {
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .channel-card-actions {
@@ -1905,7 +1905,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--border-light);
 }
 
 .action-buttons {
@@ -1922,9 +1922,9 @@ onMounted(async () => {
   width: 320px;
   min-width: 260px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1935,19 +1935,19 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .channel-count {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .channel-list {
@@ -1969,12 +1969,12 @@ onMounted(async () => {
 }
 
 .channel-item:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .channel-item.selected {
-  background: #ecf5ff;
-  border-color: #409eff;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .channel-item.offline {
@@ -1989,13 +1989,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #ffebee;
-  color: #e74c3c;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .channel-item-status.online {
-  background: #e8f5e9;
-  color: #27ae60;
+  background: var(--color-success-light);
+  color: var(--color-success);
 }
 
 .channel-item-content {
@@ -2013,7 +2013,7 @@ onMounted(async () => {
 .channel-item-name {
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2023,7 +2023,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .channel-item-actions {
@@ -2039,14 +2039,14 @@ onMounted(async () => {
 }
 
 .more-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--bg-hover);
 }
 
 .details-panel {
   flex: 1;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2059,7 +2059,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
+  color: var(--border-base);
 }
 
 .empty-details p {
@@ -2093,18 +2093,18 @@ onMounted(async () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f56c6c;
+  background: var(--color-danger);
   flex-shrink: 0;
 }
 
 .header-info .status-dot.online {
-  background: #67c23a;
+  background: var(--color-success);
 }
 
 .protocol-tag {
   padding: 2px 8px;
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--color-info-light, #ecf5ff);
+  color: var(--color-info, #409eff);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -2128,8 +2128,8 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e4e7ed;
+  background: var(--bg-container);
+  border: 1px solid var(--border-base);
   border-radius: 8px;
 }
 
@@ -2145,23 +2145,23 @@ onMounted(async () => {
 }
 
 .upload-icon {
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--color-info-light, #ecf5ff);
+  color: var(--color-info, #409eff);
 }
 
 .success-icon {
-  background: #f0f9eb;
-  color: #67c23a;
+  background: var(--color-success-light, #f0f9eb);
+  color: var(--color-success);
 }
 
 .backlog-icon {
-  background: #fdf6ec;
-  color: #e6a23c;
+  background: var(--color-warning-light, #fdf6ec);
+  color: var(--color-warning);
 }
 
 .total-icon {
-  background: #f4f4f5;
-  color: #909399;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .stat-content {
@@ -2171,21 +2171,21 @@ onMounted(async () => {
 .stat-content .stat-value {
   font-size: 20px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .stat-content .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 /* 连接配置区域 */
 .config-section {
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-base);
   overflow: hidden;
 }
 
@@ -2193,23 +2193,23 @@ onMounted(async () => {
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #2c3e50;
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border-base);
 }
 
 .config-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1px;
-  background: #f0f0f0;
+  background: var(--border-light);
 }
 
 .config-item {
   display: flex;
   align-items: center;
   padding: 10px 16px;
-  background: #fff;
+  background: var(--bg-container);
   min-height: 40px;
 }
 
@@ -2221,70 +2221,70 @@ onMounted(async () => {
   width: 80px;
   flex-shrink: 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .config-value {
   flex: 1;
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--text-primary);
   word-break: break-all;
 }
 
 .config-value.code {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .config-value .muted {
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 /* 适配器配置 */
 .adapter-config {
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid var(--border-base);
   padding: 12px 16px;
 }
 
 .adapter-config-title {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .json-config {
   margin: 0;
   padding: 12px;
-  background: #f5f7fa;
-  color: #2c3e50;
+  background: var(--code-bg, #1e1e1e);
+  color: var(--text-primary);
   border-radius: 6px;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-base);
 }
 
 /* 折叠面板 */
 .detail-collapse {
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-base);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .detail-collapse :deep(.el-collapse-item__header) {
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border-base);
   padding: 0 16px;
   height: 42px;
   line-height: 42px;
   font-size: 14px;
   font-weight: 500;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .detail-collapse :deep(.el-collapse-item__wrap) {
@@ -2298,7 +2298,7 @@ onMounted(async () => {
 .description-text {
   margin: 0;
   padding: 16px;
-  color: #606266;
+  color: var(--text-primary);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -2313,7 +2313,7 @@ onMounted(async () => {
 
 .mapping-help-text {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .detail-card {
@@ -2325,7 +2325,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .statistics-grid {
@@ -2337,20 +2337,20 @@ onMounted(async () => {
 .stat-box {
   text-align: center;
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
 }
 
 .stat-box-value {
   font-size: 24px;
   font-weight: 700;
-  color: #409eff;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 
 .stat-box-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .loading-state {
@@ -2359,7 +2359,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 60px 0;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .loading-state p {
@@ -2371,7 +2371,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   padding: 60px 0;
-  color: #95a5a6;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -2599,24 +2599,24 @@ onMounted(async () => {
 
 .form-hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
 .unit-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .option-desc {
   float: right;
-  color: #8492a6;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .danger-text {
-  color: #f56c6c;
+  color: var(--color-danger);
 }
 
 .alert-with-margin {

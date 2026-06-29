@@ -61,6 +61,7 @@ const getScheduleDisplay = computed(() => {
 
 <style scoped>
 .schedule-trigger {
-  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+  background: var(--node-schedule-bg);
+  border: 2px solid var(--node-schedule-border);
 }
 </style>

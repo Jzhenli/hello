@@ -765,10 +765,10 @@ export default {
 }
 
 .alerts-tabs {
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
   padding: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
 }
 
 .toolbar {
@@ -806,7 +806,7 @@ export default {
 .section-header h3 {
   margin: 0;
   font-size: 16px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .channel-card {
@@ -830,7 +830,7 @@ export default {
 .channel-icon {
   width: 40px;
   height: 40px;
-  background: #f0f2f5;
+  background: var(--bg-hover);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -844,13 +844,13 @@ export default {
 
 .channel-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .channel-config {
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-hover);
   border-radius: 6px;
   margin-bottom: 12px;
   display: flex;
@@ -866,12 +866,12 @@ export default {
 }
 
 .config-item .label {
-  color: #7f8c8d;
+  color: var(--text-secondary);
   min-width: 70px;
 }
 
 .config-item .value {
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .channel-footer {
@@ -879,7 +879,7 @@ export default {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-base);
 }
 
 .system-config-form .el-divider {
@@ -888,14 +888,14 @@ export default {
 
 .system-config-form .el-divider__text {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .form-item-hint {
   display: block;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   line-height: 1.4;
   margin-top: 4px;
 }

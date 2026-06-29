@@ -1051,7 +1051,7 @@ onMounted(async () => {
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="edit" :icon="Edit">{{ $t('common.edit') }}</el-dropdown-item>
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'update')" command="reload" :icon="RefreshRight">{{ $t('devices.hot_reload') }}</el-dropdown-item>
                     <el-dropdown-item v-if="userStore.hasPermission('devices', 'delete')" command="delete" :icon="Delete" divided>
-                      <span style="color: #f56c6c">{{ $t('common.delete') }}</span>
+                      <span style="color: var(--color-danger)">{{ $t('common.delete') }}</span>
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -1179,7 +1179,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'modbus_tcp' || deviceForm.pluginName === 'modbus_rtu'" :label="$t('devices.interval_label')">
           <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.interval_hint_modbus') }}
           </div>
         </el-form-item>
@@ -1188,7 +1188,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'bacnet'" :label="$t('devices.interval_label')">
           <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.interval_hint_bacnet') }}
           </div>
         </el-form-item>
@@ -1204,13 +1204,13 @@ onMounted(async () => {
             <el-option :label="$t('devices.connection_tunneling_tcp_secure')" value="tunneling_tcp_secure" />
             <el-option :label="$t('devices.connection_routing_secure')" value="routing_secure" />
           </el-select>
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.connection_type_hint') }}
           </div>
         </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'knx'" :label="$t('devices.interval_label')">
           <el-input-number v-model="deviceForm.interval" :min="1" :max="3600" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.interval_hint_knx') }}
           </div>
         </el-form-item>
@@ -1220,13 +1220,13 @@ onMounted(async () => {
             <el-option :label="$t('devices.sync_always')" value="always" />
             <el-option :label="$t('devices.sync_passive')" value="passive" />
           </el-select>
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.sync_mode_hint') }}
           </div>
         </el-form-item>
         <el-form-item v-if="deviceForm.pluginName === 'knx'" :label="$t('devices.sync_interval')">
           <el-input-number v-model="deviceForm.sync_interval" :min="5" :max="1440" />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.sync_interval_hint') }}
           </div>
         </el-form-item>
@@ -1391,7 +1391,7 @@ onMounted(async () => {
             disabled 
             :placeholder="$t('devices.auto_derived_placeholder')"
           />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
             {{ $t('devices.standard_type_hint') }}
           </div>
         </el-form-item>
@@ -1468,7 +1468,7 @@ onMounted(async () => {
               v-model="writeForm.boolValue"
               :active-text="$t('devices.on')"
               :inactive-text="$t('devices.off')"
-              style="--el-switch-on-color: #27ae60"
+              style="--el-switch-on-color: var(--color-success)"
             />
           </div>
         </template>
@@ -1538,9 +1538,9 @@ onMounted(async () => {
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   flex-shrink: 0;
 }
 
@@ -1565,7 +1565,7 @@ onMounted(async () => {
   gap: 4px;
   margin-left: 8px;
   padding-left: 12px;
-  border-left: 1px solid #ebeef5;
+  border-left: 1px solid var(--border-light);
 }
 
 .stat-item {
@@ -1577,22 +1577,22 @@ onMounted(async () => {
 .stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .stat-divider {
-  color: #dcdfe6;
+  color: var(--border-base);
   font-size: 14px;
   margin: 0 2px;
 }
 
 .stat-online .stat-value {
-  color: #27ae60;
+  color: var(--color-success);
 }
 
 .toolbar-right {
@@ -1614,12 +1614,12 @@ onMounted(async () => {
 
 .compact-tabs {
   display: flex;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
   padding: 4px;
   gap: 4px;
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
 }
 
 .compact-tab {
@@ -1630,7 +1630,7 @@ onMounted(async () => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #606266;
+  color: var(--text-primary);
   background: transparent;
   transition: all 0.2s ease;
   display: flex;
@@ -1640,12 +1640,12 @@ onMounted(async () => {
 }
 
 .compact-tab:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .compact-tab.active {
-  background: #409eff;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-white);
 }
 
 .compact-tab.disabled {
@@ -1665,8 +1665,8 @@ onMounted(async () => {
 }
 
 .compact-tab:not(.active) .tab-badge {
-  background: #e6f7ff;
-  color: #409eff;
+  background: var(--color-info-light, #e6f7ff);
+  color: var(--color-info, #409eff);
 }
 
 .tab-count {
@@ -1677,15 +1677,15 @@ onMounted(async () => {
 }
 
 .compact-tab:not(.active) .tab-count {
-  background: #f0f0f0;
-  color: #606266;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .compact-panel {
   flex: 1;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1705,20 +1705,20 @@ onMounted(async () => {
 .device-card-compact {
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  background: #fff;
+  border: 1px solid var(--border-base);
+  background: var(--bg-container);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .device-card-compact:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px var(--color-primary-light);
 }
 
 .device-card-compact.selected {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .device-card-compact.offline {
@@ -1740,13 +1740,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #ffebee;
-  color: #e74c3c;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .device-card-status.online {
-  background: #e8f5e9;
-  color: #27ae60;
+  background: var(--color-success-light);
+  color: var(--color-success);
 }
 
 .device-card-info {
@@ -1757,7 +1757,7 @@ onMounted(async () => {
 .device-card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1768,7 +1768,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .device-card-actions {
@@ -1776,7 +1776,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--border-light);
 }
 
 .action-buttons {
@@ -1793,9 +1793,9 @@ onMounted(async () => {
   width: 320px;
   min-width: 260px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1806,19 +1806,19 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .device-count {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .device-list {
@@ -1840,12 +1840,12 @@ onMounted(async () => {
 }
 
 .device-item:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .device-item.selected {
-  background: #ecf5ff;
-  border-color: #409eff;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .device-item.offline {
@@ -1860,13 +1860,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #ffebee;
-  color: #e74c3c;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .device-item-status.online {
-  background: #e8f5e9;
-  color: #27ae60;
+  background: var(--color-success-light);
+  color: var(--color-success);
 }
 
 .device-item-content {
@@ -1884,7 +1884,7 @@ onMounted(async () => {
 .device-item-name {
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1894,7 +1894,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .device-item-actions {
@@ -1910,14 +1910,14 @@ onMounted(async () => {
 }
 
 .more-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--bg-hover);
 }
 
 .points-panel {
   flex: 1;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1930,7 +1930,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
+  color: var(--border-base);
 }
 
 .empty-points p {
@@ -1946,7 +1946,7 @@ onMounted(async () => {
 
 .config-preview {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   word-break: break-all;
   max-width: 200px;
   overflow: hidden;
@@ -1956,12 +1956,12 @@ onMounted(async () => {
 }
 
 .text-muted {
-  color: #c0c4cc;
+  color: var(--border-base);
 }
 
 .current-value {
   font-weight: 600;
-  color: #409eff;
+  color: var(--color-primary);
 }
 
 .write-info {
@@ -1980,16 +1980,16 @@ onMounted(async () => {
   width: 60px;
   flex-shrink: 0;
   font-size: 13px;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .write-info-value {
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .write-info-value.current-value {
-  color: #409eff;
+  color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -2005,12 +2005,12 @@ onMounted(async () => {
 
 .write-bool-label {
   font-size: 14px;
-  color: #606266;
+  color: var(--text-primary);
 }
 
 .write-hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-top: 8px;
   line-height: 1.5;
 }
@@ -2021,7 +2021,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 60px 0;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .loading-state p {
@@ -2033,7 +2033,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   padding: 60px 0;
-  color: #95a5a6;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 

@@ -341,22 +341,22 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 <style scoped>
 .config-panel {
   width: 280px;
-  background: #fff;
-  border-left: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-left: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
 }
 
 .panel-header {
   padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--bg-hover);
 }
 
 .panel-header h3 {
   margin: 0;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .panel-body {
@@ -368,7 +368,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 .config-section {
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .config-section:last-child {
@@ -378,7 +378,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 .section-title {
   font-size: 12px;
   font-weight: 600;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 10px;
 }
@@ -390,7 +390,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 .form-group label {
   display: block;
   font-size: 12px;
-  color: #2c3e50;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
@@ -398,7 +398,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 .form-group select {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #dce1e6;
+  border: 1px solid var(--border-base);
   border-radius: 4px;
   font-size: 13px;
 }
@@ -406,7 +406,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--color-primary);
 }
 
 .form-row {
@@ -451,7 +451,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   align-items: center;
   justify-content: space-between;
   padding: 8px;
-  background: #e8f5e9;
+  background: var(--color-success-light, #e8f5e9);
   border-radius: 4px;
   margin-top: 8px;
 }
@@ -461,17 +461,17 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 }
 
 .binding-badge .device {
-  color: #27ae60;
+  color: var(--color-success);
   font-weight: 600;
 }
 
 .binding-badge .separator {
-  color: #95a5a6;
+  color: var(--text-secondary);
   margin: 0 4px;
 }
 
 .binding-badge .point {
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .action-buttons {
@@ -484,7 +484,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .info-item:last-child {
@@ -493,12 +493,12 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 
 .info-label {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .info-value {
   font-size: 12px;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -508,7 +508,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .empty-icon {

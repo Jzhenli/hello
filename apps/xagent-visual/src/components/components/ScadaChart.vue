@@ -54,7 +54,7 @@ const chartOption = computed(() => {
     yAxis: {
       type: 'value',
       splitLine: {
-        lineStyle: { color: '#eee' }
+        lineStyle: { color: 'var(--border-light)' }
       },
       axisLabel: {
         fontSize: 10
@@ -66,7 +66,7 @@ const chartOption = computed(() => {
       smooth: true,
       symbol: 'none',
       lineStyle: {
-        color: chartConfig.value?.lineColor || '#3498db',
+        color: chartConfig.value?.lineColor || 'var(--color-primary)',
         width: 2
       },
       areaStyle: chartConfig.value?.areaFill ? {
@@ -80,7 +80,7 @@ const chartOption = computed(() => {
         }
       } : undefined,
       itemStyle: {
-        color: chartConfig.value?.lineColor || '#3498db'
+        color: chartConfig.value?.lineColor || 'var(--color-primary)'
       }
     }]
   }
@@ -102,7 +102,7 @@ const chartOption = computed(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -111,8 +111,8 @@ const chartOption = computed(() => {
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #2c3e50;
-  border-bottom: 1px solid #eee;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .chart {

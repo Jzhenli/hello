@@ -9,8 +9,8 @@ html, body {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
-  color: #2c3e50;
-  background: #f5f7fa;
+  color: var(--text-primary);
+  background: var(--bg-base);
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -24,64 +24,64 @@ html, body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-scroll-track);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--bg-scroll-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--bg-scroll-thumb-hover);
 }
 
 .rule-node {
   padding: 12px 16px;
   border-radius: 10px;
   min-width: 160px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-dark);
+  transition: var(--transition-fast);
 }
 
 .rule-node:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-hover);
   transform: translateY(-2px);
 }
 
 .rule-node.selected {
-  box-shadow: 0 0 0 3px #3498db, 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 3px var(--color-primary), var(--shadow-hover);
 }
 
 .trigger-node {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  border: 2px solid #2980b9;
+  background: var(--node-trigger-bg);
+  border: 2px solid var(--node-trigger-border);
 }
 
 .schedule-trigger {
-  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
-  border: 2px solid #0097a7;
+  background: var(--node-schedule-bg);
+  border: 2px solid var(--node-schedule-border);
 }
 
 .condition-node {
-  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
-  border: 2px solid #8e44ad;
+  background: var(--node-condition-bg);
+  border: 2px solid var(--node-condition-border);
 }
 
 .logic-node {
-  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-  border: 2px solid #e67e22;
+  background: var(--node-logic-bg);
+  border: 2px solid var(--node-logic-border);
 }
 
 .action-node {
-  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
-  border: 2px solid #229954;
+  background: var(--node-action-bg);
+  border: 2px solid var(--node-action-border);
 }
 
 .notification-node {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-  border: 2px solid #c0392b;
+  background: var(--node-notification-bg);
+  border: 2px solid var(--node-notification-border);
 }
 
 .notification-node .level-badge {
@@ -157,32 +157,32 @@ html, body {
 }
 
 .vue-flow__node.selected .rule-node {
-  box-shadow: 0 0 0 3px #3498db, 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 3px var(--color-primary), var(--shadow-hover);
 }
 
 .vue-flow__edge-path {
-  stroke: #95a5a6;
+  stroke: var(--text-secondary);
   stroke-width: 2;
 }
 
 .vue-flow__edge.animated .vue-flow__edge-path {
-  stroke: #3498db;
+  stroke: var(--color-primary);
 }
 
 .vue-flow__handle {
   width: 12px;
   height: 12px;
-  background: #3498db;
-  border: 2px solid #fff;
+  background: var(--color-primary);
+  border: 2px solid var(--text-white);
 }
 
 .vue-flow__handle:hover {
-  background: #2980b9;
+  background: var(--color-primary-hover);
   transform: scale(1.2);
 }
 
 .vue-flow__controls {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-base);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -191,17 +191,17 @@ html, body {
   width: 32px;
   height: 32px;
   border: none;
-  background: #fff;
+  background: var(--bg-container);
 }
 
 .vue-flow__controls-button:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .vue-flow__minimap {
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-base);
 }
 
 .el-message {

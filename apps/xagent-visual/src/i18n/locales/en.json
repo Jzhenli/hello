@@ -53,7 +53,10 @@
     "logout": "Logout",
     "copyright": "© 2026 XAgent Data Acquisition Gateway System",
     "icp": "Beijing ICP No.XXXXXXXX",
-    "version": "v1.0.0"
+    "version": "v1.0.0",
+    "theme": "Theme",
+    "lightTheme": "Light Theme",
+    "darkTheme": "Dark Theme"
   },
   "login": {
     "title": "XAgent",

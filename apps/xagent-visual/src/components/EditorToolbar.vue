@@ -79,12 +79,12 @@ const showStats = computed(() => !isMobile.value)
 <style scoped>
 .editor-toolbar {
   height: 56px;
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  background: var(--toolbar-bg);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--toolbar-shadow);
 }
 
 .toolbar-left {
@@ -96,7 +96,7 @@ const showStats = computed(() => !isMobile.value)
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #fff;
+  color: var(--toolbar-text);
   white-space: nowrap;
 }
 
@@ -114,17 +114,17 @@ const showStats = computed(() => !isMobile.value)
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #ecf0f1;
+  color: var(--toolbar-stat-text);
   font-size: 14px;
 }
 
 .stat-label {
-  color: #bdc3c7;
+  color: var(--toolbar-stat-label);
 }
 
 .stat-value {
   font-weight: 600;
-  color: #3498db;
+  color: var(--color-primary);
 }
 
 .toolbar-right {
@@ -143,14 +143,14 @@ const showStats = computed(() => !isMobile.value)
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--toolbar-btn-bg);
+  color: var(--toolbar-text);
   -webkit-user-select: none;
   user-select: none;
 }
 
 .toolbar-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--toolbar-btn-hover-bg);
   transform: translateY(-1px);
 }
 
@@ -165,19 +165,19 @@ const showStats = computed(() => !isMobile.value)
 }
 
 .toolbar-btn.primary {
-  background: #3498db;
+  background: var(--color-primary);
 }
 
 .toolbar-btn.primary:hover {
-  background: #2980b9;
+  background: var(--color-primary-hover);
 }
 
 .toolbar-btn.danger {
-  background: #e74c3c;
+  background: var(--color-danger);
 }
 
 .toolbar-btn.danger:hover {
-  background: #c0392b;
+  background: var(--color-danger-hover, #c0392b);
 }
 
 .btn-icon {

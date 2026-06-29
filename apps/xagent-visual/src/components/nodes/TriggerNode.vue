@@ -41,7 +41,7 @@ const hasValidData = computed(() =>
 
 <style scoped>
 .trigger-node {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  border: 2px solid #2980b9;
+  background: var(--node-trigger-bg);
+  border: 2px solid var(--node-trigger-border);
 }
 </style>

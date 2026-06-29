@@ -33,7 +33,7 @@ const emit = defineEmits<{
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--confirm-overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,12 +41,12 @@ const emit = defineEmits<{
 }
 
 .confirm-dialog {
-  background: #fff;
+  background: var(--confirm-dialog-bg);
   border-radius: 12px;
   padding: 24px;
   min-width: 320px;
   max-width: 400px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--confirm-dialog-shadow);
   text-align: center;
 }
 
@@ -57,7 +57,7 @@ const emit = defineEmits<{
 
 .confirm-message {
   font-size: 16px;
-  color: #2c3e50;
+  color: var(--confirm-message-color);
   margin-bottom: 24px;
   line-height: 1.5;
 }
@@ -80,20 +80,20 @@ const emit = defineEmits<{
 }
 
 .btn-cancel {
-  background: #f5f7fa;
-  color: #606266;
+  background: var(--confirm-cancel-bg);
+  color: var(--confirm-cancel-color);
 }
 
 .btn-cancel:hover {
-  background: #e4e7ed;
+  background: var(--confirm-cancel-hover-bg);
 }
 
 .btn-ok {
-  background: #e74c3c;
-  color: #fff;
+  background: var(--confirm-ok-bg);
+  color: var(--confirm-ok-color);
 }
 
 .btn-ok:hover {
-  background: #c0392b;
+  background: var(--confirm-ok-hover-bg);
 }
 </style>

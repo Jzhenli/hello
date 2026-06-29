@@ -240,7 +240,7 @@ const formatTime = (timestamp: number) => {
 <style scoped>
 .project-list-container {
   height: calc(100vh - 100px - 32px);
-  background-color: #f5f7fa;
+  background-color: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -258,11 +258,11 @@ const formatTime = (timestamp: number) => {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .empty-state {
-  background: white;
+  background: var(--bg-container);
   border-radius: 8px;
   padding: 60px 20px;
 }
@@ -295,7 +295,7 @@ const formatTime = (timestamp: number) => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .project-title-row {
@@ -312,7 +312,7 @@ const formatTime = (timestamp: number) => {
 .project-desc {
   margin: 0 0 12px 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--text-secondary);
   line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,13 +327,13 @@ const formatTime = (timestamp: number) => {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #a8abb2;
+  color: var(--text-secondary);
 }
 
 .project-actions {
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--border-light);
 }
 </style>

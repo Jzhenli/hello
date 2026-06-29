@@ -589,16 +589,16 @@ const isDaySelected = (day: number) => {
 <style scoped>
 .node-config-panel {
   width: 280px;
-  background: #fff;
-  border-left: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-left: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
 }
 
 .panel-header {
   padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--bg-hover);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -607,14 +607,14 @@ const isDaySelected = (day: number) => {
 .panel-header h3 {
   margin: 0;
   font-size: 15px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .delete-btn {
   padding: 4px 8px;
   border: none;
-  background: #e74c3c;
-  color: #fff;
+  background: var(--color-danger);
+  color: var(--text-white);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -622,7 +622,7 @@ const isDaySelected = (day: number) => {
 }
 
 .delete-btn:hover {
-  background: #c0392b;
+  background: var(--color-danger-dark, #c0392b);
 }
 
 .panel-body {
@@ -640,7 +640,7 @@ const isDaySelected = (day: number) => {
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .form-group input,
@@ -648,7 +648,7 @@ const isDaySelected = (day: number) => {
 .form-group textarea {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #dce1e6;
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   font-size: 13px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -659,8 +659,8 @@ const isDaySelected = (day: number) => {
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .form-group textarea {
@@ -672,16 +672,16 @@ const isDaySelected = (day: number) => {
   display: block;
   margin-top: 4px;
   font-size: 11px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .info-group .info-value {
   padding: 8px 12px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: var(--color-info-light, #f0f9ff);
+  border: 1px solid var(--color-info-border, #bae6fd);
   border-radius: 6px;
   font-size: 13px;
-  color: #0369a1;
+  color: var(--color-info-text, #0369a1);
 }
 
 .device-option {
@@ -692,12 +692,12 @@ const isDaySelected = (day: number) => {
 
 .device-option .device-name {
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .device-option .device-meta {
   font-size: 11px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .point-option {
@@ -708,17 +708,17 @@ const isDaySelected = (day: number) => {
 
 .point-option .point-name {
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .point-option .point-meta {
   font-size: 11px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .logic-hint {
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-hover);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -726,7 +726,7 @@ const isDaySelected = (day: number) => {
 .logic-hint p {
   margin: 4px 0;
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .weekday-selector {
@@ -737,22 +737,22 @@ const isDaySelected = (day: number) => {
 
 .weekday-btn {
   padding: 6px 10px;
-  border: 1px solid #dce1e6;
+  border: 1px solid var(--border-base);
   border-radius: 4px;
-  background: #fff;
+  background: var(--bg-container);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s;
 }
 
 .weekday-btn:hover {
-  border-color: #3498db;
+  border-color: var(--color-primary);
 }
 
 .weekday-btn.active {
-  background: #3498db;
-  color: #fff;
-  border-color: #3498db;
+  background: var(--color-primary);
+  color: var(--text-white);
+  border-color: var(--color-primary);
 }
 
 .date-range {
@@ -766,17 +766,17 @@ const isDaySelected = (day: number) => {
 }
 
 .date-range span {
-  color: #7f8c8d;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .cron-examples {
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-hover);
   border-radius: 6px;
   margin-bottom: 16px;
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .cron-examples p {
@@ -799,11 +799,11 @@ const isDaySelected = (day: number) => {
   align-items: flex-start;
   gap: 6px;
   padding: 8px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: var(--color-info-light, #f0f9ff);
+  border: 1px solid var(--color-info-border, #bae6fd);
   border-radius: 6px;
   font-size: 12px;
-  color: #0369a1;
+  color: var(--color-info-text, #0369a1);
   line-height: 1.4;
 }
 

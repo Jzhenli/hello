@@ -68,8 +68,8 @@ const levelColor = computed(() => {
 
 <style scoped>
 .notification-node {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-  border: 2px solid #c0392b;
+  background: var(--node-notification-bg);
+  border: 2px solid var(--node-notification-border);
 }
 
 .level-badge {
@@ -77,7 +77,7 @@ const levelColor = computed(() => {
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 10px;
-  color: #fff;
+  color: var(--text-white);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;

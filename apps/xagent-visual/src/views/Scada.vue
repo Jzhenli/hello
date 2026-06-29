@@ -180,7 +180,7 @@ const handleExport = () => {
 .scada-page {
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
   position: relative;
   z-index: 1;
   height: 100%;
@@ -195,8 +195,8 @@ const handleExport = () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-bottom: 1px solid var(--border-base);
   flex-shrink: 0;
 }
 
@@ -209,7 +209,7 @@ const handleExport = () => {
 .project-name {
   font-size: 16px;
   font-weight: 500;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .header-actions {
@@ -245,8 +245,8 @@ const handleExport = () => {
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-bottom: 1px solid var(--border-base);
   overflow-x: auto;
   flex-shrink: 0;
 }
@@ -256,8 +256,8 @@ const handleExport = () => {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: #f5f7fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-base);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -265,13 +265,13 @@ const handleExport = () => {
 }
 
 .panel-tab:hover {
-  background: #e8f4fc;
+  background: var(--bg-hover);
 }
 
 .panel-tab.active {
-  background: #3498db;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #3498db;
+  border-color: var(--color-primary);
 }
 
 .tab-name {
@@ -298,7 +298,7 @@ const handleExport = () => {
   flex: 1;
   display: flex;
   min-height: 0;
-  background: #e8e8e8;
+  background: var(--bg-secondary);
   position: relative;
 }
 
@@ -309,8 +309,8 @@ const handleExport = () => {
 .editor-left {
   width: 200px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #dce1e6;
+  background: var(--bg-container);
+  border-right: 1px solid var(--border-base);
 }
 
 .editor-center {
@@ -326,8 +326,8 @@ const handleExport = () => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-bottom: 1px solid var(--border-base);
   flex-shrink: 0;
 }
 
@@ -345,7 +345,7 @@ const handleExport = () => {
 
 .component-count {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .canvas-wrapper {
@@ -360,8 +360,8 @@ const handleExport = () => {
 .editor-right {
   width: 280px;
   flex-shrink: 0;
-  background: #fff;
-  border-left: 1px solid #dce1e6;
+  background: var(--bg-container);
+  border-left: 1px solid var(--border-base);
 }
 
 .empty-state {
@@ -370,8 +370,8 @@ const handleExport = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #95a5a6;
-  background: #f5f7fa;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
 }
 
 .empty-icon {

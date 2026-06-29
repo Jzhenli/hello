@@ -338,9 +338,9 @@ export default {
   gap: 12px;
   margin-bottom: 20px;
   padding: 16px;
-  background: #fff;
+  background: var(--settings-toolbar-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--settings-toolbar-shadow);
 }
 
 .toolbar-left {
@@ -371,7 +371,7 @@ export default {
   justify-content: center;
   gap: 12px;
   padding: 48px;
-  color: #7f8c8d;
+  color: var(--rule-loading-color);
   font-size: 14px;
 }
 
@@ -407,13 +407,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffebee;
-  color: #e74c3c;
+  background: var(--rule-status-inactive-bg);
+  color: var(--rule-status-inactive-color);
 }
 
 .rule-status.active {
-  background: #e8f5e9;
-  color: #27ae60;
+  background: var(--rule-status-active-bg);
+  color: var(--rule-status-active-color);
 }
 
 .rule-title {
@@ -426,11 +426,11 @@ export default {
 .rule-name {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--rule-name-color);
 }
 
 .rule-expression {
-  background: #f8f9fa;
+  background: var(--rule-expression-bg);
   padding: 12px 16px;
   border-radius: 6px;
   margin-bottom: 12px;
@@ -439,7 +439,7 @@ export default {
 .rule-expression code {
   font-family: 'Fira Code', monospace;
   font-size: 13px;
-  color: #3498db;
+  color: var(--rule-expression-color);
 }
 
 .rule-meta {
@@ -447,7 +447,7 @@ export default {
   gap: 24px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--rule-meta-border);
 }
 
 .meta-item {
@@ -457,11 +457,11 @@ export default {
 }
 
 .meta-label {
-  color: #7f8c8d;
+  color: var(--rule-meta-label-color);
 }
 
 .meta-value {
-  color: #2c3e50;
+  color: var(--rule-meta-value-color);
   font-weight: 500;
 }
 

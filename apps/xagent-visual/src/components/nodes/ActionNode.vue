@@ -52,8 +52,8 @@ const delayText = computed(() => {
 
 <style scoped>
 .action-node {
-  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
-  border: 2px solid #229954;
+  background: var(--node-action-bg);
+  border: 2px solid var(--node-action-border);
 }
 
 .delay-badge {
@@ -62,6 +62,6 @@ const delayText = computed(() => {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   font-size: 11px;
-  color: #ecf0f1;
+  color: var(--text-white);
 }
 </style>

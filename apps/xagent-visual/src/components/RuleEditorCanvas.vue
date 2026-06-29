@@ -365,7 +365,7 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
 }
 
 .editor-toolbar {
@@ -373,8 +373,8 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-bottom: 1px solid var(--border-base);
 }
 
 .toolbar-left {
@@ -390,7 +390,7 @@ export default {
 
 .node-count {
   font-size: 13px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .editor-loading {
@@ -400,7 +400,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -422,8 +422,8 @@ export default {
 
 .config-panel {
   width: 320px;
-  background: #fff;
-  border-left: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-left: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
 }
@@ -433,15 +433,15 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-base);
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .empty-panel {
   width: 320px;
-  background: #fff;
-  border-left: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-left: 1px solid var(--border-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -460,11 +460,11 @@ export default {
 
 .empty-content p {
   margin: 4px 0;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .empty-content .hint {
   font-size: 12px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 </style>

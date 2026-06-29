@@ -53,7 +53,10 @@
     "logout": "登出",
     "copyright": "© 2026 XAgent 資料採集閘道系統",
     "icp": "京ICP備XXXXXXXX號",
-    "version": "v1.0.0"
+    "version": "v1.0.0",
+    "theme": "主題切換",
+    "lightTheme": "淺色主題",
+    "darkTheme": "深色主題"
   },
   "login": {
     "title": "XAgent",

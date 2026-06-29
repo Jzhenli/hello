@@ -108,7 +108,7 @@ async function handleLogin() {
 .login-bg {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #0d1b2a 0%, #1e3a5f 50%, #2c5f8a 100%);
+  background: var(--login-bg-gradient);
   z-index: 0;
 }
 
@@ -129,13 +129,11 @@ async function handleLogin() {
 }
 
 .login-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--login-card-bg);
   backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: clamp(24px, 5vw, 40px) clamp(20px, 4vw, 36px) clamp(20px, 3vw, 32px);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: var(--login-card-shadow);
 }
 
 .login-header {
@@ -155,14 +153,14 @@ async function handleLogin() {
 .login-title {
   font-size: clamp(22px, 5vw, 28px);
   font-weight: 700;
-  color: #1e3a5f;
+  color: var(--login-title-color);
   margin: 0 0 4px 0;
   letter-spacing: 2px;
 }
 
 .login-subtitle {
   font-size: clamp(12px, 3vw, 14px);
-  color: #7f8c8d;
+  color: var(--login-subtitle-color);
   margin: 0;
 }
 
@@ -183,10 +181,10 @@ async function handleLogin() {
 
 .login-footer {
   text-align: center;
-  color: #bdc3c7;
+  color: var(--login-footer-color);
   font-size: 12px;
   padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--login-footer-border);
 }
 
 @media (max-height: 500px) {

@@ -70,8 +70,8 @@ const paletteWidth = computed(() => {
 
 <style scoped>
 .node-palette {
-  background: #fff;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-container);
+  border-right: 1px solid var(--border-base);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -79,20 +79,20 @@ const paletteWidth = computed(() => {
 
 .palette-header {
   padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--border-base);
+  background: var(--bg-hover);
 }
 
 .palette-header h3 {
   margin: 0 0 4px 0;
   font-size: 16px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .palette-header .hint {
   margin: 0;
   font-size: 12px;
-  color: #95a5a6;
+  color: var(--text-secondary);
 }
 
 .palette-body {
@@ -108,7 +108,7 @@ const paletteWidth = computed(() => {
 .category-title {
   font-size: 12px;
   font-weight: 600;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -121,7 +121,7 @@ const paletteWidth = computed(() => {
   gap: 12px;
   padding: 12px;
   margin-bottom: 8px;
-  background: #fff;
+  background: var(--bg-container);
   border: 2px solid var(--node-color);
   border-radius: 8px;
   cursor: grab;
@@ -132,7 +132,7 @@ const paletteWidth = computed(() => {
 
 .palette-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-base);
 }
 
 .palette-item:active {
@@ -147,7 +147,7 @@ const paletteWidth = computed(() => {
 }
 
 .palette-item.touch-item:active {
-  background: #f5f7fa;
+  background: var(--bg-hover);
   transform: scale(0.98);
 }
 
@@ -176,7 +176,7 @@ const paletteWidth = computed(() => {
 .item-label {
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .touch-item .item-label {

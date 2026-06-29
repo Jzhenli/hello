@@ -53,8 +53,8 @@ const operatorColor = computed(() => {
 
 <style scoped>
 .logic-node {
-  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
-  border: 2px solid #d35400;
+  background: var(--node-logic-bg);
+  border: 2px solid var(--node-logic-border);
   min-width: 120px;
 }
 

@@ -64,7 +64,7 @@ const indicatorStyle = computed(() => ({
 
 .indicator-label {
   font-size: 10px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   margin-top: 4px;
   text-align: center;
   max-width: 100%;

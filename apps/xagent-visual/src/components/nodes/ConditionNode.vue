@@ -63,8 +63,8 @@ const durationText = computed(() => {
 
 <style scoped>
 .condition-node {
-  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
-  border: 2px solid #8e44ad;
+  background: var(--node-condition-bg);
+  border: 2px solid var(--node-condition-border);
 }
 
 .condition-expression {
@@ -76,17 +76,17 @@ const durationText = computed(() => {
 }
 
 .condition-expression .field {
-  color: #fff;
+  color: var(--text-white);
   font-weight: 600;
 }
 
 .condition-expression .operator {
-  color: #f1c40f;
+  color: var(--color-warning);
   font-weight: bold;
 }
 
 .condition-expression .value {
-  color: #2ecc71;
+  color: var(--color-success);
   font-weight: 600;
 }
 
@@ -96,6 +96,6 @@ const durationText = computed(() => {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   font-size: 11px;
-  color: #ecf0f1;
+  color: var(--text-white);
 }
 </style>

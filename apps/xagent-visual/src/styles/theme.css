@@ -1,0 +1,530 @@
+/**
+ * 主题变量定义
+ * 通过 data-theme 属性切换主题
+ * 后续扩展只需在此文件添加新的 CSS 变量
+ */
+
+/* ==================== 浅色主题（默认） ==================== */
+:root,
+[data-theme='light'] {
+  /* 主色调 */
+  --color-primary: #3498db;
+  --color-primary-hover: #2980b9;
+  --color-primary-active: #2471a3;
+  --color-primary-light: rgba(52, 152, 219, 0.1);
+
+  /* 背景色 */
+  --bg-base: #f5f7fa;
+  --bg-container: #ffffff;
+  --bg-header: #ffffff;
+  --bg-sidebar: linear-gradient(180deg, #1e3a5f 0%, #0d1b2a 100%);
+  --bg-sidebar-hover: rgba(255, 255, 255, 0.1);
+  --bg-sidebar-active: linear-gradient(90deg, #3498db, #2980b9);
+  --bg-footer: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f5f7fa;
+  --bg-dialog: #ffffff;
+  --bg-drawer: #ffffff;
+  --bg-table-header: #fafafa;
+  --bg-table-row-hover: #f5f7fa;
+  --bg-scroll-track: #f1f1f1;
+  --bg-scroll-thumb: #c1c1c1;
+  --bg-scroll-thumb-hover: #a8a8a8;
+  --bg-mask: rgba(0, 0, 0, 0.45);
+  --bg-disabled: #f5f5f5;
+
+  /* 文本色 */
+  --text-primary: #2c3e50;
+  --text-regular: #34495e;
+  --text-secondary: #7f8c8d;
+  --text-tertiary: #95a5a6;
+  --text-placeholder: #95a5a6;
+  --text-disabled: #bdc3c7;
+  --text-sidebar: rgba(255, 255, 255, 0.7);
+  --text-sidebar-hover: #ffffff;
+  --text-sidebar-active: #ffffff;
+  --text-link: #3498db;
+  --text-link-hover: #2980b9;
+  --text-white: #ffffff;
+
+  /* 边框色 */
+  --border-base: #e0e0e0;
+  --border-light: #ebeef5;
+  --border-lighter: #f2f6fc;
+  --border-sidebar: rgba(255, 255, 255, 0.1);
+  --border-header: #e0e0e0;
+  --border-footer: #e0e0e0;
+  --border-input: #dcdfe6;
+  --border-hover: #c0c4cc;
+  --border-focus: #3498db;
+
+  /* 阴影 */
+  --shadow-light: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.2);
+
+  /* 状态色 */
+  --color-success: #27ae60;
+  --color-success-light: rgba(39, 174, 96, 0.1);
+  --color-warning: #f39c12;
+  --color-warning-light: rgba(243, 156, 18, 0.1);
+  --color-danger: #e74c3c;
+  --color-danger-light: rgba(231, 76, 60, 0.1);
+  --color-info: #909399;
+  --color-info-light: rgba(144, 147, 153, 0.1);
+
+  /* 节点颜色（保持原有渐变） */
+  --node-trigger-bg: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  --node-trigger-border: #2980b9;
+  --node-schedule-bg: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+  --node-schedule-border: #0097a7;
+  --node-condition-bg: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  --node-condition-border: #8e44ad;
+  --node-logic-bg: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  --node-logic-border: #e67e22;
+  --node-action-bg: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  --node-action-border: #229954;
+  --node-notification-bg: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  --node-notification-border: #c0392b;
+
+  /* 登录页相关 */
+  --login-bg-gradient: linear-gradient(135deg, #0d1b2a 0%, #1e3a5f 50%, #2c5f8a 100%);
+  --login-card-bg: rgba(255, 255, 255, 0.95);
+  --login-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --login-title-color: #1e3a5f;
+  --login-subtitle-color: #7f8c8d;
+  --login-footer-color: #bdc3c7;
+  --login-footer-border: #f0f0f0;
+
+  /* 工具栏相关 */
+  --toolbar-bg: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --toolbar-text: #ffffff;
+  --toolbar-btn-bg: rgba(255, 255, 255, 0.1);
+  --toolbar-btn-hover-bg: rgba(255, 255, 255, 0.2);
+  --toolbar-stat-text: #ecf0f1;
+  --toolbar-stat-label: #bdc3c7;
+
+  /* 确认对话框 */
+  --confirm-overlay-bg: rgba(0, 0, 0, 0.5);
+  --confirm-dialog-bg: #fff;
+  --confirm-dialog-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --confirm-message-color: #2c3e50;
+  --confirm-cancel-bg: #f5f7fa;
+  --confirm-cancel-color: #606266;
+  --confirm-cancel-hover-bg: #e4e7ed;
+  --confirm-ok-bg: #e74c3c;
+  --confirm-ok-color: #fff;
+  --confirm-ok-hover-bg: #c0392b;
+
+  /* 规则列表 */
+  --rule-card-bg: #ffffff;
+  --rule-card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --rule-status-inactive-bg: #ffebee;
+  --rule-status-inactive-color: #e74c3c;
+  --rule-status-active-bg: #e8f5e9;
+  --rule-status-active-color: #27ae60;
+  --rule-name-color: #2c3e50;
+  --rule-expression-bg: #f8f9fa;
+  --rule-expression-color: #3498db;
+  --rule-meta-border: #eee;
+  --rule-meta-label-color: #7f8c8d;
+  --rule-meta-value-color: #2c3e50;
+  --rule-loading-color: #7f8c8d;
+
+  /* 设置页 */
+  --settings-toolbar-bg: #fff;
+  --settings-toolbar-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  /* 进度条颜色 */
+  --progress-success: #10b981;
+  --progress-warning: #f59e0b;
+  --progress-danger: #ef4444;
+
+  /* 图表相关 */
+  --chart-line-color: #3b82f6;
+  --chart-area-start: rgba(59, 130, 246, 0.3);
+  --chart-area-end: rgba(59, 130, 246, 0.05);
+
+  /* 代码高亮相关 */
+  --code-bg: #1e1e1e;
+  --code-toolbar-bg: #2d2d2d;
+  --code-comment: #6a9955;
+  --code-function: #4ec9b0;
+  --code-variable: #dcdcaa;
+  --code-string: #f14c4c;
+  --code-keyword: #608b4e;
+  --code-text: #d4d4d4;
+
+  /* 过渡动画 */
+  --transition-base: all 0.3s ease;
+  --transition-fast: all 0.2s ease;
+
+  /* ==================== Element Plus 组件主题 ==================== */
+  /* 主色 */
+  --el-color-primary: #3498db;
+  --el-color-primary-light-3: #5dade2;
+  --el-color-primary-light-5: #85c1e9;
+  --el-color-primary-light-7: #aed6f1;
+  --el-color-primary-light-8: #d4e6f1;
+  --el-color-primary-light-9: #eaf2f8;
+  --el-color-primary-dark-2: #2980b9;
+
+  /* 背景色 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f5f7fa;
+  --el-bg-color-overlay: #ffffff;
+
+  /* 文本色 */
+  --el-text-color-primary: #2c3e50;
+  --el-text-color-regular: #34495e;
+  --el-text-color-secondary: #7f8c8d;
+  --el-text-color-placeholder: #95a5a6;
+  --el-text-color-disabled: #bdc3c7;
+
+  /* 边框色 */
+  --el-border-color: #e0e0e0;
+  --el-border-color-light: #ebeef5;
+  --el-border-color-lighter: #f2f6fc;
+  --el-border-color-extra-light: #f5f7fa;
+  --el-border-color-dark: #dcdfe6;
+  --el-border-color-darker: #c0c4cc;
+
+  /* 填充色 */
+  --el-fill-color: #f5f7fa;
+  --el-fill-color-light: #fafafa;
+  --el-fill-color-lighter: #fcfcfc;
+  --el-fill-color-blank: #ffffff;
+
+  /* 阴影 */
+  --el-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --el-box-shadow-lighter: 0 2px 12px rgba(0, 0, 0, 0.12);
+
+  /* 禁用色 */
+  --el-disabled-bg-color: #f5f5f5;
+  --el-disabled-border-color: #e0e0e0;
+  --el-disabled-text-color: #bdc3c7;
+
+  /* 状态色 */
+  --el-color-success: #27ae60;
+  --el-color-success-light-3: #52c479;
+  --el-color-success-light-5: #7dd394;
+  --el-color-success-light-7: #a8e2b0;
+  --el-color-success-light-8: #c3ebc8;
+  --el-color-success-light-9: #e6f7e9;
+  --el-color-warning: #f39c12;
+  --el-color-warning-light-3: #f5ab3a;
+  --el-color-warning-light-5: #f7ba62;
+  --el-color-warning-light-7: #f9c98a;
+  --el-color-warning-light-8: #fad8a8;
+  --el-color-warning-light-9: #fdf3e6;
+  --el-color-danger: #e74c3c;
+  --el-color-danger-light-3: #eb6b5e;
+  --el-color-danger-light-5: #ef8a80;
+  --el-color-danger-light-7: #f3a9a2;
+  --el-color-danger-light-8: #f6c0bb;
+  --el-color-danger-light-9: #fbeae8;
+  --el-color-info: #909399;
+  --el-color-info-light-3: #a6a9ad;
+  --el-color-info-light-5: #bcbfc2;
+  --el-color-info-light-7: #d2d4d6;
+  --el-color-info-light-8: #e0e1e3;
+  --el-color-info-light-9: #f2f3f4;
+
+  /* 输入框 */
+  --el-input-bg-color: #ffffff;
+  --el-input-border-color: #dcdfe6;
+  --el-input-hover-border-color: #3498db;
+  --el-input-focus-border-color: #3498db;
+  --el-input-disabled-text-color: #bdc3c7;
+  --el-input-disabled-bg-color: #f5f5f5;
+
+  /* 按钮 */
+  --el-button-bg-color: #ffffff;
+  --el-button-border-color: #dcdfe6;
+  --el-button-hover-bg-color: #f5f7fa;
+  --el-button-hover-border-color: #3498db;
+  --el-button-active-bg-color: #e8f4fc;
+
+  /* 表格 */
+  --el-table-bg-color: #ffffff;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-header-bg-color: #fafafa;
+  --el-table-row-hover-bg-color: #f5f7fa;
+  --el-table-border-color: #ebeef5;
+
+  /* 对话框/抽屉 */
+  --el-dialog-bg-color: #ffffff;
+  --el-drawer-bg-color: #ffffff;
+  --el-messagebox-bg-color: #ffffff;
+
+  /* 菜单 */
+  --el-menu-bg-color: transparent;
+  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.1);
+  --el-menu-active-color: #ffffff;
+  --el-menu-text-color: rgba(255, 255, 255, 0.7);
+  --el-menu-hover-text-color: #ffffff;
+}
+
+/* ==================== 深色主题 ==================== */
+[data-theme='dark'] {
+  /* 主色调 */
+  --color-primary: #409eff;
+  --color-primary-hover: #66b1ff;
+  --color-primary-active: #3a8ee6;
+  --color-primary-light: rgba(64, 158, 255, 0.15);
+
+  /* 背景色 */
+  --bg-base: #1a1a2e;
+  --bg-container: #16213e;
+  --bg-header: #16213e;
+  --bg-sidebar: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
+  --bg-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --bg-sidebar-active: linear-gradient(90deg, #409eff, #3a8ee6);
+  --bg-footer: #16213e;
+  --bg-card: #16213e;
+  --bg-input: #0f3460;
+  --bg-hover: #1f2b47;
+  --bg-dialog: #16213e;
+  --bg-drawer: #16213e;
+  --bg-table-header: #1a2744;
+  --bg-table-row-hover: #1f2b47;
+  --bg-scroll-track: #1a1a2e;
+  --bg-scroll-thumb: #3a3a5e;
+  --bg-scroll-thumb-hover: #4a4a6e;
+  --bg-mask: rgba(0, 0, 0, 0.65);
+  --bg-disabled: #2a2a4e;
+
+  /* 文本色 */
+  --text-primary: #e4e7ed;
+  --text-regular: #c0c4cc;
+  --text-secondary: #a3a6ad;
+  --text-tertiary: #8d9096;
+  --text-placeholder: #8d9096;
+  --text-disabled: #606266;
+  --text-sidebar: rgba(255, 255, 255, 0.7);
+  --text-sidebar-hover: #ffffff;
+  --text-sidebar-active: #ffffff;
+  --text-link: #409eff;
+  --text-link-hover: #66b1ff;
+  --text-white: #ffffff;
+
+  /* 边框色 */
+  --border-base: #2a2a4e;
+  --border-light: #3a3a5e;
+  --border-lighter: #4a4a6e;
+  --border-sidebar: rgba(255, 255, 255, 0.08);
+  --border-header: #2a2a4e;
+  --border-footer: #2a2a4e;
+  --border-input: #3a3a5e;
+  --border-hover: #4a4a6e;
+  --border-focus: #409eff;
+
+  /* 阴影 */
+  --shadow-light: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5);
+
+  /* 状态色 */
+  --color-success: #67c23a;
+  --color-success-light: rgba(103, 194, 58, 0.15);
+  --color-warning: #e6a23c;
+  --color-warning-light: rgba(230, 162, 60, 0.15);
+  --color-danger: #f56c6c;
+  --color-danger-light: rgba(245, 108, 108, 0.15);
+  --color-info: #909399;
+  --color-info-light: rgba(144, 147, 153, 0.15);
+
+  /* 节点颜色（深色模式适配） */
+  --node-trigger-bg: linear-gradient(135deg, #409eff 0%, #3a8ee6 100%);
+  --node-trigger-border: #3a8ee6;
+  --node-schedule-bg: linear-gradient(135deg, #00d4e6 0%, #00a7b8 100%);
+  --node-schedule-border: #00a7b8;
+  --node-condition-bg: linear-gradient(135deg, #a869c4 0%, #9b59b6 100%);
+  --node-condition-border: #9b59b6;
+  --node-logic-bg: linear-gradient(135deg, #f5a623 0%, #e68a1a 100%);
+  --node-logic-border: #e68a1a;
+  --node-action-bg: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  --node-action-border: #27ae60;
+  --node-notification-bg: linear-gradient(135deg, #f56c6c 0%, #e74c3c 100%);
+  --node-notification-border: #e74c3c;
+
+  /* 登录页相关（深色模式） */
+  --login-bg-gradient: linear-gradient(135deg, #0a0f1a 0%, #0f2744 50%, #1a3a5f 100%);
+  --login-card-bg: rgba(22, 33, 62, 0.95);
+  --login-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --login-title-color: #409eff;
+  --login-subtitle-color: #a3a6ad;
+  --login-footer-color: #606266;
+  --login-footer-border: #2a2a4e;
+
+  /* 工具栏相关（深色模式） */
+  --toolbar-bg: linear-gradient(135deg, #1a2744 0%, #1f2b47 100%);
+  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --toolbar-text: #e4e7ed;
+  --toolbar-btn-bg: rgba(255, 255, 255, 0.08);
+  --toolbar-btn-hover-bg: rgba(255, 255, 255, 0.15);
+  --toolbar-stat-text: #c0c4cc;
+  --toolbar-stat-label: #8d9096;
+
+  /* 确认对话框（深色模式） */
+  --confirm-overlay-bg: rgba(0, 0, 0, 0.7);
+  --confirm-dialog-bg: #16213e;
+  --confirm-dialog-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --confirm-message-color: #e4e7ed;
+  --confirm-cancel-bg: #1f2b47;
+  --confirm-cancel-color: #c0c4cc;
+  --confirm-cancel-hover-bg: #2a3a5e;
+  --confirm-ok-bg: #f56c6c;
+  --confirm-ok-color: #fff;
+  --confirm-ok-hover-bg: #e74c3c;
+
+  /* 规则列表（深色模式） */
+  --rule-card-bg: #16213e;
+  --rule-card-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --rule-status-inactive-bg: rgba(245, 108, 108, 0.15);
+  --rule-status-inactive-color: #f56c6c;
+  --rule-status-active-bg: rgba(103, 194, 58, 0.15);
+  --rule-status-active-color: #67c23a;
+  --rule-name-color: #e4e7ed;
+  --rule-expression-bg: #1a2744;
+  --rule-expression-color: #409eff;
+  --rule-meta-border: #2a2a4e;
+  --rule-meta-label-color: #a3a6ad;
+  --rule-meta-value-color: #e4e7ed;
+  --rule-loading-color: #a3a6ad;
+
+  /* 设置页（深色模式） */
+  --settings-toolbar-bg: #16213e;
+  --settings-toolbar-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  /* 进度条颜色（深色模式） */
+  --progress-success: #67c23a;
+  --progress-warning: #e6a23c;
+  --progress-danger: #f56c6c;
+
+  /* 图表相关（深色模式） */
+  --chart-line-color: #409eff;
+  --chart-area-start: rgba(64, 158, 255, 0.3);
+  --chart-area-end: rgba(64, 158, 255, 0.05);
+
+  /* 代码高亮相关（深色模式） */
+  --code-bg: #1e1e1e;
+  --code-toolbar-bg: #2d2d2d;
+  --code-comment: #6a9955;
+  --code-function: #4ec9b0;
+  --code-variable: #dcdcaa;
+  --code-string: #f14c4c;
+  --code-keyword: #608b4e;
+  --code-text: #d4d4d4;
+
+  /* ==================== Element Plus 组件主题（深色模式） ==================== */
+  /* 主色 */
+  --el-color-primary: #409eff;
+  --el-color-primary-light-3: #66b1ff;
+  --el-color-primary-light-5: #8ec5ff;
+  --el-color-primary-light-7: #b5d9ff;
+  --el-color-primary-light-8: #d3e8ff;
+  --el-color-primary-light-9: #ecf5ff;
+  --el-color-primary-dark-2: #3a8ee6;
+
+  /* 背景色 */
+  --el-bg-color: #16213e;
+  --el-bg-color-page: #1a1a2e;
+  --el-bg-color-overlay: #16213e;
+
+  /* 文本色 */
+  --el-text-color-primary: #e4e7ed;
+  --el-text-color-regular: #c0c4cc;
+  --el-text-color-secondary: #a3a6ad;
+  --el-text-color-placeholder: #8d9096;
+  --el-text-color-disabled: #606266;
+
+  /* 边框色 */
+  --el-border-color: #2a2a4e;
+  --el-border-color-light: #3a3a5e;
+  --el-border-color-lighter: #4a4a6e;
+  --el-border-color-extra-light: #1f2b47;
+  --el-border-color-dark: #3a3a5e;
+  --el-border-color-darker: #4a4a6e;
+
+  /* 填充色 */
+  --el-fill-color: #1f2b47;
+  --el-fill-color-light: #1a2744;
+  --el-fill-color-lighter: #16213e;
+  --el-fill-color-blank: #16213e;
+
+  /* 阴影 */
+  --el-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --el-box-shadow-lighter: 0 2px 12px rgba(0, 0, 0, 0.35);
+
+  /* 禁用色 */
+  --el-disabled-bg-color: #2a2a4e;
+  --el-disabled-border-color: #2a2a4e;
+  --el-disabled-text-color: #606266;
+
+  /* 状态色 */
+  --el-color-success: #67c23a;
+  --el-color-success-light-3: #85ce61;
+  --el-color-success-light-5: #a4d782;
+  --el-color-success-light-7: #c3e1a3;
+  --el-color-success-light-8: #d4e8b8;
+  --el-color-success-light-9: #eef5e6;
+  --el-color-warning: #e6a23c;
+  --el-color-warning-light-3: #ebb563;
+  --el-color-warning-light-5: #f0c88a;
+  --el-color-warning-light-7: #f5dbb1;
+  --el-color-warning-light-8: #f8e8c8;
+  --el-color-warning-light-9: #fdf6ee;
+  --el-color-danger: #f56c6c;
+  --el-color-danger-light-3: #f78989;
+  --el-color-danger-light-5: #f9a6a6;
+  --el-color-danger-light-7: #fbc3c3;
+  --el-color-danger-light-8: #fcd4d4;
+  --el-color-danger-light-9: #fef0f0;
+  --el-color-info: #909399;
+  --el-color-info-light-3: #a6a9ad;
+  --el-color-info-light-5: #bcbfc2;
+  --el-color-info-light-7: #d2d4d6;
+  --el-color-info-light-8: #e0e1e3;
+  --el-color-info-light-9: #f2f3f4;
+
+  /* 输入框 */
+  --el-input-bg-color: #0f3460;
+  --el-input-border-color: #3a3a5e;
+  --el-input-hover-border-color: #409eff;
+  --el-input-focus-border-color: #409eff;
+  --el-input-disabled-text-color: #606266;
+  --el-input-disabled-bg-color: #2a2a4e;
+
+  /* 按钮 */
+  --el-button-bg-color: #16213e;
+  --el-button-border-color: #3a3a5e;
+  --el-button-hover-bg-color: #1f2b47;
+  --el-button-hover-border-color: #409eff;
+  --el-button-active-bg-color: #1a2744;
+
+  /* 表格 */
+  --el-table-bg-color: #16213e;
+  --el-table-tr-bg-color: #16213e;
+  --el-table-header-bg-color: #1a2744;
+  --el-table-row-hover-bg-color: #1f2b47;
+  --el-table-border-color: #2a2a4e;
+
+  /* 对话框/抽屉 */
+  --el-dialog-bg-color: #16213e;
+  --el-drawer-bg-color: #16213e;
+  --el-messagebox-bg-color: #16213e;
+
+  /* 菜单 */
+  --el-menu-bg-color: transparent;
+  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.08);
+  --el-menu-active-color: #ffffff;
+  --el-menu-text-color: rgba(255, 255, 255, 0.7);
+  --el-menu-hover-text-color: #ffffff;
+}

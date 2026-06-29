@@ -95,7 +95,7 @@ const handleToggle = async () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
   cursor: pointer;
   user-select: none;
@@ -103,20 +103,20 @@ const handleToggle = async () => {
 
 .switch-label {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .switch-track {
   width: 50px;
   height: 26px;
-  background: #dce1e6;
+  background: var(--border-base);
   border-radius: 13px;
   position: relative;
   transition: background 0.3s;
 }
 
 .switch-track.on {
-  background: #27ae60;
+  background: var(--color-success);
 }
 
 .switch-track.writing {
@@ -127,12 +127,12 @@ const handleToggle = async () => {
   position: absolute;
   width: 22px;
   height: 22px;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 50%;
   top: 2px;
   left: 2px;
   transition: transform 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-light);
 }
 
 .switch-thumb.on {

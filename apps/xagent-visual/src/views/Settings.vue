@@ -720,7 +720,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
               <el-table-column :label="$t('settings.backup.filename')" min-width="200">
                 <template #default="{ row, $index }">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <el-icon style="color: #409eff;"><Document /></el-icon>
+                    <el-icon style="color: var(--color-primary);"><Document /></el-icon>
                     <span>{{ row.filename }}</span>
                     <el-tag v-if="$index === 0" type="success" size="small">{{ $t('settings.backup.latest') }}</el-tag>
                   </div>
@@ -968,9 +968,9 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 .settings-container {
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
   min-height: calc(100vh - 160px);
 }
 
@@ -983,7 +983,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 
 .settings-sidebar {
   width: 200px;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border-base);
   flex-shrink: 0;
 }
 
@@ -1001,12 +1001,12 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 
 .settings-tabs {
   display: flex;
-  background: #fff;
+  background: var(--bg-container);
   border-radius: 8px 8px 0 0;
   padding: 4px;
   gap: 4px;
   flex-shrink: 0;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-base);
   overflow-x: auto;
 }
 
@@ -1019,7 +1019,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #606266;
+  color: var(--text-secondary);
   background: transparent;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -1027,12 +1027,12 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .settings-tab:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .settings-tab.active {
-  background: #409eff;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-white);
 }
 
 .settings-tab .el-icon {
@@ -1250,7 +1250,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 .settings-section h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .settings-form {
@@ -1258,7 +1258,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .log-viewer {
-  background: #1e1e1e;
+  background: var(--code-bg, #1e1e1e);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1267,7 +1267,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: #2d2d2d;
+  background: var(--code-toolbar-bg, #2d2d2d);
 }
 
 .log-content {
@@ -1285,7 +1285,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .log-time {
-  color: #6a9955;
+  color: var(--code-comment, #6a9955);
 }
 
 .log-level {
@@ -1294,23 +1294,23 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .log-line.info .log-level {
-  color: #4ec9b0;
+  color: var(--code-function, #4ec9b0);
 }
 
 .log-line.warning .log-level {
-  color: #dcdcaa;
+  color: var(--code-variable, #dcdcaa);
 }
 
 .log-line.error .log-level {
-  color: #f14c4c;
+  color: var(--code-string, #f14c4c);
 }
 
 .log-line.debug .log-level {
-  color: #608b4e;
+  color: var(--code-keyword, #608b4e);
 }
 
 .log-message {
-  color: #d4d4d4;
+  color: var(--code-text, #d4d4d4);
 }
 
 .backup-section {
@@ -1330,13 +1330,13 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .section-card {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--border-light);
 }
 
 .section-card :deep(.el-card__header) {
   padding: 12px 20px;
-  background: #fafafa;
-  border-bottom: 1px solid #ebeef5;
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .section-card :deep(.el-card__body) {
@@ -1356,7 +1356,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .permission-section {
@@ -1387,31 +1387,31 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-base);
   padding: 10px 16px;
   text-align: center;
 }
 
 .resource-header {
-  background: #f5f7fa;
+  background: var(--bg-hover);
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   text-align: left;
   min-width: 120px;
 }
 
 .action-header {
-  background: #f5f7fa;
+  background: var(--bg-hover);
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
   min-width: 80px;
 }
 
 .resource-cell {
   text-align: left;
   font-weight: 500;
-  color: #2c3e50;
-  background: #fafafa;
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .permission-cell {
@@ -1424,12 +1424,12 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 }
 
 .perm-allowed {
-  color: #27ae60;
+  color: var(--color-success);
   font-size: 18px;
 }
 
 .perm-denied {
-  color: #e74c3c;
+  color: var(--color-danger);
   font-size: 18px;
 }
 
@@ -1438,10 +1438,10 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   gap: 24px;
   margin-top: 16px;
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-hover);
   border-radius: 6px;
   font-size: 13px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .legend-item {
@@ -1453,7 +1453,7 @@ watch(() => userStore.permissionMatrix, (matrix) => {
 .empty-hint {
   text-align: center;
   padding: 40px;
-  color: #909399;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 </style>

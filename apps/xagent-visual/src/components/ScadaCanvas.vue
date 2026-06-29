@@ -268,7 +268,7 @@ onUnmounted(() => {
 .scada-canvas {
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-base);
   border-radius: 4px;
 }
 
@@ -279,8 +279,8 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   background-image: 
-    linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    linear-gradient(var(--grid-line, rgba(0, 0, 0, 0.05)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line, rgba(0, 0, 0, 0.05)) 1px, transparent 1px);
   pointer-events: none;
 }
 
@@ -291,12 +291,12 @@ onUnmounted(() => {
 }
 
 .scada-component.editing:hover {
-  outline: 1px dashed #3498db;
+  outline: 1px dashed var(--color-primary);
 }
 
 .scada-component.selected {
-  outline: 2px solid #3498db;
-  box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+  outline: 2px solid var(--color-primary);
+  box-shadow: 0 0 10px var(--color-primary-light);
 }
 
 .scada-component.locked {
@@ -308,8 +308,8 @@ onUnmounted(() => {
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #3498db;
-  border: 2px solid #fff;
+  background: var(--color-primary);
+  border: 2px solid var(--bg-container);
   border-radius: 2px;
   z-index: 10;
 }

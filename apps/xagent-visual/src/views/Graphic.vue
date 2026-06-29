@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { GraphicEditor } from "@x-plateform/graphic-editor";
 import { onMounted, ref, watch, nextTick } from "vue";
@@ -12,9 +12,9 @@ declare global {
   type Recordable<T = any> = Record<string, T>
 }
 
-const route = useRoute();
+//const route = useRoute();
 const router = useRouter();
-const { t, locale } = useI18n();
+const { locale } = useI18n();
 
 const graphicData = ref<any | null>(null);
 const showEditor = ref(true);
@@ -68,7 +68,10 @@ const onExit = () => {
   router.push({ name: "ScadaList" });
 };
 
-const onSave = (data: any, callback?: (success: boolean) => void) => {};
+const onSave = (data: any, callback?: (success: boolean) => void) => {
+  console.log(data, callback)
+
+};
 
 const showPreview = () => {};
 </script>
@@ -91,6 +94,6 @@ const showPreview = () => {};
   height: calc(100vh - 100px - 32px);
   display: flex;
   flex-direction: column;
-  background-color: #f5f7fa;
+  background-color: var(--bg-secondary);
 }
 </style>

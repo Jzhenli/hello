@@ -79,9 +79,9 @@ const chartHeight = computed(() => {
 })
 
 function getProgressColor(percentage: number): string {
-  if (percentage > 80) return '#ef4444'
-  if (percentage > 60) return '#f59e0b'
-  return '#10b981'
+  if (percentage > 80) return 'var(--color-danger)'
+  if (percentage > 60) return 'var(--color-warning)'
+  return 'var(--color-success)'
 }
 
 const alertTrend = computed(() => {
@@ -615,7 +615,7 @@ onActivated(async () => {
   width: 48px;
   height: 48px;
   border-radius: 8px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -629,7 +629,7 @@ onActivated(async () => {
   width: 60%;
   border-radius: 4px;
   margin-bottom: 8px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -638,7 +638,7 @@ onActivated(async () => {
   height: 16px;
   width: 40%;
   border-radius: 4px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -652,7 +652,7 @@ onActivated(async () => {
   width: 30%;
   border-radius: 4px;
   margin-bottom: 20px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -660,7 +660,7 @@ onActivated(async () => {
 .skeleton-chart-body {
   height: 250px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -674,7 +674,7 @@ onActivated(async () => {
   width: 25%;
   border-radius: 4px;
   margin-bottom: 20px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -682,7 +682,7 @@ onActivated(async () => {
 .skeleton-info-body {
   height: 120px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -705,7 +705,7 @@ onActivated(async () => {
   .skeleton-chart-body,
   .skeleton-info-header,
   .skeleton-info-body {
-    background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+    background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-base) 50%, var(--bg-hover) 75%);
     background-size: 200% 100%;
     animation: skeleton-shimmer 1.5s infinite;
   }
@@ -726,7 +726,7 @@ onActivated(async () => {
 }
 
 .update-time {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -748,8 +748,8 @@ onActivated(async () => {
 }
 
 .alert-card-highlight {
-  border-left: 4px solid #ef4444;
-  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  border-left: 4px solid var(--color-danger);
+  background: var(--color-danger-light);
 }
 
 .alert-card-highlight .stat-icon.alerts {
@@ -778,19 +778,19 @@ onActivated(async () => {
 }
 
 .stat-icon.devices {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: var(--color-primary);
 }
 
 .stat-icon.channels {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  background: var(--color-info, #8b5cf6);
 }
 
 .stat-icon.rules {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: var(--color-success);
 }
 
 .stat-icon.alerts {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: var(--color-danger);
 }
 
 .stat-content {
@@ -801,13 +801,13 @@ onActivated(async () => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -818,19 +818,19 @@ onActivated(async () => {
 }
 
 .stat-trend.success {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 .stat-trend.warning {
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .stat-trend.danger {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .stat-trend.info {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .chart-row {
@@ -843,7 +843,7 @@ onActivated(async () => {
 
 .chart-card :deep(.el-card__header) {
   padding: 16px 20px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .chart-card :deep(.el-card__body) {
@@ -866,7 +866,7 @@ onActivated(async () => {
 .chart-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .time-range-selector {
@@ -886,13 +886,13 @@ onActivated(async () => {
 
 .summary-item .label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .summary-item .value {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .chart {
@@ -911,7 +911,7 @@ onActivated(async () => {
 
 .info-card :deep(.el-card__header) {
   padding: 16px 20px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .info-card :deep(.el-card__body) {
@@ -951,7 +951,7 @@ onActivated(async () => {
 .gauge-label {
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .channel-stats {
@@ -965,27 +965,27 @@ onActivated(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8fafc;
+  background: var(--bg-hover);
   border-radius: 8px;
 }
 
 .channel-stat-item .stat-label {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .channel-stat-item .stat-value {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .text-danger {
-  color: #ef4444 !important;
+  color: var(--color-danger) !important;
 }
 
 .text-success {
-  color: #10b981 !important;
+  color: var(--color-success) !important;
 }
 
 .alert-card :deep(.el-card__header) {
@@ -1004,22 +1004,22 @@ onActivated(async () => {
   gap: 12px;
   padding: 12px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--bg-hover);
   transition: all 0.2s ease;
 }
 
 .alert-item:hover {
-  background: #f1f5f9;
+  background: var(--border-light);
 }
 
 .alert-item.critical {
-  background: #fef2f2;
-  border-left: 3px solid #ef4444;
+  background: var(--color-danger-light);
+  border-left: 3px solid var(--color-danger);
 }
 
 .alert-item.warning {
-  background: #fffbeb;
-  border-left: 3px solid #f59e0b;
+  background: var(--color-warning-light);
+  border-left: 3px solid var(--color-warning);
 }
 
 .alert-icon {
@@ -1034,12 +1034,12 @@ onActivated(async () => {
 .alert-title {
   font-size: 14px;
   font-weight: 500;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .alert-desc {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1048,7 +1048,7 @@ onActivated(async () => {
 
 .alert-time {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .system-info {
@@ -1062,19 +1062,19 @@ onActivated(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: #f8fafc;
+  background: var(--bg-hover);
   border-radius: 8px;
 }
 
 .info-label {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .info-value {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .mt-20 {

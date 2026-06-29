@@ -1,0 +1,247 @@
+/**
+ * Element Plus 主题变量覆盖
+ * 确保 Element Plus 组件跟随应用主题切换
+ */
+
+/* ==================== 浅色主题 ==================== */
+:root,
+[data-theme='light'] {
+  /* 主色 */
+  --el-color-primary: #3498db !important;
+  --el-color-primary-light-3: #5dade2 !important;
+  --el-color-primary-light-5: #85c1e9 !important;
+  --el-color-primary-light-7: #aed6f1 !important;
+  --el-color-primary-light-8: #d4e6f1 !important;
+  --el-color-primary-light-9: #eaf2f8 !important;
+  --el-color-primary-dark-2: #2980b9 !important;
+
+  /* 背景色 */
+  --el-bg-color: #ffffff !important;
+  --el-bg-color-page: #f5f7fa !important;
+  --el-bg-color-overlay: #ffffff !important;
+
+  /* 文本色 */
+  --el-text-color-primary: #2c3e50 !important;
+  --el-text-color-regular: #34495e !important;
+  --el-text-color-secondary: #7f8c8d !important;
+  --el-text-color-placeholder: #95a5a6 !important;
+  --el-text-color-disabled: #bdc3c7 !important;
+
+  /* 边框色 */
+  --el-border-color: #e0e0e0 !important;
+  --el-border-color-light: #ebeef5 !important;
+  --el-border-color-lighter: #f2f6fc !important;
+  --el-border-color-extra-light: #f5f7fa !important;
+  --el-border-color-dark: #dcdfe6 !important;
+  --el-border-color-darker: #c0c4cc !important;
+
+  /* 填充色 */
+  --el-fill-color: #f5f7fa !important;
+  --el-fill-color-light: #fafafa !important;
+  --el-fill-color-lighter: #fcfcfc !important;
+  --el-fill-color-blank: #ffffff !important;
+
+  /* 阴影 */
+  --el-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  --el-box-shadow-lighter: 0 2px 12px rgba(0, 0, 0, 0.12) !important;
+
+  /* 禁用色 */
+  --el-disabled-bg-color: #f5f5f5 !important;
+  --el-disabled-border-color: #e0e0e0 !important;
+  --el-disabled-text-color: #bdc3c7 !important;
+
+  /* 状态色 */
+  --el-color-success: #27ae60 !important;
+  --el-color-success-light-3: #52c479 !important;
+  --el-color-success-light-5: #7dd394 !important;
+  --el-color-success-light-7: #a8e2b0 !important;
+  --el-color-success-light-8: #c3ebc8 !important;
+  --el-color-success-light-9: #e6f7e9 !important;
+  --el-color-warning: #f39c12 !important;
+  --el-color-warning-light-3: #f5ab3a !important;
+  --el-color-warning-light-5: #f7ba62 !important;
+  --el-color-warning-light-7: #f9c98a !important;
+  --el-color-warning-light-8: #fad8a8 !important;
+  --el-color-warning-light-9: #fdf3e6 !important;
+  --el-color-danger: #e74c3c !important;
+  --el-color-danger-light-3: #eb6b5e !important;
+  --el-color-danger-light-5: #ef8a80 !important;
+  --el-color-danger-light-7: #f3a9a2 !important;
+  --el-color-danger-light-8: #f6c0bb !important;
+  --el-color-danger-light-9: #fbeae8 !important;
+  --el-color-info: #909399 !important;
+  --el-color-info-light-3: #a6a9ad !important;
+  --el-color-info-light-5: #bcbfc2 !important;
+  --el-color-info-light-7: #d2d4d6 !important;
+  --el-color-info-light-8: #e0e1e3 !important;
+  --el-color-info-light-9: #f2f3f4 !important;
+
+  /* 输入框 */
+  --el-input-bg-color: #ffffff !important;
+  --el-input-border-color: #dcdfe6 !important;
+  --el-input-hover-border-color: #3498db !important;
+  --el-input-focus-border-color: #3498db !important;
+  --el-input-disabled-text-color: #bdc3c7 !important;
+  --el-input-disabled-bg-color: #f5f5f5 !important;
+
+  /* 按钮 */
+  --el-button-bg-color: #ffffff !important;
+  --el-button-border-color: #dcdfe6 !important;
+  --el-button-hover-bg-color: #f5f7fa !important;
+  --el-button-hover-border-color: #3498db !important;
+  --el-button-active-bg-color: #e8f4fc !important;
+
+  /* 表格 */
+  --el-table-bg-color: #ffffff !important;
+  --el-table-tr-bg-color: #ffffff !important;
+  --el-table-header-bg-color: #fafafa !important;
+  --el-table-row-hover-bg-color: #f5f7fa !important;
+  --el-table-border-color: #ebeef5 !important;
+
+  /* 对话框/抽屉/消息框 */
+  --el-dialog-bg-color: #ffffff !important;
+  --el-drawer-bg-color: #ffffff !important;
+  --el-messagebox-bg-color: #ffffff !important;
+
+  /* 选择器 */
+  --el-select-input-color: #34495e !important;
+
+  /* 级联选择器 */
+  --el-cascader-menu-bg-color: #ffffff !important;
+  --el-cascader-menu-selected-bg: #f5f7fa !important;
+
+  /* 日期选择器 */
+  --el-datepicker-bg-color: #ffffff !important;
+  --el-datepicker-inner-bg-color: #ffffff !important;
+
+  /* 分页 */
+  --el-pagination-bg-color: #ffffff !important;
+  --el-pagination-text-color: #2c3e50 !important;
+  --el-pagination-button-color: #2c3e50 !important;
+  --el-pagination-hover-color: #3498db !important;
+
+  /* 标签页 */
+  --el-tabs-header-bg-color: #ffffff !important;
+}
+
+/* ==================== 深色主题 ==================== */
+[data-theme='dark'] {
+  /* 主色 */
+  --el-color-primary: #409eff !important;
+  --el-color-primary-light-3: #66b1ff !important;
+  --el-color-primary-light-5: #8ec5ff !important;
+  --el-color-primary-light-7: #b5d9ff !important;
+  --el-color-primary-light-8: #d3e8ff !important;
+  --el-color-primary-light-9: #ecf5ff !important;
+  --el-color-primary-dark-2: #3a8ee6 !important;
+
+  /* 背景色 */
+  --el-bg-color: #16213e !important;
+  --el-bg-color-page: #1a1a2e !important;
+  --el-bg-color-overlay: #16213e !important;
+
+  /* 文本色 */
+  --el-text-color-primary: #e4e7ed !important;
+  --el-text-color-regular: #c0c4cc !important;
+  --el-text-color-secondary: #a3a6ad !important;
+  --el-text-color-placeholder: #8d9096 !important;
+  --el-text-color-disabled: #606266 !important;
+
+  /* 边框色 */
+  --el-border-color: #2a2a4e !important;
+  --el-border-color-light: #3a3a5e !important;
+  --el-border-color-lighter: #4a4a6e !important;
+  --el-border-color-extra-light: #1f2b47 !important;
+  --el-border-color-dark: #3a3a5e !important;
+  --el-border-color-darker: #4a4a6e !important;
+
+  /* 填充色 */
+  --el-fill-color: #1f2b47 !important;
+  --el-fill-color-light: #1a2744 !important;
+  --el-fill-color-lighter: #16213e !important;
+  --el-fill-color-blank: #16213e !important;
+
+  /* 阴影 */
+  --el-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  --el-box-shadow-lighter: 0 2px 12px rgba(0, 0, 0, 0.35) !important;
+
+  /* 禁用色 */
+  --el-disabled-bg-color: #2a2a4e !important;
+  --el-disabled-border-color: #2a2a4e !important;
+  --el-disabled-text-color: #606266 !important;
+
+  /* 状态色 */
+  --el-color-success: #67c23a !important;
+  --el-color-success-light-3: #85ce61 !important;
+  --el-color-success-light-5: #a4d782 !important;
+  --el-color-success-light-7: #c3e1a3 !important;
+  --el-color-success-light-8: #d4e8b8 !important;
+  --el-color-success-light-9: #eef5e6 !important;
+  --el-color-warning: #e6a23c !important;
+  --el-color-warning-light-3: #ebb563 !important;
+  --el-color-warning-light-5: #f0c88a !important;
+  --el-color-warning-light-7: #f5dbb1 !important;
+  --el-color-warning-light-8: #f8e8c8 !important;
+  --el-color-warning-light-9: #fdf6ee !important;
+  --el-color-danger: #f56c6c !important;
+  --el-color-danger-light-3: #f78989 !important;
+  --el-color-danger-light-5: #f9a6a6 !important;
+  --el-color-danger-light-7: #fbc3c3 !important;
+  --el-color-danger-light-8: #fcd4d4 !important;
+  --el-color-danger-light-9: #fef0f0 !important;
+  --el-color-info: #909399 !important;
+  --el-color-info-light-3: #a6a9ad !important;
+  --el-color-info-light-5: #bcbfc2 !important;
+  --el-color-info-light-7: #d2d4d6 !important;
+  --el-color-info-light-8: #e0e1e3 !important;
+  --el-color-info-light-9: #f2f3f4 !important;
+
+  /* 输入框 */
+  --el-input-bg-color: #0f3460 !important;
+  --el-input-border-color: #3a3a5e !important;
+  --el-input-hover-border-color: #409eff !important;
+  --el-input-focus-border-color: #409eff !important;
+  --el-input-disabled-text-color: #606266 !important;
+  --el-input-disabled-bg-color: #2a2a4e !important;
+
+  /* 按钮 */
+  --el-button-bg-color: #16213e !important;
+  --el-button-border-color: #3a3a5e !important;
+  --el-button-hover-bg-color: #1f2b47 !important;
+  --el-button-hover-border-color: #409eff !important;
+  --el-button-active-bg-color: #1a2744 !important;
+
+  /* 表格 */
+  --el-table-bg-color: #16213e !important;
+  --el-table-tr-bg-color: #16213e !important;
+  --el-table-header-bg-color: #1a2744 !important;
+  --el-table-row-hover-bg-color: #1f2b47 !important;
+  --el-table-border-color: #2a2a4e !important;
+
+  /* 对话框/抽屉/消息框 */
+  --el-dialog-bg-color: #16213e !important;
+  --el-drawer-bg-color: #16213e !important;
+  --el-messagebox-bg-color: #16213e !important;
+
+  /* 选择器 */
+  --el-select-input-color: #c0c4cc !important;
+
+  /* 级联选择器 */
+  --el-cascader-menu-bg-color: #16213e !important;
+  --el-cascader-menu-selected-bg: #1f2b47 !important;
+
+  /* 日期选择器 */
+  --el-datepicker-bg-color: #16213e !important;
+  --el-datepicker-inner-bg-color: #16213e !important;
+
+  /* 分页 */
+  --el-pagination-bg-color: #16213e !important;
+  --el-pagination-text-color: #e4e7ed !important;
+  --el-pagination-button-color: #e4e7ed !important;
+  --el-pagination-hover-color: #409eff !important;
+
+  /* 标签页 */
+  --el-tabs-header-bg-color: #16213e !important;
+}

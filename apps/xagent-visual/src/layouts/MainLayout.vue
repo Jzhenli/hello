@@ -17,7 +17,9 @@ import {
 import { useAlertStore } from '@/stores/alerts'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
+//import { useThemeStore } from '@/stores/theme'
 import { useResponsive } from '@/utils/useResponsive'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 import { ElMessage } from 'element-plus'
 
 const { t, locale } = useI18n()
@@ -27,6 +29,7 @@ const router = useRouter()
 const alertStore = useAlertStore()
 const scadaStore = useScadaStore()
 const userStore = useUserStore()
+//const themeStore = useThemeStore()
 const { isTablet, isMobile, width, height } = useResponsive()
 
 const isCollapsed = ref(false)
@@ -239,6 +242,8 @@ onUnmounted(() => {
           <el-badge :value="alertStore.pendingAlerts" :hidden="alertStore.pendingAlerts === 0">
             <el-button :icon="Bell" circle @click="router.push('/alerts')" />
           </el-badge>
+          <!-- Theme switcher -->
+          <ThemeSwitcher />
           <!-- Language switcher -->
           <el-dropdown @command="handleLanguageChange">
             <el-button size="small">
@@ -308,7 +313,7 @@ onUnmounted(() => {
 }
 
 .app-aside {
-  background: linear-gradient(180deg, #1e3a5f 0%, #0d1b2a 100%);
+  background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
@@ -330,7 +335,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-sidebar);
 }
 
 .logo-icon {
@@ -351,7 +356,7 @@ onUnmounted(() => {
 }
 
 .app-menu .el-menu-item {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-sidebar);
   height: 50px;
   line-height: 50px;
   margin: 4px 8px;
@@ -359,13 +364,13 @@ onUnmounted(() => {
 }
 
 .app-menu .el-menu-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--bg-sidebar-hover);
+  color: var(--text-sidebar-hover);
 }
 
 .app-menu .el-menu-item.is-active {
-  background: linear-gradient(90deg, #3498db, #2980b9);
-  color: #fff;
+  background: var(--bg-sidebar-active);
+  color: var(--text-sidebar-active);
 }
 
 .mobile-menu .el-menu-item {
@@ -384,15 +389,15 @@ onUnmounted(() => {
 }
 
 .collapse-btn {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-sidebar);
 }
 
 .collapse-btn:hover {
-  color: #fff;
+  color: var(--text-sidebar-hover);
 }
 
 .version {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-disabled);
   font-size: 12px;
   text-align: center;
 }
@@ -403,24 +408,24 @@ onUnmounted(() => {
 
 .drawer-content {
   height: 100%;
-  background: linear-gradient(180deg, #1e3a5f 0%, #0d1b2a 100%);
+  background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
 }
 
 .drawer-footer {
   padding: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-sidebar);
 }
 
 .app-header {
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-header);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-light);
 }
 
 .app-header.mobile-header {
@@ -440,7 +445,7 @@ onUnmounted(() => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-primary);
 }
 
 .header-right {
@@ -451,7 +456,7 @@ onUnmounted(() => {
 
 .user-avatar {
   cursor: pointer;
-  background: #3498db;
+  background: var(--color-primary);
 }
 
 .user-info {
@@ -463,7 +468,7 @@ onUnmounted(() => {
 
 .user-name {
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-weight: 500;
   max-width: 120px;
   overflow: hidden;
@@ -472,7 +477,7 @@ onUnmounted(() => {
 }
 
 .app-main {
-  background: #f5f7fa;
+  background: var(--bg-base);
   padding: 20px;
   overflow-y: auto;
 }
@@ -496,31 +501,31 @@ onUnmounted(() => {
 }
 
 .app-footer {
-  background: #fff;
-  border-top: 1px solid #e0e0e0;
+  background: var(--bg-footer);
+  border-top: 1px solid var(--border-footer);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
 }
 
 .copyright {
-  color: #95a5a6;
+  color: var(--text-placeholder);
 }
 
 .icp {
-  color: #95a5a6;
+  color: var(--text-placeholder);
 }
 
 .current-time {
-  color: #7f8c8d;
+  color: var(--text-secondary);
   font-family: 'Courier New', monospace;
 }
 
 .divider {
-  color: #ddd;
+  color: var(--border-light);
 }
 
 .fade-enter-active,
