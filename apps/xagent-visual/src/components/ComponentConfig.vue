@@ -21,6 +21,9 @@ const panelWidth = ref(1200)
 const panelHeight = ref(800)
 const panelBgColor = ref('#f0f2f5')
 const panelGrid = ref(20)
+const panelBgImage = ref<string | undefined>(undefined)
+const panelBgType = ref<'color' | 'image'>('color')
+const bgImageInput = ref<HTMLInputElement | null>(null)
 
 watch(currentPanel, (panel) => {
   if (panel) {
@@ -28,6 +31,8 @@ watch(currentPanel, (panel) => {
     panelHeight.value = panel.height
     panelBgColor.value = panel.backgroundColor
     panelGrid.value = panel.grid
+    panelBgImage.value = panel.backgroundImage
+    panelBgType.value = panel.backgroundImage ? 'image' : 'color'
   }
 }, { immediate: true })
 
@@ -95,8 +100,47 @@ const updatePanelSize = () => {
     width: panelWidth.value,
     height: panelHeight.value,
     backgroundColor: panelBgColor.value,
-    grid: panelGrid.value
+    grid: panelGrid.value,
+    backgroundImage: panelBgType.value === 'image' ? panelBgImage.value : undefined
   })
+}
+
+const onBgTypeChange = (type: 'color' | 'image') => {
+  if (type === 'color') {
+    // Clear image when switching to color mode
+    panelBgImage.value = undefined
+  }
+  updatePanelSize()
+}
+
+const handleBgImageUpload = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (event) => {
+    const result = event.target?.result as string
+    if (result) {
+      panelBgImage.value = result
+      panelBgType.value = 'image'
+      updatePanelSize()
+    }
+  }
+  reader.readAsDataURL(file)
+  
+  // Reset input
+  input.value = ''
+}
+
+const removeBgImage = () => {
+  panelBgImage.value = undefined
+  panelBgType.value = 'color'
+  updatePanelSize()
+}
+
+const triggerBgImageUpload = () => {
+  bgImageInput.value?.click()
 }
 
 const presetSizes = [
@@ -264,11 +308,41 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
       <div class="config-section">
         <div class="section-title">{{ t('componentConfig.canvasStyle') }}</div>
         <div class="form-group">
+          <label>{{ t('componentConfig.bgType') }}</label>
+          <el-radio-group v-model="panelBgType" @change="onBgTypeChange">
+            <el-radio value="color">{{ t('componentConfig.bgColor') }}</el-radio>
+            <el-radio value="image">{{ t('componentConfig.bgImage') }}</el-radio>
+          </el-radio-group>
+        </div>
+        <div v-if="panelBgType === 'color'" class="form-group">
           <label>{{ t('componentConfig.backgroundColor') }}</label>
           <div class="color-input">
             <input type="color" v-model="panelBgColor" @change="updatePanelSize">
             <input type="text" v-model="panelBgColor" @change="updatePanelSize" placeholder="#f0f2f5">
           </div>
+        </div>
+        <div v-else class="form-group">
+          <label>{{ t('componentConfig.backgroundImage') }}</label>
+          <div v-if="panelBgImage" class="bg-image-card">
+            <div class="bg-image-preview">
+              <img :src="panelBgImage" alt="bg">
+            </div>
+            <div class="bg-image-actions">
+              <el-button size="small" @click="triggerBgImageUpload">{{ t('componentConfig.changeBgImage') }}</el-button>
+              <el-button size="small" type="danger" @click="removeBgImage">{{ t('componentConfig.removeBgImage') }}</el-button>
+            </div>
+          </div>
+          <div v-else class="bg-upload-area" @click="triggerBgImageUpload">
+            <span class="upload-icon">+</span>
+            <span class="upload-text">{{ t('componentConfig.uploadBgImage') }}</span>
+          </div>
+          <input 
+            ref="bgImageInput"
+            type="file"
+            accept="image/*"
+            class="hidden-file-input"
+            @change="handleBgImageUpload"
+          />
         </div>
         <div class="form-group">
           <label>{{ t('componentConfig.gridSize') }}</label>
@@ -356,6 +430,10 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   margin-bottom: 4px;
 }
 
+.hidden-file-input {
+  display: none;
+}
+
 .form-group input,
 .form-group select {
   width: 100%;
@@ -400,6 +478,75 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.bg-image-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bg-image-control .el-button {
+  align-self: flex-start;
+}
+
+.bg-image-card {
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bg-image-preview {
+  width: 100%;
+  height: 100px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.bg-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bg-image-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-container);
+}
+
+.bg-image-actions .el-button {
+  flex: 1;
+}
+
+.bg-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  border: 2px dashed var(--border-base);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bg-upload-area:hover {
+  border-color: var(--color-primary);
+  background: rgba(64, 158, 255, 0.05);
+}
+
+.upload-icon {
+  font-size: 32px;
+  color: var(--text-secondary);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.upload-text {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .preset-buttons .el-button {

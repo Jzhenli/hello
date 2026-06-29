@@ -101,6 +101,7 @@ export interface ScadaPanel {
   height: number
   grid: number
   backgroundColor: string
+  backgroundImage?: string
   components: ScadaComponent[]
   createdAt: number
   updatedAt: number

@@ -561,6 +561,9 @@ onUnmounted(() => {
       width: `${panel?.width || 1200}px`,
       height: `${panel?.height || 800}px`,
       backgroundColor: panel?.backgroundColor || '#f0f2f5',
+      backgroundImage: panel?.backgroundImage ? `url(${panel.backgroundImage})` : 'none',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
       transform: `scale(${scadaStore.zoom})`,
       transformOrigin: 'top left'
     }"
@@ -718,6 +721,10 @@ onUnmounted(() => {
   background-color: rgba(64, 158, 255, 0.1);
   pointer-events: none;
   z-index: 1000;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .scada-component {
