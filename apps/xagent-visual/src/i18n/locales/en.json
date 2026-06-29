@@ -1330,6 +1330,16 @@
     "to": "to",
     "deleteNode": "Delete Node"
   },
+  "scadaContextMenu": {
+    "copy": "Copy",
+    "paste": "Paste",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "delete": "Delete",
+    "bringToFront": "Bring to Front",
+    "sendToBack": "Send to Back",
+    "noClipboard": "Clipboard is empty"
+  },
   "componentPalette": {
     "title": "📦 Component Library",
     "dragHint": "Drag to canvas"

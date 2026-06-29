@@ -74,26 +74,6 @@ const handleUnbind = () => {
   selectedPoint.value = ''
 }
 
-const handleDelete = () => {
-  if (!component.value) return
-  scadaStore.deleteComponent(component.value.id)
-}
-
-const handleDuplicate = () => {
-  if (!component.value) return
-  scadaStore.duplicateComponent(component.value.id)
-}
-
-const handleBringToFront = () => {
-  if (!component.value) return
-  scadaStore.bringToFront(component.value.id)
-}
-
-const handleSendToBack = () => {
-  if (!component.value) return
-  scadaStore.sendToBack(component.value.id)
-}
-
 const updateStyle = (key: string, value: any) => {
   if (!component.value) return
   scadaStore.updateComponent(component.value.id, {
@@ -251,24 +231,6 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
         <div class="form-group">
           <label>{{ t('componentConfig.offColor') }}</label>
           <input type="color" :value="component.indicatorConfig.offColor" @input="updateConfig('indicatorConfig', 'offColor', ($event.target as HTMLInputElement).value)">
-        </div>
-      </div>
-
-      <!-- 操作按钮 -->
-      <div class="config-section">
-        <div class="section-title">{{ t('componentConfig.operations') }}</div>
-        <div class="action-buttons">
-          <el-button size="small" @click="handleDuplicate">📋 {{ t('componentConfig.duplicate') }}</el-button>
-          <el-button size="small" @click="handleBringToFront">⬆️ {{ t('componentConfig.bringToFront') }}</el-button>
-          <el-button size="small" @click="handleSendToBack">⬇️ {{ t('componentConfig.sendToBack') }}</el-button>
-          <el-button 
-            :type="component.locked ? 'success' : 'warning'" 
-            size="small"
-            @click="scadaStore.updateComponent(component.id, { locked: !component.locked })"
-          >
-            {{ component.locked ? '🔓 ' + t('componentConfig.unlock') : '🔒 ' + t('componentConfig.lock') }}
-          </el-button>
-          <el-button type="danger" size="small" @click="handleDelete">🗑️ {{ t('componentConfig.delete') }}</el-button>
         </div>
       </div>
     </div>
@@ -472,12 +434,6 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 
 .binding-badge .point {
   color: var(--text-primary);
-}
-
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
 .info-item {

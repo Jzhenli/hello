@@ -1330,6 +1330,16 @@
     "to": "至",
     "deleteNode": "刪除節點"
   },
+  "scadaContextMenu": {
+    "copy": "複製",
+    "paste": "貼上",
+    "lock": "鎖定",
+    "unlock": "解鎖",
+    "delete": "刪除",
+    "bringToFront": "置頂",
+    "sendToBack": "置底",
+    "noClipboard": "剪貼簿為空"
+  },
   "componentPalette": {
     "title": "📦 元件庫",
     "dragHint": "拖曳到畫布"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import type { ComponentType, ScadaComponent } from '@/types/scada'
 import ScadaGauge from './components/ScadaGauge.vue'
@@ -8,7 +9,17 @@ import ScadaIndicator from './components/ScadaIndicator.vue'
 import ScadaSwitch from './components/ScadaSwitch.vue'
 import ScadaText from './components/ScadaText.vue'
 import ScadaButton from './components/ScadaButton.vue'
+import {
+  CopyDocument,
+  Document,
+  Lock,
+  Unlock,
+  Delete,
+  Top,
+  Bottom
+} from '@element-plus/icons-vue'
 
+const { t } = useI18n()
 const scadaStore = useScadaStore()
 
 const canvasRef = ref<HTMLElement | null>(null)
@@ -19,10 +30,20 @@ const componentStartPos = ref({ x: 0, y: 0 })
 const resizeStartSize = ref({ width: 0, height: 0 })
 const resizeHandle = ref<string | null>(null)
 
+// Context menu state
+const contextMenuVisible = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuTargetId = ref<string | null>(null)
+const contextMenuType = ref<'node' | 'canvas'>('canvas') // 区分右键的是节点还是画布
+
 const panel = computed(() => scadaStore.currentPanel)
 const components = computed(() => panel.value?.components || [])
 const selectedId = computed(() => scadaStore.selectedComponentId)
 const isEditing = computed(() => scadaStore.isEditing)
+const targetComponent = computed(() => {
+  if (!contextMenuTargetId.value || !panel.value) return null
+  return panel.value.components.find(c => c.id === contextMenuTargetId.value) || null
+})
 
 const componentMap: Record<string, any> = {
   gauge: ScadaGauge,
@@ -151,10 +172,101 @@ const handleCanvasClick = (e: MouseEvent) => {
   if (e.target === canvasRef.value) {
     scadaStore.selectComponent(null)
   }
+  hideContextMenu()
+}
+
+// Context menu handlers
+const handleContextMenu = (e: MouseEvent, comp: ScadaComponent) => {
+  if (!isEditing.value) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  scadaStore.selectComponent(comp.id)
+  contextMenuTargetId.value = comp.id
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  contextMenuType.value = 'node'
+  contextMenuVisible.value = true
+}
+
+const handleCanvasContextMenu = (e: MouseEvent) => {
+  if (!isEditing.value) return
+  e.preventDefault()
+
+  contextMenuTargetId.value = null
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  contextMenuType.value = 'canvas'
+  contextMenuVisible.value = true
+}
+
+const hideContextMenu = () => {
+  contextMenuVisible.value = false
+  contextMenuTargetId.value = null
+}
+
+const handleContextAction = (action: string) => {
+  switch (action) {
+    case 'copy':
+      if (contextMenuTargetId.value) {
+        scadaStore.copyComponent(contextMenuTargetId.value)
+      }
+      break
+    case 'paste': {
+      const rect = canvasRef.value?.getBoundingClientRect()
+      if (rect) {
+        const x = (contextMenuPosition.value.x - rect.left) / scadaStore.zoom
+        const y = (contextMenuPosition.value.y - rect.top) / scadaStore.zoom
+        scadaStore.pasteComponent(x, y)
+      }
+      break
+    }
+    case 'lock':
+    case 'unlock':
+      if (contextMenuTargetId.value) {
+        scadaStore.toggleLock(contextMenuTargetId.value)
+      }
+      break
+    case 'delete':
+      if (contextMenuTargetId.value) {
+        scadaStore.deleteComponent(contextMenuTargetId.value)
+      }
+      break
+    case 'bringToFront':
+      if (contextMenuTargetId.value) {
+        scadaStore.bringToFront(contextMenuTargetId.value)
+      }
+      break
+    case 'sendToBack':
+      if (contextMenuTargetId.value) {
+        scadaStore.sendToBack(contextMenuTargetId.value)
+      }
+      break
+  }
+
+  hideContextMenu()
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
+  // Close context menu on Escape
+  if (e.key === 'Escape' && contextMenuVisible.value) {
+    hideContextMenu()
+    return
+  }
+
   if (!isEditing.value || !selectedId.value) return
+
+  // Copy: Ctrl+C
+  if (e.ctrlKey && e.key === 'c' && !contextMenuVisible.value) {
+    e.preventDefault()
+    scadaStore.copyComponent(selectedId.value)
+    return
+  }
+
+  // Paste: Ctrl+V
+  if (e.ctrlKey && e.key === 'v' && !contextMenuVisible.value) {
+    e.preventDefault()
+    scadaStore.pasteComponent()
+    return
+  }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
     scadaStore.deleteComponent(selectedId.value)
@@ -218,6 +330,7 @@ onUnmounted(() => {
     @drop="handleDrop"
     @dragover="handleDragOver"
     @click="handleCanvasClick"
+    @contextmenu.prevent="handleCanvasContextMenu"
   >
     <!-- Grid -->
     <div 
@@ -240,6 +353,7 @@ onUnmounted(() => {
       }"
       :style="getComponentStyle(comp)"
       @mousedown="handleComponentMouseDown($event, comp)"
+      @contextmenu.prevent="handleContextMenu($event, comp)"
     >
       <!-- Component Content -->
       <component
@@ -261,6 +375,67 @@ onUnmounted(() => {
         <div class="resize-handle w" @mousedown.stop="handleResizeStart($event, 'w')"></div>
       </template>
     </div>
+
+    <!-- Context Menu -->
+    <Teleport to="body">
+      <div 
+        v-if="contextMenuVisible && isEditing"
+        class="context-menu-overlay"
+        @click="hideContextMenu"
+      >
+        <div 
+          class="context-menu"
+          :style="{
+            left: `${contextMenuPosition.x}px`,
+            top: `${contextMenuPosition.y}px`
+          }"
+          @click.stop
+        >
+          <!-- Node context menu -->
+          <template v-if="contextMenuType === 'node'">
+            <div class="context-menu-item" @click="handleContextAction('copy')">
+              <el-icon class="menu-icon"><CopyDocument /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.copy') }}</span>
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" @click="handleContextAction(targetComponent?.locked ? 'unlock' : 'lock')">
+              <el-icon class="menu-icon">
+                <component :is="targetComponent?.locked ? Unlock : Lock" />
+              </el-icon>
+              <span class="menu-label">{{ targetComponent?.locked ? t('scadaContextMenu.unlock') : t('scadaContextMenu.lock') }}</span>
+            </div>
+            <div class="context-menu-item" @click="handleContextAction('delete')">
+              <el-icon class="menu-icon"><Delete /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.delete') }}</span>
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" @click="handleContextAction('bringToFront')">
+              <el-icon class="menu-icon"><Top /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.bringToFront') }}</span>
+            </div>
+            <div class="context-menu-item" @click="handleContextAction('sendToBack')">
+              <el-icon class="menu-icon"><Bottom /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.sendToBack') }}</span>
+            </div>
+          </template>
+          <!-- Canvas context menu -->
+          <template v-else>
+            <div 
+              v-if="scadaStore.clipboard"
+              class="context-menu-item" 
+              @click="handleContextAction('paste')"
+            >
+              <el-icon class="menu-icon"><Document /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.paste') }}</span>
+            </div>
+            <div v-else class="context-menu-item disabled">
+              <el-icon class="menu-icon"><Document /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.noClipboard') }}</span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -322,4 +497,105 @@ onUnmounted(() => {
 .resize-handle.s { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
 .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
 .resize-handle.w { top: 50%; left: -5px; transform: translateY(-50%); cursor: w-resize; }
+
+.context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 180px;
+  background: var(--bg-container, #fff);
+  border: 1px solid var(--border-base, #e4e7ed);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  padding: 6px 0;
+  z-index: 10000;
+  backdrop-filter: blur(8px);
+  animation: contextMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #303133);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.context-menu-item:hover {
+  background-color: var(--color-primary-light, #ecf5ff);
+  color: var(--color-primary, #409eff);
+}
+
+.context-menu-item:hover .menu-icon {
+  color: var(--color-primary, #409eff);
+}
+
+.context-menu-item.danger {
+  color: var(--color-danger, #f56c6c);
+}
+
+.context-menu-item.danger:hover {
+  background-color: var(--color-danger-light, #fef0f0);
+  color: var(--color-danger, #f56c6c);
+}
+
+.context-menu-item.danger:hover .menu-icon {
+  color: var(--color-danger, #f56c6c);
+}
+
+.context-menu-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  color: var(--text-secondary, #c0c4cc);
+}
+
+.context-menu-item.disabled:hover {
+  background-color: transparent;
+  color: var(--text-secondary, #c0c4cc);
+}
+
+.context-menu-item.disabled:hover .menu-icon {
+  color: var(--text-secondary, #c0c4cc);
+}
+
+.menu-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-secondary, #909399);
+  transition: color 0.15s ease;
+}
+
+.menu-label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background-color: var(--border-light, #ebeef5);
+  margin: 6px 12px;
+}
 </style>

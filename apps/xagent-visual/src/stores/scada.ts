@@ -254,6 +254,39 @@ export const useScadaStore = defineStore('scada', () => {
     }
   }
 
+  const clipboard = ref<ScadaComponent | null>(null)
+
+  const copyComponent = (id: string) => {
+    if (!currentPanel.value) return
+    const component = currentPanel.value.components.find(c => c.id === id)
+    if (component) {
+      clipboard.value = JSON.parse(JSON.stringify(component))
+    }
+  }
+
+  const pasteComponent = (x?: number, y?: number) => {
+    if (!currentPanel.value || !clipboard.value) return
+    const newComponent: ScadaComponent = {
+      ...JSON.parse(JSON.stringify(clipboard.value)),
+      id: generateId(),
+      x: x ?? clipboard.value.x + 20,
+      y: y ?? clipboard.value.y + 20,
+      name: `${clipboard.value.name} (副本)`
+    }
+    currentPanel.value.components.push(newComponent)
+    currentPanel.value.updatedAt = Date.now()
+    selectedComponentId.value = newComponent.id
+  }
+
+  const toggleLock = (id: string) => {
+    if (!currentPanel.value) return
+    const component = currentPanel.value.components.find(c => c.id === id)
+    if (component) {
+      component.locked = !component.locked
+      currentPanel.value.updatedAt = Date.now()
+    }
+  }
+
   const bringToFront = (id: string) => {
     if (!currentPanel.value) return
 
@@ -298,6 +331,10 @@ export const useScadaStore = defineStore('scada', () => {
     resizeComponent,
     bindPoint,
     duplicateComponent,
+    clipboard,
+    copyComponent,
+    pasteComponent,
+    toggleLock,
     bringToFront,
     sendToBack
   }
