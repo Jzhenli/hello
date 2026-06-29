@@ -83,11 +83,11 @@ const shouldCollapseSidebar = computed(() => {
 
 const allMenuItems = computed(() => [
   { path: '/dashboard', title: t('layout.dashboard'), icon: Odometer, resource: 'dashboard' },
-  { path: '/devices', title: t('layout.devices'), icon: Monitor, resource: 'devices' },
   { path: '/channels', title: t('layout.channels'), icon: Connection, resource: 'channels' },
-  { path: '/rules', title: t('layout.rules'), icon: Connection, resource: 'rules' },
-  { path: '/alerts', title: t('layout.alerts'), icon: Bell, resource: 'alerts' },
+  { path: '/devices', title: t('layout.devices'), icon: Monitor, resource: 'devices' },
   { path: '/scada', title: t('layout.scada'), icon: PictureFilled, resource: 'scada' },
+  { path: '/alerts', title: t('layout.alerts'), icon: Bell, resource: 'alerts' },
+  { path: '/rules', title: t('layout.rules'), icon: Connection, resource: 'rules' },
   { path: '/settings', title: t('layout.settings'), icon: Setting, resource: 'settings' }
 ])
 
