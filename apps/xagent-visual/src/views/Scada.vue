@@ -152,6 +152,43 @@ const handleExport = () => {
             </el-button-group>
             <el-checkbox v-model="scadaStore.showGrid" size="small">{{ $t('scada.showGrid') }}</el-checkbox>
             <el-checkbox v-model="scadaStore.isEditing" size="small">{{ $t('scada.editMode') }}</el-checkbox>
+            <el-popover
+              placement="bottom-start"
+              :width="320"
+              trigger="hover"
+            >
+              <template #reference>
+                <el-button size="small" text class="shortcut-btn">
+                  ⌨️ {{ $t('scada.shortcuts') }}
+                </el-button>
+              </template>
+              <div class="shortcut-list">
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>C</kbd></span>
+                  <span class="desc">{{ $t('scada.copy') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>V</kbd></span>
+                  <span class="desc">{{ $t('scada.paste') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>D</kbd></span>
+                  <span class="desc">{{ $t('scada.duplicate') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Delete</kbd></span>
+                  <span class="desc">{{ $t('scada.delete') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></span>
+                  <span class="desc">{{ $t('scada.move') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Esc</kbd></span>
+                  <span class="desc">{{ $t('scada.closeMenu') }}</span>
+                </div>
+              </div>
+            </el-popover>
           </div>
           <div class="toolbar-right">
             <span class="component-count">{{ $t('scada.componentCount', { count: currentPanel.components.length }) }}</span>
@@ -335,6 +372,55 @@ const handleExport = () => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.shortcut-btn {
+  font-size: 12px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.key-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-base);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  min-width: 20px;
+  height: 20px;
+}
+
+.desc {
+  color: var(--text-secondary);
 }
 
 .toolbar-right {

@@ -30,6 +30,27 @@ const componentStartPos = ref({ x: 0, y: 0 })
 const resizeStartSize = ref({ width: 0, height: 0 })
 const resizeHandle = ref<string | null>(null)
 
+// Box selection state
+const isBoxSelecting = ref(false)
+const boxSelectStart = ref({ x: 0, y: 0 })
+const boxSelectEnd = ref({ x: 0, y: 0 })
+const justFinishedBoxSelect = ref(false)
+
+// Multi-drag state (non-reactive, only used during drag)
+let multiDragStartPositions: Map<string, { x: number, y: number }> = new Map()
+
+// Mouse position tracking for paste
+const mouseCanvasPos = ref({ x: 0, y: 0 })
+
+const handleCanvasMouseMove = (e: MouseEvent) => {
+  if (!canvasRef.value) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  mouseCanvasPos.value = {
+    x: (e.clientX - rect.left) / scadaStore.zoom,
+    y: (e.clientY - rect.top) / scadaStore.zoom
+  }
+}
+
 // Context menu state
 const contextMenuVisible = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
@@ -39,6 +60,7 @@ const contextMenuType = ref<'node' | 'canvas'>('canvas') // 区分右键的是�
 const panel = computed(() => scadaStore.currentPanel)
 const components = computed(() => panel.value?.components || [])
 const selectedId = computed(() => scadaStore.selectedComponentId)
+const selectedIds = computed(() => scadaStore.selectedComponentIds)
 const isEditing = computed(() => scadaStore.isEditing)
 const targetComponent = computed(() => {
   if (!contextMenuTargetId.value || !panel.value) return null
@@ -89,6 +111,26 @@ const handleComponentMouseDown = (e: MouseEvent, comp: ScadaComponent) => {
   if (!isEditing.value || comp.locked) return
   e.stopPropagation()
 
+  // If component is part of multi-selection, enable multi-drag
+  if (selectedIds.value.length > 1 && selectedIds.value.includes(comp.id)) {
+    // Don't call selectComponent here to preserve multi-selection
+    isDragging.value = true
+    dragStartPos.value = { x: e.clientX, y: e.clientY }
+    
+    // Save start positions for all selected components
+    multiDragStartPositions = new Map()
+    selectedIds.value.forEach(id => {
+      const c = components.value.find(c => c.id === id)
+      if (c) {
+        multiDragStartPositions.set(id, { x: c.x, y: c.y })
+      }
+    })
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return
+  }
+
   scadaStore.selectComponent(comp.id)
   isDragging.value = true
   dragStartPos.value = { x: e.clientX, y: e.clientY }
@@ -105,6 +147,20 @@ const handleMouseMove = (e: MouseEvent) => {
     const dx = (e.clientX - dragStartPos.value.x) / scadaStore.zoom
     const dy = (e.clientY - dragStartPos.value.y) / scadaStore.zoom
     
+    // Multi-drag: move all selected components
+    if (selectedIds.value.length > 1 && multiDragStartPositions.size > 0) {
+      selectedIds.value.forEach(id => {
+        const startPos = multiDragStartPositions.get(id)
+        if (startPos) {
+          const newX = Math.max(0, startPos.x + dx)
+          const newY = Math.max(0, startPos.y + dy)
+          scadaStore.moveComponent(id, newX, newY)
+        }
+      })
+      return
+    }
+    
+    // Single drag
     const newX = Math.max(0, Math.min(
       panel.value.width - (scadaStore.selectedComponent?.style.width || 0),
       componentStartPos.value.x + dx
@@ -148,6 +204,7 @@ const handleMouseUp = () => {
   isDragging.value = false
   isResizing.value = false
   resizeHandle.value = null
+  multiDragStartPositions = new Map()
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
 }
@@ -169,10 +226,120 @@ const handleResizeStart = (e: MouseEvent, handle: string) => {
 }
 
 const handleCanvasClick = (e: MouseEvent) => {
+  // Don't clear selection if we just finished box selecting
+  if (justFinishedBoxSelect.value) {
+    justFinishedBoxSelect.value = false
+    return
+  }
+  
   if (e.target === canvasRef.value) {
     scadaStore.selectComponent(null)
   }
   hideContextMenu()
+}
+
+const handleCanvasMouseDown = (e: MouseEvent) => {
+  if (!isEditing.value || e.target !== canvasRef.value) return
+  // Only start box selection on left click without modifiers
+  if (e.button === 0 && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+    e.preventDefault()
+    isBoxSelecting.value = true
+    const rect = canvasRef.value!.getBoundingClientRect()
+    boxSelectStart.value = {
+      x: (e.clientX - rect.left) / scadaStore.zoom,
+      y: (e.clientY - rect.top) / scadaStore.zoom
+    }
+    boxSelectEnd.value = { ...boxSelectStart.value }
+    
+    // Clear selection
+    scadaStore.clearSelection()
+    
+    document.addEventListener('mousemove', handleBoxSelectMove)
+    document.addEventListener('mouseup', handleBoxSelectUp)
+  }
+}
+
+const handleBoxSelectMove = (e: MouseEvent) => {
+  if (!isBoxSelecting.value || !canvasRef.value) return
+  
+  const rect = canvasRef.value.getBoundingClientRect()
+  boxSelectEnd.value = {
+    x: (e.clientX - rect.left) / scadaStore.zoom,
+    y: (e.clientY - rect.top) / scadaStore.zoom
+  }
+  
+  // Calculate selection box
+  const x1 = Math.min(boxSelectStart.value.x, boxSelectEnd.value.x)
+  const y1 = Math.min(boxSelectStart.value.y, boxSelectEnd.value.y)
+  const x2 = Math.max(boxSelectStart.value.x, boxSelectEnd.value.x)
+  const y2 = Math.max(boxSelectStart.value.y, boxSelectEnd.value.y)
+  
+  // Find components within the selection box
+  const selectedIds: string[] = []
+  components.value.forEach(comp => {
+    const compX2 = comp.x + comp.style.width
+    const compY2 = comp.y + comp.style.height
+    
+    // Check if component intersects with selection box
+    if (compX2 > x1 && comp.x < x2 && compY2 > y1 && comp.y < y2) {
+      selectedIds.push(comp.id)
+    }
+  })
+  
+  if (selectedIds.length > 0) {
+    scadaStore.selectComponent(selectedIds[0])
+    scadaStore.selectedComponentIds = selectedIds
+  } else {
+    scadaStore.clearSelection()
+  }
+}
+
+const handleBoxSelectUp = () => {
+  isBoxSelecting.value = false
+  justFinishedBoxSelect.value = true
+  document.removeEventListener('mousemove', handleBoxSelectMove)
+  document.removeEventListener('mouseup', handleBoxSelectUp)
+}
+
+const handleComponentClick = (e: MouseEvent, comp: ScadaComponent) => {
+  if (!isEditing.value || comp.locked) return
+  
+  // Ctrl+Click: toggle selection
+  if (e.ctrlKey || e.metaKey) {
+    e.stopPropagation()
+    const idx = selectedIds.value.indexOf(comp.id)
+    if (idx >= 0) {
+      // Deselect this component
+      const newIds = selectedIds.value.filter(id => id !== comp.id)
+      if (newIds.length > 0) {
+        scadaStore.selectComponent(newIds[0])
+        scadaStore.selectedComponentIds = newIds
+      } else {
+        scadaStore.clearSelection()
+      }
+    } else {
+      // Add to selection
+      scadaStore.selectComponent(comp.id)
+      scadaStore.selectedComponentIds = [...selectedIds.value, comp.id]
+    }
+    return
+  }
+  
+  // Shift+Click: select range
+  if (e.shiftKey && selectedId.value) {
+    e.stopPropagation()
+    const allIds = components.value.map(c => c.id)
+    const startIdx = allIds.indexOf(selectedId.value)
+    const endIdx = allIds.indexOf(comp.id)
+    if (startIdx >= 0 && endIdx >= 0) {
+      const minIdx = Math.min(startIdx, endIdx)
+      const maxIdx = Math.max(startIdx, endIdx)
+      const rangeIds = allIds.slice(minIdx, maxIdx + 1)
+      scadaStore.selectComponent(comp.id)
+      scadaStore.selectedComponentIds = rangeIds
+    }
+    return
+  }
 }
 
 // Context menu handlers
@@ -252,30 +419,64 @@ const handleKeyDown = (e: KeyboardEvent) => {
     return
   }
 
-  if (!isEditing.value || !selectedId.value) return
+  if (!isEditing.value) return
 
-  // Copy: Ctrl+C
-  if (e.ctrlKey && e.key === 'c' && !contextMenuVisible.value) {
+  // Ctrl+A: 全选所有组件
+  if (e.ctrlKey && e.key === 'a') {
     e.preventDefault()
-    scadaStore.copyComponent(selectedId.value)
+    scadaStore.selectAllComponents()
     return
   }
 
-  // Paste: Ctrl+V
+  // Ctrl+Z: 撤销（占位）
+  if (e.ctrlKey && e.key === 'z') {
+    e.preventDefault()
+    return
+  }
+
+  // Ctrl+Y: 重做（占位）
+  if (e.ctrlKey && e.key === 'y') {
+    e.preventDefault()
+    return
+  }
+
+  // Ctrl+C: 复制
+  if (e.ctrlKey && e.key === 'c' && selectedId.value && !contextMenuVisible.value) {
+    e.preventDefault()
+    if (selectedIds.value.length > 1) {
+      scadaStore.copySelectedComponents()
+    } else {
+      scadaStore.copyComponent(selectedId.value)
+    }
+    return
+  }
+
+  // Ctrl+V: 粘贴到鼠标位置
   if (e.ctrlKey && e.key === 'v' && !contextMenuVisible.value) {
     e.preventDefault()
-    scadaStore.pasteComponent()
+    scadaStore.pasteComponent(mouseCanvasPos.value.x, mouseCanvasPos.value.y)
     return
   }
 
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    scadaStore.deleteComponent(selectedId.value)
+  // Delete / Backspace: 删除
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId.value) {
+    e.preventDefault()
+    if (selectedIds.value.length > 1) {
+      scadaStore.deleteSelectedComponents()
+    } else {
+      scadaStore.deleteComponent(selectedId.value)
+    }
+    return
   }
 
-  if (e.ctrlKey && e.key === 'd') {
+  // Ctrl+D: 复制并粘贴到旁边
+  if (e.ctrlKey && e.key === 'd' && selectedId.value) {
     e.preventDefault()
     scadaStore.duplicateComponent(selectedId.value)
+    return
   }
+
+  if (!selectedId.value) return
 
   const comp = scadaStore.selectedComponent
   if (!comp || comp.locked) return
@@ -285,19 +486,55 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
   switch (e.key) {
     case 'ArrowLeft':
-      scadaStore.moveComponent(selectedId.value, comp.x - step, comp.y)
+      if (selectedIds.value.length > 1) {
+        selectedIds.value.forEach(id => {
+          const c = components.value.find(comp => comp.id === id)
+          if (c && !c.locked) {
+            scadaStore.moveComponent(id, c.x - step, c.y)
+          }
+        })
+      } else {
+        scadaStore.moveComponent(selectedId.value, comp.x - step, comp.y)
+      }
       moved = true
       break
     case 'ArrowRight':
-      scadaStore.moveComponent(selectedId.value, comp.x + step, comp.y)
+      if (selectedIds.value.length > 1) {
+        selectedIds.value.forEach(id => {
+          const c = components.value.find(comp => comp.id === id)
+          if (c && !c.locked) {
+            scadaStore.moveComponent(id, c.x + step, c.y)
+          }
+        })
+      } else {
+        scadaStore.moveComponent(selectedId.value, comp.x + step, comp.y)
+      }
       moved = true
       break
     case 'ArrowUp':
-      scadaStore.moveComponent(selectedId.value, comp.x, comp.y - step)
+      if (selectedIds.value.length > 1) {
+        selectedIds.value.forEach(id => {
+          const c = components.value.find(comp => comp.id === id)
+          if (c && !c.locked) {
+            scadaStore.moveComponent(id, c.x, c.y - step)
+          }
+        })
+      } else {
+        scadaStore.moveComponent(selectedId.value, comp.x, comp.y - step)
+      }
       moved = true
       break
     case 'ArrowDown':
-      scadaStore.moveComponent(selectedId.value, comp.x, comp.y + step)
+      if (selectedIds.value.length > 1) {
+        selectedIds.value.forEach(id => {
+          const c = components.value.find(comp => comp.id === id)
+          if (c && !c.locked) {
+            scadaStore.moveComponent(id, c.x, c.y + step)
+          }
+        })
+      } else {
+        scadaStore.moveComponent(selectedId.value, comp.x, comp.y + step)
+      }
       moved = true
       break
   }
@@ -331,6 +568,8 @@ onUnmounted(() => {
     @dragover="handleDragOver"
     @click="handleCanvasClick"
     @contextmenu.prevent="handleCanvasContextMenu"
+    @mousedown="handleCanvasMouseDown"
+    @mousemove="handleCanvasMouseMove"
   >
     <!-- Grid -->
     <div 
@@ -347,12 +586,14 @@ onUnmounted(() => {
       :key="comp.id"
       class="scada-component"
       :class="{ 
-        selected: selectedId === comp.id, 
+        selected: selectedIds.includes(comp.id),
+        'multi-selected': selectedIds.length > 1,
         locked: comp.locked,
         editing: isEditing
       }"
       :style="getComponentStyle(comp)"
       @mousedown="handleComponentMouseDown($event, comp)"
+      @click="handleComponentClick($event, comp)"
       @contextmenu.prevent="handleContextMenu($event, comp)"
     >
       <!-- Component Content -->
@@ -363,8 +604,8 @@ onUnmounted(() => {
         :editing="isEditing"
       />
       
-      <!-- Selection Handles -->
-      <template v-if="selectedId === comp.id && isEditing">
+      <!-- Selection Handles (only show for primary selected component) -->
+      <template v-if="selectedId === comp.id && isEditing && selectedIds.length === 1">
         <div class="resize-handle nw" @mousedown.stop="handleResizeStart($event, 'nw')"></div>
         <div class="resize-handle n" @mousedown.stop="handleResizeStart($event, 'n')"></div>
         <div class="resize-handle ne" @mousedown.stop="handleResizeStart($event, 'ne')"></div>
@@ -375,6 +616,18 @@ onUnmounted(() => {
         <div class="resize-handle w" @mousedown.stop="handleResizeStart($event, 'w')"></div>
       </template>
     </div>
+
+    <!-- Box Selection Rectangle -->
+    <div 
+      v-if="isBoxSelecting"
+      class="selection-box"
+      :style="{
+        left: `${Math.min(boxSelectStart.x, boxSelectEnd.x)}px`,
+        top: `${Math.min(boxSelectStart.y, boxSelectEnd.y)}px`,
+        width: `${Math.abs(boxSelectEnd.x - boxSelectStart.x)}px`,
+        height: `${Math.abs(boxSelectEnd.y - boxSelectStart.y)}px`
+      }"
+    />
 
     <!-- Context Menu -->
     <Teleport to="body">
@@ -459,6 +712,14 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.selection-box {
+  position: absolute;
+  border: 1px dashed var(--color-primary);
+  background-color: rgba(64, 158, 255, 0.1);
+  pointer-events: none;
+  z-index: 1000;
+}
+
 .scada-component {
   position: absolute;
   cursor: move;
@@ -472,6 +733,11 @@ onUnmounted(() => {
 .scada-component.selected {
   outline: 2px solid var(--color-primary);
   box-shadow: 0 0 10px var(--color-primary-light);
+}
+
+.scada-component.selected.multi-selected {
+  outline: 2px dashed var(--color-primary);
+  background-color: rgba(64, 158, 255, 0.05);
 }
 
 .scada-component.locked {

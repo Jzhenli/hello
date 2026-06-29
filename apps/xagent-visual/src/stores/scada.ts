@@ -99,6 +99,7 @@ export const useScadaStore = defineStore('scada', () => {
 
   const _currentPanelId = ref<string | null>(null)
   const selectedComponentId = ref<string | null>(null)
+  const selectedComponentIds = ref<string[]>([])
   const isEditing = ref(true)
   const zoom = ref(1)
   const showGrid = ref(true)
@@ -204,11 +205,41 @@ export const useScadaStore = defineStore('scada', () => {
       if (selectedComponentId.value === id) {
         selectedComponentId.value = null
       }
+      selectedComponentIds.value = selectedComponentIds.value.filter(sid => sid !== id)
     }
+  }
+
+  const deleteSelectedComponents = () => {
+    if (!currentPanel.value || selectedComponentIds.value.length === 0) return
+    
+    currentPanel.value.components = currentPanel.value.components.filter(
+      c => !selectedComponentIds.value.includes(c.id)
+    )
+    currentPanel.value.updatedAt = Date.now()
+    selectedComponentId.value = null
+    selectedComponentIds.value = []
   }
 
   const selectComponent = (id: string | null) => {
     selectedComponentId.value = id
+    if (id) {
+      selectedComponentIds.value = [id]
+    } else {
+      selectedComponentIds.value = []
+    }
+  }
+
+  const selectAllComponents = () => {
+    if (!currentPanel.value) return
+    selectedComponentIds.value = currentPanel.value.components.map(c => c.id)
+    if (selectedComponentIds.value.length > 0) {
+      selectedComponentId.value = selectedComponentIds.value[0]
+    }
+  }
+
+  const clearSelection = () => {
+    selectedComponentId.value = null
+    selectedComponentIds.value = []
   }
 
   const moveComponent = (id: string, x: number, y: number) => {
@@ -254,28 +285,44 @@ export const useScadaStore = defineStore('scada', () => {
     }
   }
 
-  const clipboard = ref<ScadaComponent | null>(null)
+  const clipboard = ref<ScadaComponent[]>([])
 
   const copyComponent = (id: string) => {
     if (!currentPanel.value) return
     const component = currentPanel.value.components.find(c => c.id === id)
     if (component) {
-      clipboard.value = JSON.parse(JSON.stringify(component))
+      clipboard.value = [JSON.parse(JSON.stringify(component))]
     }
   }
 
+  const copySelectedComponents = () => {
+    if (!currentPanel.value || selectedComponentIds.value.length === 0) return
+    clipboard.value = currentPanel.value.components
+      .filter(c => selectedComponentIds.value.includes(c.id))
+      .map(c => JSON.parse(JSON.stringify(c)))
+  }
+
   const pasteComponent = (x?: number, y?: number) => {
-    if (!currentPanel.value || !clipboard.value) return
-    const newComponent: ScadaComponent = {
-      ...JSON.parse(JSON.stringify(clipboard.value)),
-      id: generateId(),
-      x: x ?? clipboard.value.x + 20,
-      y: y ?? clipboard.value.y + 20,
-      name: `${clipboard.value.name} (副本)`
-    }
-    currentPanel.value.components.push(newComponent)
+    if (!currentPanel.value || clipboard.value.length === 0) return
+    
+    const newIds: string[] = []
+    clipboard.value.forEach((clipComp, index) => {
+      const newComponent: ScadaComponent = {
+        ...clipComp,
+        id: generateId(),
+        x: x !== undefined ? x + (index * 20) : clipComp.x + 20,
+        y: y !== undefined ? y + (index * 20) : clipComp.y + 20,
+        name: `${clipComp.name} (副本)`
+      }
+      currentPanel.value!.components.push(newComponent)
+      newIds.push(newComponent.id)
+    })
+    
     currentPanel.value.updatedAt = Date.now()
-    selectedComponentId.value = newComponent.id
+    selectedComponentIds.value = newIds
+    if (newIds.length > 0) {
+      selectedComponentId.value = newIds[0]
+    }
   }
 
   const toggleLock = (id: string) => {
@@ -313,6 +360,7 @@ export const useScadaStore = defineStore('scada', () => {
     panels,
     currentPanelId,
     selectedComponentId,
+    selectedComponentIds,
     isEditing,
     zoom,
     showGrid,
@@ -326,13 +374,17 @@ export const useScadaStore = defineStore('scada', () => {
     addComponent,
     updateComponent,
     deleteComponent,
+    deleteSelectedComponents,
     selectComponent,
+    selectAllComponents,
+    clearSelection,
     moveComponent,
     resizeComponent,
     bindPoint,
     duplicateComponent,
     clipboard,
     copyComponent,
+    copySelectedComponents,
     pasteComponent,
     toggleLock,
     bringToFront,
