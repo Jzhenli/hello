@@ -43,7 +43,7 @@ function generateSamplePanels(): ScadaPanel[] {
 
   const panels: ScadaPanel[] = []
 
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 2; i++) {
     const type = panelTypes[i % 2]
     const bgColor = backgroundColors[i % backgroundColors.length]
     const daysAgo = 50 - i
