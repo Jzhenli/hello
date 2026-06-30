@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
-import { Delete, Location } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const scadaStore = useScadaStore()
