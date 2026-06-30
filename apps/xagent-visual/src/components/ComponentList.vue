@@ -147,8 +147,18 @@ const getComponentIcon = (type: string) => {
 }
 
 .list-item.active {
-  background: var(--color-primary-light-9);
-  border: 1px solid var(--color-primary-light-5);
+  background: var(--color-primary-light-9, rgba(64, 158, 255, 0.1));
+  border: 1px solid var(--color-primary, #409eff);
+}
+
+.list-item.active .item-icon {
+  background: var(--color-primary, #409eff);
+  color: #fff;
+}
+
+.list-item.active .item-name {
+  color: var(--color-primary, #409eff);
+  font-weight: 500;
 }
 
 .item-icon {
