@@ -5,8 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { FullScreen, View, Upload, ArrowLeft } from '@element-plus/icons-vue'
+import { FullScreen, View, Upload, ArrowLeft, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import ComponentPalette from '@/components/ComponentPalette.vue'
+import ComponentList from '@/components/ComponentList.vue'
 import ScadaCanvas from '@/components/ScadaCanvas.vue'
 import ComponentConfig from '@/components/ComponentConfig.vue'
 
@@ -18,6 +19,7 @@ const scadaStore = useScadaStore()
 const userStore = useUserStore()
 
 const isPreviewMode = ref(false)
+const showComponentList = ref(true)
 
 const currentPanel = computed(() => scadaStore.currentPanel)
 
@@ -140,6 +142,15 @@ const handleExport = () => {
     <div v-if="currentPanel" class="scada-editor">
       <div v-if="!isPreviewMode" class="editor-left">
         <ComponentPalette />
+      </div>
+      
+      <div v-if="!isPreviewMode" class="editor-list" :class="{ collapsed: !showComponentList }">
+        <div v-if="showComponentList" class="list-panel">
+          <ComponentList />
+        </div>
+        <div class="list-toggle" @click="showComponentList = !showComponentList">
+          <el-icon><DArrowLeft v-if="showComponentList" /><DArrowRight v-else /></el-icon>
+        </div>
       </div>
       
       <div class="editor-center">
@@ -344,10 +355,55 @@ const handleExport = () => {
 }
 
 .editor-left {
-  width: 200px;
+  width: 240px;
   flex-shrink: 0;
   background: var(--bg-container);
   border-right: 1px solid var(--border-base);
+}
+
+.editor-list {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-container);
+  border-right: 1px solid var(--border-base);
+  transition: width 0.2s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-list.collapsed {
+  width: 32px;
+}
+
+.editor-list .list-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-list .list-toggle {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-container);
+  border: 1px solid var(--border-base);
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  z-index: 10;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.editor-list .list-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--color-primary);
 }
 
 .editor-center {

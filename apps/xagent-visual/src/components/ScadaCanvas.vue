@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import type { ComponentType, ScadaComponent } from '@/types/scada'
@@ -41,6 +41,7 @@ let multiDragStartPositions: Map<string, { x: number, y: number }> = new Map()
 
 // Mouse position tracking for paste
 const mouseCanvasPos = ref({ x: 0, y: 0 })
+const isMouseOnCanvas = ref(false)
 
 const handleCanvasMouseMove = (e: MouseEvent) => {
   if (!canvasRef.value) return
@@ -49,6 +50,14 @@ const handleCanvasMouseMove = (e: MouseEvent) => {
     x: (e.clientX - rect.left) / scadaStore.zoom,
     y: (e.clientY - rect.top) / scadaStore.zoom
   }
+}
+
+const handleCanvasMouseEnter = () => {
+  isMouseOnCanvas.value = true
+}
+
+const handleCanvasMouseLeave = () => {
+  isMouseOnCanvas.value = false
 }
 
 // Context menu state
@@ -419,7 +428,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
     return
   }
 
-  if (!isEditing.value) return
+  if (!isEditing.value || !isMouseOnCanvas.value) return
 
   // Ctrl+A: 全选所有组件
   if (e.ctrlKey && e.key === 'a') {
@@ -551,6 +560,47 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
 })
+
+// Watch for scroll-to-component requests
+watch(
+  () => scadaStore.scrollToComponentId,
+  async (newVal) => {
+    const targetId = newVal ?? null
+    if (!targetId || !canvasRef.value) return
+
+    const component = components.value.find(c => c.id === targetId)
+    if (!component) return
+
+    await nextTick()
+
+    const canvasContainer = canvasRef.value.closest('.canvas-wrapper')
+    if (!canvasContainer) return
+
+    const containerRect = canvasContainer.getBoundingClientRect()
+
+    const scaledX = component.x * scadaStore.zoom
+    const scaledY = component.y * scadaStore.zoom
+    const scaledWidth = component.style.width * scadaStore.zoom
+    const scaledHeight = component.style.height * scadaStore.zoom
+
+    const componentCenterX = scaledX + scaledWidth / 2
+    const componentCenterY = scaledY + scaledHeight / 2
+
+    const containerCenterX = containerRect.width / 2
+    const containerCenterY = containerRect.height / 2
+
+    const scrollLeft = componentCenterX - containerCenterX
+    const scrollTop = componentCenterY - containerCenterY
+
+    canvasContainer.scrollTo({
+      left: scrollLeft,
+      top: scrollTop,
+      behavior: 'smooth'
+    })
+
+    scadaStore.clearScrollTarget()
+  }
+)
 </script>
 
 <template>
@@ -573,6 +623,8 @@ onUnmounted(() => {
     @contextmenu.prevent="handleCanvasContextMenu"
     @mousedown="handleCanvasMouseDown"
     @mousemove="handleCanvasMouseMove"
+    @mouseenter="handleCanvasMouseEnter"
+    @mouseleave="handleCanvasMouseLeave"
   >
     <!-- Grid -->
     <div 

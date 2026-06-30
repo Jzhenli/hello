@@ -1213,6 +1213,8 @@
     "move": "移动",
     "closeMenu": "关闭菜单",
     "componentCountLabel": "组件",
+    "componentList": "组件列表",
+    "noComponents": "暂无组件，请从左侧拖入",
     "projectNotExist": "项目不存在或已被删除",
     "backToProjectList": "返回项目列表",
     "publishConfirm": "确定要发布当前面板吗？发布后其他用户将可以看到此面板。",

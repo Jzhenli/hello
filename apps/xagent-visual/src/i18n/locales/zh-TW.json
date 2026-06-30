@@ -1213,6 +1213,8 @@
     "move": "移動",
     "closeMenu": "關閉選單",
     "componentCountLabel": "元件",
+    "componentList": "元件列表",
+    "noComponents": "暫無元件，請從左側拖入",
     "projectNotExist": "專案不存在或已被刪除",
     "backToProjectList": "返回專案列表",
     "publishConfirm": "確定要發布目前面板嗎？發布後其他使用者將可以看到此面板。",

@@ -356,6 +356,16 @@ export const useScadaStore = defineStore('scada', () => {
     }
   }
 
+  const scrollToComponentId = ref<string | null>(null)
+
+  const scrollToComponent = (id: string) => {
+    scrollToComponentId.value = id
+  }
+
+  const clearScrollTarget = () => {
+    scrollToComponentId.value = null
+  }
+
   return {
     panels,
     currentPanelId,
@@ -388,6 +398,9 @@ export const useScadaStore = defineStore('scada', () => {
     pasteComponent,
     toggleLock,
     bringToFront,
-    sendToBack
+    sendToBack,
+    scrollToComponentId,
+    scrollToComponent,
+    clearScrollTarget
   }
 })

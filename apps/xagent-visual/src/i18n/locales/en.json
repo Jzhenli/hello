@@ -1213,6 +1213,8 @@
     "move": "Move",
     "closeMenu": "Close Menu",
     "componentCountLabel": "Components",
+    "componentList": "Component List",
+    "noComponents": "No components yet, drag from left panel",
     "projectNotExist": "Project does not exist or has been deleted",
     "backToProjectList": "Back to Project List",
     "publishConfirm": "Are you sure you want to publish the current panel? Other users will be able to see it after publishing.",

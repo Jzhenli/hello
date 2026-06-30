@@ -17,6 +17,15 @@ const currentPanel = computed(() => scadaStore.currentPanel)
 
 const currentBinding = computed(() => component.value?.binding)
 
+// Display name: translate if it's a template key, otherwise show custom name
+const displayName = computed(() => {
+  if (!component.value) return ''
+  if (component.value.name?.startsWith('scadaComponentNames.')) {
+    return t(component.value.name)
+  }
+  return component.value.name || component.value.type
+})
+
 const panelWidth = ref(1200)
 const panelHeight = ref(800)
 const panelBgColor = ref('#f0f2f5')
@@ -171,7 +180,7 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
           <label>{{ t('componentConfig.name') }}</label>
           <input 
             type="text" 
-            :value="component.name"
+            :value="displayName"
             @input="scadaStore.updateComponent(component.id, { name: ($event.target as HTMLInputElement).value })"
           >
         </div>
