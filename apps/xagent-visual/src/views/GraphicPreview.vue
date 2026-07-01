@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { ArrowLeft, FullScreen } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const scadaStore = useScadaStore()

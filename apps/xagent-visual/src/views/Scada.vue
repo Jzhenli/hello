@@ -19,7 +19,7 @@ const scadaStore = useScadaStore()
 const userStore = useUserStore()
 
 const isPreviewMode = ref(false)
-const showComponentList = ref(true)
+const showComponentList = ref(false)
 
 const currentPanel = computed(() => scadaStore.currentPanel)
 
@@ -141,15 +141,12 @@ const handleExport = () => {
     
     <div v-if="currentPanel" class="scada-editor">
       <div v-if="!isPreviewMode" class="editor-left">
-        <ComponentPalette />
+        <ComponentPalette :showComponentList="showComponentList" @toggleList="showComponentList = !showComponentList" />
       </div>
       
       <div v-if="!isPreviewMode" class="editor-list" :class="{ collapsed: !showComponentList }">
         <div v-if="showComponentList" class="list-panel">
           <ComponentList />
-        </div>
-        <div class="list-toggle" @click="showComponentList = !showComponentList">
-          <el-icon><DArrowLeft v-if="showComponentList" /><DArrowRight v-else /></el-icon>
         </div>
       </div>
       
@@ -355,7 +352,7 @@ const handleExport = () => {
 }
 
 .editor-left {
-  width: 240px;
+  width: 280px;
   flex-shrink: 0;
   background: var(--bg-container);
   border-right: 1px solid var(--border-base);
@@ -373,7 +370,8 @@ const handleExport = () => {
 }
 
 .editor-list.collapsed {
-  width: 32px;
+  width: 0;
+  overflow: hidden;
 }
 
 .editor-list .list-panel {

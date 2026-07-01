@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
-import { usePointStore } from '@/stores/points'
+import { useComponentBinding } from '@/composables/useComponentBinding'
 
 const props = defineProps<{
   config: ScadaComponent
   editing?: boolean
 }>()
 
-const pointStore = usePointStore()
-
-const currentValue = ref(0)
-
 const gaugeConfig = computed(() => props.config.gaugeConfig)
 const binding = computed(() => props.config.binding)
+
+const { currentValue } = useComponentBinding(binding, {
+  autoRefresh: true,
+  refreshInterval: 5000,
+  transform: (value) => typeof value === 'number' ? value : 0
+})
 
 const percentage = computed(() => {
   if (!gaugeConfig.value) return 0
@@ -39,14 +41,9 @@ const strokeDasharray = computed(() => {
   return `${(percentage.value / 100) * circumference} ${circumference}`
 })
 
-onMounted(() => {
-  if (binding.value) {
-    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
-    const point = device?.points.find(p => p.name === binding.value!.pointName)
-    if (point) {
-      currentValue.value = typeof point.currentValue === 'number' ? point.currentValue : 0
-    }
-  }
+const displayValue = computed(() => {
+  const val = currentValue.value
+  return typeof val === 'number' ? val.toFixed(1) : '0.0'
 })
 </script>
 
@@ -78,7 +75,7 @@ onMounted(() => {
     </svg>
     
     <div class="gauge-value" :style="{ color: currentColor }">
-      {{ currentValue.toFixed(1) }}
+      {{ displayValue }}
       <span v-if="gaugeConfig?.unit" class="unit">{{ gaugeConfig.unit }}</span>
     </div>
     

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
+import { useComponentBinding } from '@/composables/useComponentBinding'
 import { usePointStore } from '@/stores/points'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -16,24 +17,24 @@ const props = defineProps<{
 }>()
 
 const pointStore = usePointStore()
-
 const chartConfig = computed(() => props.config.chartConfig)
 const binding = computed(() => props.config.binding)
+
+const { boundPoint } = useComponentBinding(binding, {
+  autoRefresh: true,
+  refreshInterval: 10000
+})
 
 const chartOption = computed(() => {
   const isLine = props.config.type === 'chart-line'
   
   let data: number[] = []
-  if (binding.value) {
-    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
-    const point = device?.points.find(p => p.name === binding.value!.pointName)
-    if (point) {
-      const hours = chartConfig.value?.timeRange === '1h' ? 1 : 
-                    chartConfig.value?.timeRange === '6h' ? 6 :
-                    chartConfig.value?.timeRange === '7d' ? 168 : 24
-      const trendData = pointStore.generateTrendData(point, hours)
-      data = trendData.map(d => d.value)
-    }
+  if (boundPoint.value) {
+    const hours = chartConfig.value?.timeRange === '1h' ? 1 : 
+                  chartConfig.value?.timeRange === '6h' ? 6 :
+                  chartConfig.value?.timeRange === '7d' ? 168 : 24
+    const trendData = pointStore.generateTrendData(boundPoint.value, hours)
+    data = trendData.map(d => d.value)
   }
   
   return {

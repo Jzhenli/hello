@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ScadaComponent } from '@/types/scada'
-import { usePointStore } from '@/stores/points'
-import { controlApi } from '@/api/control'
+import { useComponentBinding } from '@/composables/useComponentBinding'
 import { ElMessageBox, ElMessage } from 'element-plus'
 
 const { t } = useI18n()
@@ -12,23 +11,16 @@ const props = defineProps<{
   editing?: boolean
 }>()
 
-const pointStore = usePointStore()
-
 const switchConfig = computed(() => props.config.switchConfig)
 const binding = computed(() => props.config.binding)
 
-const isOn = ref(false)
-const writing = ref(false)
-
-onMounted(() => {
-  if (binding.value) {
-    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
-    const point = device?.points.find(p => p.name === binding.value!.pointName)
-    if (point) {
-      isOn.value = point.currentValue === true || point.currentValue === 1
-    }
-  }
+const { currentValue, writeValue } = useComponentBinding(binding, {
+  autoRefresh: true,
+  refreshInterval: 3000,
+  transform: (value) => value === true || value === 1
 })
+
+const writing = ref(false)
 
 const handleToggle = async () => {
   if (props.editing) return
@@ -36,7 +28,7 @@ const handleToggle = async () => {
   if (switchConfig.value?.confirmRequired) {
     try {
       await ElMessageBox.confirm(
-        `${t('scadaComponents.confirmToggle')}${isOn.value ? t('scadaComponents.switchOff') : t('scadaComponents.switchOn')}${t('scadaComponents.confirmToggleSuffix', '？')}`,
+        `${t('scadaComponents.confirmToggle')}${currentValue.value ? t('scadaComponents.switchOff') : t('scadaComponents.switchOn')}${t('scadaComponents.confirmToggleSuffix', '？')}`,
         t('scadaComponents.operationConfirm'),
         { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
       )
@@ -45,25 +37,17 @@ const handleToggle = async () => {
     }
   }
 
-  const targetValue = !isOn.value
+  const targetValue = !currentValue.value
   const writeTarget = switchConfig.value?.writePoint || binding.value
 
   if (writeTarget) {
     writing.value = true
     try {
-      const device = pointStore.devices.find(d => d.asset === writeTarget.deviceId || d.name === writeTarget.deviceId)
-      const pluginName = device?.pluginName || ''
-      const res = await controlApi.writeSetpoint(
-        pluginName,
-        writeTarget.deviceId,
-        writeTarget.pointName,
-        targetValue
-      )
-      if (res.status === 'ACCEPTED') {
-        isOn.value = targetValue
+      const res = await writeValue(targetValue)
+      if (res.success) {
         ElMessage.success(t('scadaComponents.commandSent'))
       } else {
-        ElMessage.error(`${t('scadaComponents.commandError')}: ${res.status}`)
+        ElMessage.error(res.message)
       }
     } catch (e: unknown) {
       const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : t('scadaComponents.operationFailed'))
@@ -72,7 +56,7 @@ const handleToggle = async () => {
       writing.value = false
     }
   } else {
-    isOn.value = targetValue
+    currentValue.value = targetValue
   }
 }
 </script>
@@ -80,8 +64,8 @@ const handleToggle = async () => {
 <template>
   <div class="switch-container" @click="handleToggle">
     <div class="switch-label">{{ switchConfig?.onText || t('scadaComponents.switchOn') }}</div>
-    <div class="switch-track" :class="{ on: isOn, writing }">
-      <div class="switch-thumb" :class="{ on: isOn }"></div>
+    <div class="switch-track" :class="{ on: currentValue, writing }">
+      <div class="switch-thumb" :class="{ on: currentValue }"></div>
     </div>
     <div class="switch-label">{{ switchConfig?.offText || t('scadaComponents.switchOff') }}</div>
   </div>

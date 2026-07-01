@@ -6,7 +6,7 @@ import { useScadaStore } from '@/stores/scada'
 import { ArrowLeft, FullScreen } from '@element-plus/icons-vue'
 import ScadaCanvas from '@/components/ScadaCanvas.vue'
 
-const { t } = useI18n()
+useI18n()
 const route = useRoute()
 const router = useRouter()
 const scadaStore = useScadaStore()

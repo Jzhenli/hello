@@ -1,35 +1,27 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
-import { usePointStore } from '@/stores/points'
+import { useComponentBinding } from '@/composables/useComponentBinding'
 
 const props = defineProps<{
   config: ScadaComponent
   editing?: boolean
 }>()
 
-const pointStore = usePointStore()
-
 const indicatorConfig = computed(() => props.config.indicatorConfig)
 const binding = computed(() => props.config.binding)
 
-const isOn = ref(false)
-
-onMounted(() => {
-  if (binding.value) {
-    const device = pointStore.devices.find(d => d.asset === binding.value!.deviceId || d.name === binding.value!.deviceId)
-    const point = device?.points.find(p => p.name === binding.value!.pointName)
-    if (point) {
-      isOn.value = point.currentValue === true || point.currentValue === 1
-    }
-  }
+const { currentValue } = useComponentBinding(binding, {
+  autoRefresh: true,
+  refreshInterval: 3000,
+  transform: (value) => value === true || value === 1
 })
 
 const indicatorStyle = computed(() => ({
-  backgroundColor: isOn.value 
+  backgroundColor: currentValue.value
     ? indicatorConfig.value?.onColor || '#27ae60'
     : indicatorConfig.value?.offColor || '#95a5a6',
-  boxShadow: isOn.value 
+  boxShadow: currentValue.value
     ? `0 0 20px ${indicatorConfig.value?.onColor || '#27ae60'}80`
     : 'none'
 }))

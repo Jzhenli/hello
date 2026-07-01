@@ -1,0 +1,52 @@
+/**
+ * Component category configuration
+ * Easy to extend: just add new categories or components here
+ */
+
+import type { ComponentTemplate } from '@/types/scada'
+import { COMPONENT_TEMPLATES } from '@/types/scada'
+
+export interface CategoryConfig {
+  key: string
+  icon: string
+  order: number
+}
+
+// Category definitions - add new categories here
+export const COMPONENT_CATEGORIES: CategoryConfig[] = [
+  { key: 'basic', icon: '📝', order: 1 },
+  { key: 'gauge', icon: '🎯', order: 2 },
+  { key: 'chart', icon: '📊', order: 3 },
+  { key: 'indicator', icon: '💡', order: 4 },
+  { key: 'control', icon: '🎛️', order: 5 },
+  { key: 'layout', icon: '📦', order: 6 },
+]
+
+// Get sorted categories
+export const getSortedCategories = (): CategoryConfig[] => {
+  return [...COMPONENT_CATEGORIES].sort((a, b) => a.order - b.order)
+}
+
+// Get components by category
+export const getComponentsByCategory = (categoryKey: string): ComponentTemplate[] => {
+  return COMPONENT_TEMPLATES.filter(t => t.category === `scadaComponentCategories.${categoryKey}`)
+}
+
+// Get all components grouped by category
+export const getGroupedComponents = (): Record<string, ComponentTemplate[]> => {
+  const grouped: Record<string, ComponentTemplate[]> = {}
+  
+  for (const category of getSortedCategories()) {
+    const components = getComponentsByCategory(category.key)
+    if (components.length > 0) {
+      grouped[category.key] = components
+    }
+  }
+  
+  return grouped
+}
+
+// Get category config by key
+export const getCategoryConfig = (key: string): CategoryConfig | undefined => {
+  return COMPONENT_CATEGORIES.find(c => c.key === key)
+}

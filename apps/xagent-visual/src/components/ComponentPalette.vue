@@ -1,13 +1,34 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { COMPONENT_TEMPLATES, type ComponentType } from '@/types/scada'
+import { type ComponentType } from '@/types/scada'
+import {
+  getSortedCategories,
+  getComponentsByCategory
+} from '@/config/component-categories'
+import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'dragStart', type: ComponentType): void
+  (e: 'toggleList'): void
 }>()
+
+const props = defineProps<{
+  showComponentList?: boolean
+}>()
+
+// Active category state
+const activeCategory = ref<string>('basic')
+
+// Get all categories sorted by order
+const categories = computed(() => getSortedCategories())
+
+// Get components for active category
+const activeComponents = computed(() => {
+  return getComponentsByCategory(activeCategory.value)
+})
 
 const onDragStart = (type: ComponentType, event: DragEvent) => {
   if (event.dataTransfer) {
@@ -17,32 +38,48 @@ const onDragStart = (type: ComponentType, event: DragEvent) => {
   emit('dragStart', type)
 }
 
-const categories = computed(() => {
-  const cats: Record<string, typeof COMPONENT_TEMPLATES> = {}
-  COMPONENT_TEMPLATES.forEach(template => {
-    const catKey = template.category
-    if (!cats[catKey]) {
-      cats[catKey] = []
-    }
-    cats[catKey].push(template)
-  })
-  return cats
-})
+const selectCategory = (key: string) => {
+  activeCategory.value = key
+}
 </script>
 
 <template>
   <div class="component-palette">
     <div class="palette-header">
-      <h3>{{ t('componentPalette.title') }}</h3>
-      <span class="hint">{{ t('componentPalette.dragHint') }}</span>
+      <div class="header-content">
+        <div class="header-text">
+          <h3>{{ t('componentPalette.title') }}</h3>
+          <span class="hint">{{ t('componentPalette.dragHint') }}</span>
+        </div>
+        <div class="header-toggle" @click="emit('toggleList')" :title="props.showComponentList ? '隐藏组件列表' : '显示组件列表'">
+          <el-icon><DArrowLeft v-if="props.showComponentList" /><DArrowRight v-else /></el-icon>
+        </div>
+      </div>
     </div>
     
     <div class="palette-body">
-      <div v-for="(templates, category) in categories" :key="category" class="category-section">
-        <div class="category-title">{{ t(category) }}</div>
-        <div class="component-grid">
+      <!-- Category menu -->
+      <div class="category-menu">
+        <div
+          v-for="category in categories"
+          :key="category.key"
+          class="menu-item"
+          :class="{ 'active': activeCategory === category.key }"
+          @click="selectCategory(category.key)"
+        >
+          <span class="menu-icon">{{ category.icon }}</span>
+          <span class="menu-label">{{ t(`scadaComponentCategories.${category.key}`) }}</span>
+        </div>
+      </div>
+
+      <!-- Component grid -->
+      <div class="component-panel">
+        <div v-if="activeComponents.length === 0" class="empty-category">
+          {{ $t('scada.noComponents') }}
+        </div>
+        <div v-else class="component-grid">
           <div
-            v-for="template in templates"
+            v-for="template in activeComponents"
             :key="template.type"
             class="component-item"
             draggable="true"
@@ -72,6 +109,18 @@ const categories = computed(() => {
   flex-shrink: 0;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.header-text {
+  flex: 1;
+  min-width: 0;
+}
+
 .palette-header h3 {
   margin: 0 0 4px 0;
   font-size: 14px;
@@ -83,37 +132,111 @@ const categories = computed(() => {
   color: var(--text-secondary);
 }
 
+.header-toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-base);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.header-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 .palette-body {
   flex: 1;
-  padding: 8px;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Category menu sidebar */
+.category-menu {
+  width: 70px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-base);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.menu-item.active {
+  background: var(--color-primary-light-9, rgba(64, 158, 255, 0.1));
+  border-left-color: var(--color-primary);
+}
+
+.menu-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.menu-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.menu-item.active .menu-label {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+/* Component panel */
+.component-panel {
+  flex: 1;
+  padding: 10px;
   overflow-y: auto;
 }
 
-.category-section {
-  margin-bottom: 12px;
-}
-
-.category-title {
-  font-size: 11px;
-  font-weight: 600;
+.empty-category {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-  padding-left: 4px;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
 }
 
 .component-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 8px;
 }
 
 .component-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 4px;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  padding: 8px;
   background: var(--bg-hover);
   border: 1px solid var(--border-base);
   border-radius: 6px;
@@ -134,8 +257,9 @@ const categories = computed(() => {
 }
 
 .component-icon {
-  font-size: 24px;
+  font-size: 28px;
   margin-bottom: 4px;
+  line-height: 1;
 }
 
 .component-name {
@@ -143,5 +267,9 @@ const categories = computed(() => {
   color: var(--text-primary);
   text-align: center;
   line-height: 1.2;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 </style>
