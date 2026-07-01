@@ -3,12 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import type { ComponentType, ScadaComponent } from '@/types/scada'
-import ScadaGauge from './components/ScadaGauge.vue'
-import ScadaChart from './components/ScadaChart.vue'
-import ScadaIndicator from './components/ScadaIndicator.vue'
-import ScadaSwitch from './components/ScadaSwitch.vue'
-import ScadaText from './components/ScadaText.vue'
-import ScadaButton from './components/ScadaButton.vue'
+import { componentRegistry } from './scada-components'
 import {
   CopyDocument,
   Document,
@@ -75,16 +70,6 @@ const targetComponent = computed(() => {
   if (!contextMenuTargetId.value || !panel.value) return null
   return panel.value.components.find(c => c.id === contextMenuTargetId.value) || null
 })
-
-const componentMap: Record<string, any> = {
-  gauge: ScadaGauge,
-  'chart-line': ScadaChart,
-  'chart-bar': ScadaChart,
-  indicator: ScadaIndicator,
-  switch: ScadaSwitch,
-  text: ScadaText,
-  button: ScadaButton
-}
 
 const getComponentStyle = (comp: ScadaComponent) => ({
   left: `${comp.x}px`,
@@ -653,8 +638,8 @@ watch(
     >
       <!-- Component Content -->
       <component
-        :is="componentMap[comp.type]"
-        v-if="componentMap[comp.type]"
+        :is="componentRegistry[comp.type]"
+        v-if="componentRegistry[comp.type]"
         :config="comp"
         :editing="isEditing"
       />
