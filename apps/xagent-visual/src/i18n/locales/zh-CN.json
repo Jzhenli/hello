@@ -1227,7 +1227,8 @@
     "dashboardType": "Dashboard",
     "graphicType": "Graphic",
     "graphicEditor": "图形编辑",
-    "graphicPlaceholder": "图形编辑器正在开发中..."
+    "graphicPlaceholder": "图形编辑器正在开发中...",
+    "graphicPreviewPlaceholder": "图形预览功能正在开发中..."
   },
   "ruleEditor": {
     "defaultRuleName": "新规则",

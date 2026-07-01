@@ -16,8 +16,16 @@ function matchRoute(path: string): string | null {
   if (ROUTE_PERMISSION_MAP[path]) {
     return ROUTE_PERMISSION_MAP[path]
   }
+  // Handle /scada/:id/preview
+  if (path.startsWith('/scada/') && path.endsWith('/preview')) {
+    return ROUTE_PERMISSION_MAP['/scada']
+  }
   // Handle /scada/:id
   if (path.startsWith('/scada/')) {
+    return ROUTE_PERMISSION_MAP['/scada']
+  }
+  // Handle /graphic/:id/preview
+  if (path.startsWith('/graphic/') && path.endsWith('/preview')) {
     return ROUTE_PERMISSION_MAP['/scada']
   }
   // Handle /graphic/:id
@@ -81,10 +89,22 @@ const routes = [
     meta: { title: '组态编辑', icon: 'PictureFilled' }
   },
   {
+    path: '/scada/:id/preview',
+    name: 'ScadaPreview',
+    component: () => import('@/views/ScadaPreview.vue'),
+    meta: { title: '组态预览', icon: 'PictureFilled', public: true }
+  },
+  {
     path: '/graphic/:id',
     name: 'GraphicEdit',
     component: () => import('@/views/Graphic.vue'),
     meta: { title: '图形编辑', icon: 'PictureFilled' }
+  },
+  {
+    path: '/graphic/:id/preview',
+    name: 'GraphicPreview',
+    component: () => import('@/views/GraphicPreview.vue'),
+    meta: { title: '图形预览', icon: 'PictureFilled', public: true }
   },
   {
     path: '/settings',

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, Setting } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Setting, View } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -45,6 +45,14 @@ const handleEdit = (panel: any) => {
     router.push({ name: 'GraphicEdit', params: { id: panel.id } })
   } else {
     router.push({ name: 'ScadaEdit', params: { id: panel.id } })
+  }
+}
+
+const handlePreview = (panel: any) => {
+  if (panel.type === 'Graphic') {
+    router.push({ name: 'GraphicPreview', params: { id: panel.id } })
+  } else {
+    router.push({ name: 'ScadaPreview', params: { id: panel.id } })
   }
 }
 
@@ -150,6 +158,14 @@ const formatTime = (timestamp: number) => {
           </div>
         </div>
         <div class="project-actions">
+          <el-button 
+            type="success" 
+            :icon="View"
+            size="small"
+            @click="handlePreview(panel)"
+          >
+            {{ $t('scada.preview') }}
+          </el-button>
           <el-button 
             type="primary" 
             :icon="Edit"

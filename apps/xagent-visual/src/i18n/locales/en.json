@@ -1227,7 +1227,8 @@
     "dashboardType": "Dashboard",
     "graphicType": "Graphic",
     "graphicEditor": "Graphic Editor",
-    "graphicPlaceholder": "Graphic editor is under development..."
+    "graphicPlaceholder": "Graphic editor is under development...",
+    "graphicPreviewPlaceholder": "Graphic preview feature is under development..."
   },
   "ruleEditor": {
     "defaultRuleName": "New Rule",
