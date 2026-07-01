@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import type { ComponentType, ScadaComponent } from '@/types/scada'
-import { componentRegistry } from './scada-components'
+import { getComponent } from './scada-components'
 import {
   CopyDocument,
   Document,
@@ -638,8 +638,8 @@ watch(
     >
       <!-- Component Content -->
       <component
-        :is="componentRegistry[comp.type]"
-        v-if="componentRegistry[comp.type]"
+        :is="getComponent(comp.type)"
+        v-if="getComponent(comp.type)"
         :config="comp"
         :editing="isEditing"
       />

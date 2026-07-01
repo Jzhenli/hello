@@ -1,4 +1,5 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaText from './index.vue'
 
 export interface TextConfig {
   content: string
@@ -8,9 +9,10 @@ export interface TextConfig {
   textAlign: 'left' | 'center' | 'right'
 }
 
-export const textMetadata: ComponentMetadata = {
+export const textMeta: ScadaComponentMeta = {
+  type: 'text',
+  component: ScadaText,
   template: {
-    type: 'text',
     name: 'scadaComponentNames.text',
     icon: '📝',
     category: 'scadaComponentCategories.basic',
@@ -24,5 +26,8 @@ export const textMetadata: ComponentMetadata = {
         textAlign: 'center'
       }
     }
+  },
+  configTypes: {
+    TextConfig: null as unknown as TextConfig
   }
 }

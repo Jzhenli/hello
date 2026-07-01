@@ -1,8 +1,10 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaContainer from './index.vue'
 
-export const containerMetadata: ComponentMetadata = {
+export const containerMeta: ScadaComponentMeta = {
+  type: 'container',
+  component: ScadaContainer,
   template: {
-    type: 'container',
     name: 'scadaComponentNames.container',
     icon: '📦',
     category: 'scadaComponentCategories.layout',

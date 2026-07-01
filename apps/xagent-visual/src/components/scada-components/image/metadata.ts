@@ -1,8 +1,12 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaImage from './index.vue'
+import ImageConfigPanel from './ConfigPanel.vue'
 
-export const imageMetadata: ComponentMetadata = {
+export const imageMeta: ScadaComponentMeta = {
+  type: 'image',
+  component: ScadaImage,
+  configPanel: ImageConfigPanel,
   template: {
-    type: 'image',
     name: 'scadaComponentNames.image',
     icon: '🖼️',
     category: 'scadaComponentCategories.basic',

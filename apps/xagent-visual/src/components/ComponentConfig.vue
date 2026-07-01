@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, markRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { usePointStore } from '@/stores/points'
 import type { PointBinding } from '@/types/scada'
+import { getConfigPanel } from '@/components/scada-components'
 
 const { t } = useI18n()
 const scadaStore = useScadaStore()
@@ -16,6 +17,13 @@ const component = computed(() => scadaStore.selectedComponent)
 const currentPanel = computed(() => scadaStore.currentPanel)
 
 const currentBinding = computed(() => component.value?.binding)
+
+// 获取当前组件类型的配置面板
+const componentConfigPanel = computed(() => {
+  if (!component.value) return null
+  const panel = getConfigPanel(component.value.type)
+  return panel ? markRaw(panel) : null
+})
 
 // Display name: translate if it's a template key, otherwise show custom name
 const displayName = computed(() => {
@@ -92,14 +100,6 @@ const updateStyle = (key: string, value: any) => {
   if (!component.value) return
   scadaStore.updateComponent(component.value.id, {
     style: { ...component.value.style, [key]: value }
-  })
-}
-
-const updateConfig = (configKey: string, key: string, value: any) => {
-  if (!component.value) return
-  const config = (component.value as any)[configKey] || {}
-  scadaStore.updateComponent(component.value.id, {
-    [configKey]: { ...config, [key]: value }
   })
 }
 
@@ -237,55 +237,12 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
         </div>
       </div>
 
-      <!-- 仪表盘配置 -->
-      <div v-if="component.type === 'gauge' && component.gaugeConfig" class="config-section">
-        <div class="section-title">{{ t('componentConfig.gaugeConfig') }}</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>{{ t('componentConfig.minValue') }}</label>
-            <input type="number" :value="component.gaugeConfig.min" @input="updateConfig('gaugeConfig', 'min', +($event.target as HTMLInputElement).value)">
-          </div>
-          <div class="form-group">
-            <label>{{ t('componentConfig.maxValue') }}</label>
-            <input type="number" :value="component.gaugeConfig.max" @input="updateConfig('gaugeConfig', 'max', +($event.target as HTMLInputElement).value)">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>{{ t('componentConfig.unit') }}</label>
-          <input type="text" :value="component.gaugeConfig.unit" @input="updateConfig('gaugeConfig', 'unit', ($event.target as HTMLInputElement).value)">
-        </div>
-      </div>
-
-      <!-- 图表配置 -->
-      <div v-if="(component.type === 'chart-line' || component.type === 'chart-bar') && component.chartConfig" class="config-section">
-        <div class="section-title">{{ t('componentConfig.chartConfig') }}</div>
-        <div class="form-group">
-          <label>{{ t('componentConfig.timeRange') }}</label>
-          <select :value="component.chartConfig.timeRange" @change="updateConfig('chartConfig', 'timeRange', ($event.target as HTMLSelectElement).value)">
-              <option value="1h">{{ t('dashboard.timeRange1h') }}</option>
-              <option value="6h">{{ t('pointTrend.timeRange6h') }}</option>
-              <option value="24h">{{ t('dashboard.timeRange24h') }}</option>
-              <option value="7d">{{ t('dashboard.timeRange7d') }}</option>
-            </select>
-        </div>
-        <div class="form-group">
-          <label>{{ t('componentConfig.lineColor') }}</label>
-          <input type="color" :value="component.chartConfig.lineColor" @input="updateConfig('chartConfig', 'lineColor', ($event.target as HTMLInputElement).value)">
-        </div>
-      </div>
-
-      <!-- 指示灯配置 -->
-      <div v-if="component.type === 'indicator' && component.indicatorConfig" class="config-section">
-        <div class="section-title">{{ t('componentConfig.indicatorConfig') }}</div>
-        <div class="form-group">
-          <label>{{ t('componentConfig.onColor') }}</label>
-          <input type="color" :value="component.indicatorConfig.onColor" @input="updateConfig('indicatorConfig', 'onColor', ($event.target as HTMLInputElement).value)">
-        </div>
-        <div class="form-group">
-          <label>{{ t('componentConfig.offColor') }}</label>
-          <input type="color" :value="component.indicatorConfig.offColor" @input="updateConfig('indicatorConfig', 'offColor', ($event.target as HTMLInputElement).value)">
-        </div>
-      </div>
+      <!-- 动态渲染组件专属配置面板 -->
+      <component 
+        v-if="componentConfigPanel && component" 
+        :is="componentConfigPanel" 
+        :component="component" 
+      />
     </div>
 
     <!-- 面板设置（未选中组件时显示） -->

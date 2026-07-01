@@ -1,4 +1,6 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaIndicator from './index.vue'
+import IndicatorConfigPanel from './ConfigPanel.vue'
 
 export interface IndicatorConfig {
   onColor: string
@@ -6,9 +8,11 @@ export interface IndicatorConfig {
   blinkOnAlarm: boolean
 }
 
-export const indicatorMetadata: ComponentMetadata = {
+export const indicatorMeta: ScadaComponentMeta = {
+  type: 'indicator',
+  component: ScadaIndicator,
+  configPanel: IndicatorConfigPanel,
   template: {
-    type: 'indicator',
     name: 'scadaComponentNames.indicator',
     icon: '💡',
     category: 'scadaComponentCategories.indicator',
@@ -20,5 +24,8 @@ export const indicatorMetadata: ComponentMetadata = {
         blinkOnAlarm: true
       }
     }
+  },
+  configTypes: {
+    IndicatorConfig: null as unknown as IndicatorConfig
   }
 }

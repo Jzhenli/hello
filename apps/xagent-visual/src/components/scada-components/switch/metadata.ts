@@ -1,5 +1,6 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
 import type { PointBinding } from '@/types/scada'
+import ScadaSwitch from './index.vue'
 
 export interface SwitchConfig {
   onText: string
@@ -8,9 +9,10 @@ export interface SwitchConfig {
   writePoint: PointBinding | null
 }
 
-export const switchMetadata: ComponentMetadata = {
+export const switchMeta: ScadaComponentMeta = {
+  type: 'switch',
+  component: ScadaSwitch,
   template: {
-    type: 'switch',
     name: 'scadaComponentNames.switch',
     icon: '🔘',
     category: 'scadaComponentCategories.control',
@@ -23,5 +25,8 @@ export const switchMetadata: ComponentMetadata = {
         writePoint: null
       }
     }
+  },
+  configTypes: {
+    SwitchConfig: null as unknown as SwitchConfig
   }
 }

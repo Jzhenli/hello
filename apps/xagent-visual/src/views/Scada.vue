@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
 import { useUserStore } from '@/stores/users'
+import { usePointStore } from '@/stores/points'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { FullScreen, View, Upload, ArrowLeft } from '@element-plus/icons-vue'
 import ComponentPalette from '@/components/ComponentPalette.vue'
@@ -17,6 +18,7 @@ const route = useRoute()
 const router = useRouter()
 const scadaStore = useScadaStore()
 const userStore = useUserStore()
+const pointStore = usePointStore()
 
 const isPreviewMode = ref(false)
 const showComponentList = ref(false)
@@ -30,8 +32,9 @@ watch(() => route.params.id, (newId) => {
   }
 }, { immediate: true })
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  await pointStore.fetchDevicesWithPoints()
 })
 
 onUnmounted(() => {

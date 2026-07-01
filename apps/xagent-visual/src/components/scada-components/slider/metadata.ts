@@ -1,4 +1,5 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaSlider from './index.vue'
 
 export interface SliderConfig {
   min: number
@@ -6,9 +7,10 @@ export interface SliderConfig {
   step: number
 }
 
-export const sliderMetadata: ComponentMetadata = {
+export const sliderMeta: ScadaComponentMeta = {
+  type: 'slider',
+  component: ScadaSlider,
   template: {
-    type: 'slider',
     name: 'scadaComponentNames.slider',
     icon: '🎚️',
     category: 'scadaComponentCategories.control',
@@ -16,5 +18,8 @@ export const sliderMetadata: ComponentMetadata = {
     defaultConfig: {
       sliderConfig: { min: 0, max: 100, step: 1 }
     }
+  },
+  configTypes: {
+    SliderConfig: null as unknown as SliderConfig
   }
 }

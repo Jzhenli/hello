@@ -1,10 +1,10 @@
 /**
  * Component category configuration
- * Easy to extend: just add new categories or components here
+ * Uses unified componentMetaRegistry for all component data
  */
 
 import type { ComponentTemplate } from '@/types/scada'
-import { COMPONENT_TEMPLATES } from '@/types/scada'
+import { getAllTemplates } from '@/components/scada-components'
 
 export interface CategoryConfig {
   key: string
@@ -29,7 +29,8 @@ export const getSortedCategories = (): CategoryConfig[] => {
 
 // Get components by category
 export const getComponentsByCategory = (categoryKey: string): ComponentTemplate[] => {
-  return COMPONENT_TEMPLATES.filter(t => t.category === `scadaComponentCategories.${categoryKey}`)
+  const templates = getAllTemplates()
+  return templates.filter(t => t.category === `scadaComponentCategories.${categoryKey}`)
 }
 
 // Get all components grouped by category

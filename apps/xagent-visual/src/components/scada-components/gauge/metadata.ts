@@ -1,4 +1,6 @@
-import type { ComponentMetadata, StyleConfig } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaGauge from './index.vue'
+import GaugeConfigPanel from './ConfigPanel.vue'
 
 export interface GaugeConfig {
   min: number
@@ -10,9 +12,11 @@ export interface GaugeConfig {
 
 const defaultStyle: StyleConfig = { width: 150, height: 150 }
 
-export const gaugeMetadata: ComponentMetadata = {
+export const gaugeMeta: ScadaComponentMeta = {
+  type: 'gauge',
+  component: ScadaGauge,
+  configPanel: GaugeConfigPanel,
   template: {
-    type: 'gauge',
     name: 'scadaComponentNames.gauge',
     icon: '🎯',
     category: 'scadaComponentCategories.gauge',
@@ -30,5 +34,8 @@ export const gaugeMetadata: ComponentMetadata = {
         showValue: true
       }
     }
+  },
+  configTypes: {
+    GaugeConfig: null as unknown as GaugeConfig
   }
 }

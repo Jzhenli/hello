@@ -1,5 +1,6 @@
-import type { ComponentMetadata } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
 import type { PointBinding } from '@/types/scada'
+import ScadaButton from './index.vue'
 
 export interface ButtonConfig {
   text: string
@@ -8,9 +9,10 @@ export interface ButtonConfig {
   writePoint: PointBinding | null
 }
 
-export const buttonMetadata: ComponentMetadata = {
+export const buttonMeta: ScadaComponentMeta = {
+  type: 'button',
+  component: ScadaButton,
   template: {
-    type: 'button',
     name: 'scadaComponentNames.button',
     icon: '🔲',
     category: 'scadaComponentCategories.control',
@@ -23,5 +25,8 @@ export const buttonMetadata: ComponentMetadata = {
         writePoint: null
       }
     }
+  },
+  configTypes: {
+    ButtonConfig: null as unknown as ButtonConfig
   }
 }

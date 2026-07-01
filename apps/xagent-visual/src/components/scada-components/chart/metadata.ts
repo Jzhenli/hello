@@ -1,4 +1,6 @@
-import type { ComponentMetadata, StyleConfig } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../types'
+import ScadaChart from './index.vue'
+import ChartConfigPanel from './ConfigPanel.vue'
 
 export interface ChartConfig {
   timeRange: '1h' | '6h' | '24h' | '7d'
@@ -9,9 +11,11 @@ export interface ChartConfig {
 
 const defaultStyle: StyleConfig = { width: 300, height: 200 }
 
-export const chartLineMetadata: ComponentMetadata = {
+export const chartLineMeta: ScadaComponentMeta = {
+  type: 'chart-line',
+  component: ScadaChart,
+  configPanel: ChartConfigPanel,
   template: {
-    type: 'chart-line',
     name: 'scadaComponentNames.chartLine',
     icon: '📈',
     category: 'scadaComponentCategories.chart',
@@ -24,12 +28,17 @@ export const chartLineMetadata: ComponentMetadata = {
         showLegend: true
       }
     }
+  },
+  configTypes: {
+    ChartConfig: null as unknown as ChartConfig
   }
 }
 
-export const chartBarMetadata: ComponentMetadata = {
+export const chartBarMeta: ScadaComponentMeta = {
+  type: 'chart-bar',
+  component: ScadaChart,
+  configPanel: ChartConfigPanel,
   template: {
-    type: 'chart-bar',
     name: 'scadaComponentNames.chartBar',
     icon: '📊',
     category: 'scadaComponentCategories.chart',
@@ -42,5 +51,8 @@ export const chartBarMetadata: ComponentMetadata = {
         showLegend: true
       }
     }
+  },
+  configTypes: {
+    ChartConfig: null as unknown as ChartConfig
   }
 }

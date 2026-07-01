@@ -4,8 +4,7 @@
 export type {
   ComponentType,
   StyleConfig,
-  ComponentTemplate,
-  ComponentMetadata
+  ScadaComponentMeta
 } from './types'
 
 // 导出各组件配置类型和元数据
@@ -17,40 +16,15 @@ export type { SliderConfig } from './slider/metadata'
 export type { TextConfig } from './text/metadata'
 export type { ButtonConfig } from './button/metadata'
 
-// 聚合所有组件模板
-import { gaugeMetadata } from './gauge/metadata'
-import { chartLineMetadata, chartBarMetadata } from './chart/metadata'
-import { indicatorMetadata } from './indicator/metadata'
-import { switchMetadata } from './switch/metadata'
-import { sliderMetadata } from './slider/metadata'
-import { textMetadata } from './text/metadata'
-import { imageMetadata } from './image/metadata'
-import { buttonMetadata } from './button/metadata'
-import { containerMetadata } from './container/metadata'
-
-export const COMPONENT_TEMPLATES = [
-  gaugeMetadata.template,
-  chartLineMetadata.template,
-  chartBarMetadata.template,
-  indicatorMetadata.template,
-  switchMetadata.template,
-  sliderMetadata.template,
-  textMetadata.template,
-  imageMetadata.template,
-  buttonMetadata.template,
-  containerMetadata.template,
-]
-
-// 导出注册工具
-export { componentRegistry, getComponent, registerComponent, getRegisteredTypes } from './registry'
-
-// 导出组件（按需使用）
-export { default as ScadaGauge } from './gauge/index.vue'
-export { default as ScadaChart } from './chart/index.vue'
-export { default as ScadaIndicator } from './indicator/index.vue'
-export { default as ScadaSwitch } from './switch/index.vue'
-export { default as ScadaSlider } from './slider/index.vue'
-export { default as ScadaText } from './text/index.vue'
-export { default as ScadaImage } from './image/index.vue'
-export { default as ScadaButton } from './button/index.vue'
-export { default as ScadaContainer } from './container/index.vue'
+// 导出统一注册表
+export {
+  componentMetaRegistry,
+  getComponentMeta,
+  getComponent,
+  getConfigPanel,
+  getComponentTemplate,
+  getAllTemplates,
+  COMPONENT_TEMPLATES,
+  registerComponent,
+  getRegisteredTypes
+} from './registry'

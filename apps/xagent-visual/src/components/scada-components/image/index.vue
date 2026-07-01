@@ -23,6 +23,7 @@ const imageStyle = computed(() => `object-fit: ${objectFit.value};`)
       :alt="config.name"
       class="image-content"
       :style="imageStyle"
+      draggable="false"
     />
   </div>
 </template>
