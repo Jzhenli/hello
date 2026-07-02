@@ -1,18 +1,5 @@
 import type { Component } from 'vue'
 
-// 组件类型联合 - 新增组件在此添加类型
-export type ComponentType =
-  | 'gauge'
-  | 'chart-line'
-  | 'chart-bar'
-  | 'indicator'
-  | 'switch'
-  | 'slider'
-  | 'text'
-  | 'image'
-  | 'button'
-  | 'container'
-
 // 组件样式配置
 export interface StyleConfig {
   width: number
@@ -32,7 +19,7 @@ export interface StyleConfig {
  */
 export interface ScadaComponentMeta {
   /** 组件类型标识 */
-  type: ComponentType
+  type: string
   /** 组件视图 */
   component: Component
   /** 配置面板组件（可选，无则使用默认） */

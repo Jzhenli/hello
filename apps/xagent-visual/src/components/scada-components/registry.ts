@@ -1,5 +1,9 @@
 import type { Component } from 'vue'
-import type { ComponentType, ScadaComponentMeta } from './types'
+import type { ScadaComponentMeta } from './types'
+
+// 组件类型 - 从注册表自动推导
+// 新增组件只需在下方 componentMetaRegistry 中注册即可
+export type ComponentType = keyof typeof componentMetaRegistry
 
 // 导入所有组件元数据（每个组件的视图、配置面板、模板信息已整合）
 import { gaugeMeta } from './gauge/metadata'
@@ -13,7 +17,8 @@ import { buttonMeta } from './button/metadata'
 import { containerMeta } from './container/metadata'
 
 // 统一组件注册表：type -> 完整元数据
-export const componentMetaRegistry: Record<string, ScadaComponentMeta> = {
+// 去掉显式类型注解，让 TS 自动推导字面量类型
+export const componentMetaRegistry = {
   'gauge': gaugeMeta,
   'chart-line': chartLineMeta,
   'chart-bar': chartBarMeta,
@@ -50,7 +55,7 @@ export function getComponent(type: ComponentType): Component | undefined {
  * @returns 配置面板组件或 null
  */
 export function getConfigPanel(type: string): Component | null {
-  return componentMetaRegistry[type]?.configPanel ?? null
+  return (componentMetaRegistry as Record<string, ScadaComponentMeta>)[type]?.configPanel ?? null
 }
 
 /**
@@ -83,7 +88,7 @@ export const COMPONENT_TEMPLATES = getAllTemplates()
  * @param meta 组件完整元数据
  */
 export function registerComponent(meta: ScadaComponentMeta) {
-  componentMetaRegistry[meta.type] = meta
+  (componentMetaRegistry as Record<string, ScadaComponentMeta>)[meta.type] = meta
 }
 
 /**

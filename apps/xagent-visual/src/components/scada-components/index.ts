@@ -2,10 +2,10 @@
 
 // 导出公共类型
 export type {
-  ComponentType,
   StyleConfig,
   ScadaComponentMeta
 } from './types'
+export type { ComponentType } from './registry'
 
 // 导出各组件配置类型和元数据
 export type { GaugeConfig } from './gauge/metadata'
