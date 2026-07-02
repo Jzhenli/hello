@@ -1,41 +1,3 @@
-<script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useUserStore } from '@/stores/users'
-import { ElMessage } from 'element-plus'
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
-const router = useRouter()
-const route = useRoute()
-const userStore = useUserStore()
-
-const loginForm = ref({ username: '', password: '' })
-const loading = ref(false)
-
-async function handleLogin() {
-  if (!loginForm.value.username || !loginForm.value.password) {
-    ElMessage.warning(t('login.pleaseEnterCredentials'))
-    return
-  }
-  loading.value = true
-  try {
-    const success = await userStore.login(loginForm.value.username, loginForm.value.password)
-    if (success) {
-      ElMessage.success(t('login.loginSuccess'))
-      const redirect = (route.query.redirect as string) || '/dashboard'
-      router.push(redirect)
-    } else {
-      ElMessage.error(t('login.loginFailed'))
-    }
-  } catch {
-    ElMessage.error(t('login.loginError'))
-  } finally {
-    loading.value = false
-  }
-}
-</script>
-
 <template>
   <div class="login-page">
     <div class="login-bg">
@@ -90,6 +52,44 @@ async function handleLogin() {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/users'
+import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+const router = useRouter()
+const route = useRoute()
+const userStore = useUserStore()
+
+const loginForm = ref({ username: '', password: '' })
+const loading = ref(false)
+
+async function handleLogin() {
+  if (!loginForm.value.username || !loginForm.value.password) {
+    ElMessage.warning(t('login.pleaseEnterCredentials'))
+    return
+  }
+  loading.value = true
+  try {
+    const success = await userStore.login(loginForm.value.username, loginForm.value.password)
+    if (success) {
+      ElMessage.success(t('login.loginSuccess'))
+      const redirect = (route.query.redirect as string) || '/dashboard'
+      router.push(redirect)
+    } else {
+      ElMessage.error(t('login.loginFailed'))
+    }
+  } catch {
+    ElMessage.error(t('login.loginError'))
+  } finally {
+    loading.value = false
+  }
+}
+</script>
 
 <style scoped>
 .login-page {

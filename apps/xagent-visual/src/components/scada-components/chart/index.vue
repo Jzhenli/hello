@@ -1,3 +1,12 @@
+<template>
+  <div class="chart-container">
+    <div v-if="binding" class="chart-title">
+      {{ binding.pointDescription || binding.pointName }}
+    </div>
+    <v-chart :option="chartOption" class="chart" autoresize />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
@@ -87,15 +96,6 @@ const chartOption = computed(() => {
   }
 })
 </script>
-
-<template>
-  <div class="chart-container">
-    <div v-if="binding" class="chart-title">
-      {{ binding.pointDescription || binding.pointName }}
-    </div>
-    <v-chart :option="chartOption" class="chart" autoresize />
-  </div>
-</template>
 
 <style scoped>
 .chart-container {

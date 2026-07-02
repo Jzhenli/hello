@@ -1,3 +1,24 @@
+<template>
+  <div class="rule-node logic-node">
+    <Handle type="target" :position="Position.Top" />
+    <Handle type="target" :position="Position.Left" id="left" />
+    
+    <div class="node-header">
+      <span class="node-icon">🔀</span>
+      <span class="node-title">{{ t('nodeViews.logic') }}</span>
+    </div>
+    
+    <div class="node-body">
+      <div class="logic-operator" :style="{ color: operatorColor }">
+        {{ operatorLabel }}
+      </div>
+    </div>
+    
+    <Handle type="source" :position="Position.Bottom" />
+    <Handle type="target" :position="Position.Right" id="right" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
@@ -29,27 +50,6 @@ const operatorColor = computed(() => {
   return colors[op || 'and'] || '#3498db'
 })
 </script>
-
-<template>
-  <div class="rule-node logic-node">
-    <Handle type="target" :position="Position.Top" />
-    <Handle type="target" :position="Position.Left" id="left" />
-    
-    <div class="node-header">
-      <span class="node-icon">🔀</span>
-      <span class="node-title">{{ t('nodeViews.logic') }}</span>
-    </div>
-    
-    <div class="node-body">
-      <div class="logic-operator" :style="{ color: operatorColor }">
-        {{ operatorLabel }}
-      </div>
-    </div>
-    
-    <Handle type="source" :position="Position.Bottom" />
-    <Handle type="target" :position="Position.Right" id="right" />
-  </div>
-</template>
 
 <style scoped>
 .logic-node {

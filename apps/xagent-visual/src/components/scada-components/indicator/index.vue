@@ -1,3 +1,12 @@
+<template>
+  <div class="indicator-container">
+    <div class="indicator-light" :style="indicatorStyle"></div>
+    <div v-if="binding" class="indicator-label">
+      {{ binding.pointDescription || binding.pointName }}
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
@@ -26,15 +35,6 @@ const indicatorStyle = computed(() => ({
     : 'none'
 }))
 </script>
-
-<template>
-  <div class="indicator-container">
-    <div class="indicator-light" :style="indicatorStyle"></div>
-    <div v-if="binding" class="indicator-label">
-      {{ binding.pointDescription || binding.pointName }}
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .indicator-container {

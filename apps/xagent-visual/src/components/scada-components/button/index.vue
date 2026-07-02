@@ -1,3 +1,16 @@
+<template>
+  <div class="button-container" @click="handleClick">
+    <el-button 
+      :type="buttonConfig?.type || 'primary'"
+      size="default"
+      :loading="writing"
+      style="width: 100%; height: 100%;"
+    >
+      {{ buttonConfig?.text || t('scadaComponents.defaultButton') }}
+    </el-button>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -56,19 +69,6 @@ const handleClick = async () => {
   }
 }
 </script>
-
-<template>
-  <div class="button-container" @click="handleClick">
-    <el-button 
-      :type="buttonConfig?.type || 'primary'"
-      size="default"
-      :loading="writing"
-      style="width: 100%; height: 100%;"
-    >
-      {{ buttonConfig?.text || t('scadaComponents.defaultButton') }}
-    </el-button>
-  </div>
-</template>
 
 <style scoped>
 .button-container {

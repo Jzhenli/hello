@@ -1,36 +1,3 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { Rule } from '@/types/rule'
-import { useResponsive } from '@/utils/useResponsive'
-
-const { t } = useI18n()
-
-const props = defineProps<{
-  rule: Rule | null
-  canSave: boolean
-}>()
-
-const emit = defineEmits<{
-  (e: 'save'): void
-  (e: 'clear'): void
-  (e: 'export'): void
-  (e: 'import'): void
-}>()
-
-const { isTablet, isMobile } = useResponsive()
-
-const nodeCount = computed(() => {
-  return props.rule?.graph.nodes.length || 0
-})
-
-const edgeCount = computed(() => {
-  return props.rule?.graph.edges.length || 0
-})
-
-const showStats = computed(() => !isMobile.value)
-</script>
-
 <template>
   <div class="editor-toolbar" :class="{ 'mobile-toolbar': isMobile, 'tablet-toolbar': isTablet }">
     <div class="toolbar-left">
@@ -75,6 +42,39 @@ const showStats = computed(() => !isMobile.value)
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { Rule } from '@/types/rule'
+import { useResponsive } from '@/utils/useResponsive'
+
+const { t } = useI18n()
+
+const props = defineProps<{
+  rule: Rule | null
+  canSave: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'save'): void
+  (e: 'clear'): void
+  (e: 'export'): void
+  (e: 'import'): void
+}>()
+
+const { isTablet, isMobile } = useResponsive()
+
+const nodeCount = computed(() => {
+  return props.rule?.graph.nodes.length || 0
+})
+
+const edgeCount = computed(() => {
+  return props.rule?.graph.edges.length || 0
+})
+
+const showStats = computed(() => !isMobile.value)
+</script>
 
 <style scoped>
 .editor-toolbar {

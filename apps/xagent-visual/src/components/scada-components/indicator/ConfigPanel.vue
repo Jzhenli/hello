@@ -1,3 +1,17 @@
+<template>
+  <div class="config-section">
+    <div class="section-title">{{ t('componentConfig.indicatorConfig') }}</div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.onColor') }}</label>
+      <input type="color" :value="component.indicatorConfig?.onColor ?? '#27ae60'" @input="updateConfig('onColor', ($event.target as HTMLInputElement).value)">
+    </div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.offColor') }}</label>
+      <input type="color" :value="component.indicatorConfig?.offColor ?? '#95a5a6'" @input="updateConfig('offColor', ($event.target as HTMLInputElement).value)">
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
@@ -17,20 +31,6 @@ const updateConfig = (key: string, value: any) => {
   })
 }
 </script>
-
-<template>
-  <div class="config-section">
-    <div class="section-title">{{ t('componentConfig.indicatorConfig') }}</div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.onColor') }}</label>
-      <input type="color" :value="component.indicatorConfig?.onColor ?? '#27ae60'" @input="updateConfig('onColor', ($event.target as HTMLInputElement).value)">
-    </div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.offColor') }}</label>
-      <input type="color" :value="component.indicatorConfig?.offColor ?? '#95a5a6'" @input="updateConfig('offColor', ($event.target as HTMLInputElement).value)">
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .config-section {

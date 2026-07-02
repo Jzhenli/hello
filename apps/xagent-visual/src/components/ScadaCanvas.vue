@@ -1,3 +1,147 @@
+<template>
+  <div 
+    ref="canvasRef"
+    class="scada-canvas"
+    :style="{
+      width: `${panel?.width || 1200}px`,
+      height: `${panel?.height || 800}px`,
+      backgroundColor: panel?.backgroundColor || '#f0f2f5',
+      backgroundImage: panel?.backgroundImage ? `url(${panel.backgroundImage})` : 'none',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      transform: `scale(${scadaStore.zoom})`,
+      transformOrigin: 'top left'
+    }"
+    @drop="handleDrop"
+    @dragover="handleDragOver"
+    @click="handleCanvasClick"
+    @contextmenu.prevent="handleCanvasContextMenu"
+    @mousedown="handleCanvasMouseDown"
+    @mousemove="handleCanvasMouseMove"
+    @mouseenter="handleCanvasMouseEnter"
+    @mouseleave="handleCanvasMouseLeave"
+  >
+    <!-- Grid -->
+    <div 
+      v-if="scadaStore.showGrid && isEditing"
+      class="canvas-grid"
+      :style="{
+        backgroundSize: `${panel?.grid || 20}px ${panel?.grid || 20}px`
+      }"
+    />
+    
+    <!-- Components -->
+    <div
+      v-for="comp in components"
+      :key="comp.id"
+      class="scada-component"
+      :class="{ 
+        selected: selectedIds.includes(comp.id),
+        'multi-selected': selectedIds.length > 1,
+        locked: comp.locked,
+        editing: isEditing
+      }"
+      :style="getComponentStyle(comp)"
+      @mousedown="handleComponentMouseDown($event, comp)"
+      @click="handleComponentClick($event, comp)"
+      @contextmenu.prevent="handleContextMenu($event, comp)"
+    >
+      <!-- Component Content -->
+      <component
+        :is="getComponent(comp.type)"
+        v-if="getComponent(comp.type)"
+        :config="comp"
+        :editing="isEditing"
+      />
+      
+      <!-- Selection Handles (only show for primary selected component) -->
+      <template v-if="selectedId === comp.id && isEditing && selectedIds.length === 1">
+        <div class="resize-handle nw" @mousedown.stop="handleResizeStart($event, 'nw')"></div>
+        <div class="resize-handle n" @mousedown.stop="handleResizeStart($event, 'n')"></div>
+        <div class="resize-handle ne" @mousedown.stop="handleResizeStart($event, 'ne')"></div>
+        <div class="resize-handle e" @mousedown.stop="handleResizeStart($event, 'e')"></div>
+        <div class="resize-handle se" @mousedown.stop="handleResizeStart($event, 'se')"></div>
+        <div class="resize-handle s" @mousedown.stop="handleResizeStart($event, 's')"></div>
+        <div class="resize-handle sw" @mousedown.stop="handleResizeStart($event, 'sw')"></div>
+        <div class="resize-handle w" @mousedown.stop="handleResizeStart($event, 'w')"></div>
+      </template>
+    </div>
+
+    <!-- Box Selection Rectangle -->
+    <div 
+      v-if="isBoxSelecting"
+      class="selection-box"
+      :style="{
+        left: `${Math.min(boxSelectStart.x, boxSelectEnd.x)}px`,
+        top: `${Math.min(boxSelectStart.y, boxSelectEnd.y)}px`,
+        width: `${Math.abs(boxSelectEnd.x - boxSelectStart.x)}px`,
+        height: `${Math.abs(boxSelectEnd.y - boxSelectStart.y)}px`
+      }"
+    />
+
+    <!-- Context Menu -->
+    <Teleport to="body">
+      <div 
+        v-if="contextMenuVisible && isEditing"
+        class="context-menu-overlay"
+        @click="hideContextMenu"
+      >
+        <div 
+          class="context-menu"
+          :style="{
+            left: `${contextMenuPosition.x}px`,
+            top: `${contextMenuPosition.y}px`
+          }"
+          @click.stop
+        >
+          <!-- Node context menu -->
+          <template v-if="contextMenuType === 'node'">
+            <div class="context-menu-item" @click="handleContextAction('copy')">
+              <el-icon class="menu-icon"><CopyDocument /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.copy') }}</span>
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" @click="handleContextAction(targetComponent?.locked ? 'unlock' : 'lock')">
+              <el-icon class="menu-icon">
+                <component :is="targetComponent?.locked ? Unlock : Lock" />
+              </el-icon>
+              <span class="menu-label">{{ targetComponent?.locked ? t('scadaContextMenu.unlock') : t('scadaContextMenu.lock') }}</span>
+            </div>
+            <div class="context-menu-item" @click="handleContextAction('delete')">
+              <el-icon class="menu-icon"><Delete /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.delete') }}</span>
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" @click="handleContextAction('bringToFront')">
+              <el-icon class="menu-icon"><Top /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.bringToFront') }}</span>
+            </div>
+            <div class="context-menu-item" @click="handleContextAction('sendToBack')">
+              <el-icon class="menu-icon"><Bottom /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.sendToBack') }}</span>
+            </div>
+          </template>
+          <!-- Canvas context menu -->
+          <template v-else>
+            <div 
+              v-if="scadaStore.clipboard"
+              class="context-menu-item" 
+              @click="handleContextAction('paste')"
+            >
+              <el-icon class="menu-icon"><Document /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.paste') }}</span>
+            </div>
+            <div v-else class="context-menu-item disabled">
+              <el-icon class="menu-icon"><Document /></el-icon>
+              <span class="menu-label">{{ t('scadaContextMenu.noClipboard') }}</span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -587,150 +731,6 @@ watch(
   }
 )
 </script>
-
-<template>
-  <div 
-    ref="canvasRef"
-    class="scada-canvas"
-    :style="{
-      width: `${panel?.width || 1200}px`,
-      height: `${panel?.height || 800}px`,
-      backgroundColor: panel?.backgroundColor || '#f0f2f5',
-      backgroundImage: panel?.backgroundImage ? `url(${panel.backgroundImage})` : 'none',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      transform: `scale(${scadaStore.zoom})`,
-      transformOrigin: 'top left'
-    }"
-    @drop="handleDrop"
-    @dragover="handleDragOver"
-    @click="handleCanvasClick"
-    @contextmenu.prevent="handleCanvasContextMenu"
-    @mousedown="handleCanvasMouseDown"
-    @mousemove="handleCanvasMouseMove"
-    @mouseenter="handleCanvasMouseEnter"
-    @mouseleave="handleCanvasMouseLeave"
-  >
-    <!-- Grid -->
-    <div 
-      v-if="scadaStore.showGrid && isEditing"
-      class="canvas-grid"
-      :style="{
-        backgroundSize: `${panel?.grid || 20}px ${panel?.grid || 20}px`
-      }"
-    />
-    
-    <!-- Components -->
-    <div
-      v-for="comp in components"
-      :key="comp.id"
-      class="scada-component"
-      :class="{ 
-        selected: selectedIds.includes(comp.id),
-        'multi-selected': selectedIds.length > 1,
-        locked: comp.locked,
-        editing: isEditing
-      }"
-      :style="getComponentStyle(comp)"
-      @mousedown="handleComponentMouseDown($event, comp)"
-      @click="handleComponentClick($event, comp)"
-      @contextmenu.prevent="handleContextMenu($event, comp)"
-    >
-      <!-- Component Content -->
-      <component
-        :is="getComponent(comp.type)"
-        v-if="getComponent(comp.type)"
-        :config="comp"
-        :editing="isEditing"
-      />
-      
-      <!-- Selection Handles (only show for primary selected component) -->
-      <template v-if="selectedId === comp.id && isEditing && selectedIds.length === 1">
-        <div class="resize-handle nw" @mousedown.stop="handleResizeStart($event, 'nw')"></div>
-        <div class="resize-handle n" @mousedown.stop="handleResizeStart($event, 'n')"></div>
-        <div class="resize-handle ne" @mousedown.stop="handleResizeStart($event, 'ne')"></div>
-        <div class="resize-handle e" @mousedown.stop="handleResizeStart($event, 'e')"></div>
-        <div class="resize-handle se" @mousedown.stop="handleResizeStart($event, 'se')"></div>
-        <div class="resize-handle s" @mousedown.stop="handleResizeStart($event, 's')"></div>
-        <div class="resize-handle sw" @mousedown.stop="handleResizeStart($event, 'sw')"></div>
-        <div class="resize-handle w" @mousedown.stop="handleResizeStart($event, 'w')"></div>
-      </template>
-    </div>
-
-    <!-- Box Selection Rectangle -->
-    <div 
-      v-if="isBoxSelecting"
-      class="selection-box"
-      :style="{
-        left: `${Math.min(boxSelectStart.x, boxSelectEnd.x)}px`,
-        top: `${Math.min(boxSelectStart.y, boxSelectEnd.y)}px`,
-        width: `${Math.abs(boxSelectEnd.x - boxSelectStart.x)}px`,
-        height: `${Math.abs(boxSelectEnd.y - boxSelectStart.y)}px`
-      }"
-    />
-
-    <!-- Context Menu -->
-    <Teleport to="body">
-      <div 
-        v-if="contextMenuVisible && isEditing"
-        class="context-menu-overlay"
-        @click="hideContextMenu"
-      >
-        <div 
-          class="context-menu"
-          :style="{
-            left: `${contextMenuPosition.x}px`,
-            top: `${contextMenuPosition.y}px`
-          }"
-          @click.stop
-        >
-          <!-- Node context menu -->
-          <template v-if="contextMenuType === 'node'">
-            <div class="context-menu-item" @click="handleContextAction('copy')">
-              <el-icon class="menu-icon"><CopyDocument /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.copy') }}</span>
-            </div>
-            <div class="context-menu-divider"></div>
-            <div class="context-menu-item" @click="handleContextAction(targetComponent?.locked ? 'unlock' : 'lock')">
-              <el-icon class="menu-icon">
-                <component :is="targetComponent?.locked ? Unlock : Lock" />
-              </el-icon>
-              <span class="menu-label">{{ targetComponent?.locked ? t('scadaContextMenu.unlock') : t('scadaContextMenu.lock') }}</span>
-            </div>
-            <div class="context-menu-item" @click="handleContextAction('delete')">
-              <el-icon class="menu-icon"><Delete /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.delete') }}</span>
-            </div>
-            <div class="context-menu-divider"></div>
-            <div class="context-menu-item" @click="handleContextAction('bringToFront')">
-              <el-icon class="menu-icon"><Top /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.bringToFront') }}</span>
-            </div>
-            <div class="context-menu-item" @click="handleContextAction('sendToBack')">
-              <el-icon class="menu-icon"><Bottom /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.sendToBack') }}</span>
-            </div>
-          </template>
-          <!-- Canvas context menu -->
-          <template v-else>
-            <div 
-              v-if="scadaStore.clipboard"
-              class="context-menu-item" 
-              @click="handleContextAction('paste')"
-            >
-              <el-icon class="menu-icon"><Document /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.paste') }}</span>
-            </div>
-            <div v-else class="context-menu-item disabled">
-              <el-icon class="menu-icon"><Document /></el-icon>
-              <span class="menu-label">{{ t('scadaContextMenu.noClipboard') }}</span>
-            </div>
-          </template>
-        </div>
-      </div>
-    </Teleport>
-  </div>
-</template>
 
 <style scoped>
 .scada-canvas {

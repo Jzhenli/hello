@@ -1,3 +1,12 @@
+<template>
+  <div class="container-wrapper" :style="containerStyle">
+    <div v-if="editing" class="container-placeholder">
+      <span>容器</span>
+    </div>
+    <slot />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
@@ -14,15 +23,6 @@ const containerStyle = computed(() => ({
   borderRadius: `${props.config.style.borderRadius || 4}px`,
 }))
 </script>
-
-<template>
-  <div class="container-wrapper" :style="containerStyle">
-    <div v-if="editing" class="container-placeholder">
-      <span>容器</span>
-    </div>
-    <slot />
-  </div>
-</template>
 
 <style scoped>
 .container-wrapper {

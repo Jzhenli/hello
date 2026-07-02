@@ -1,3 +1,41 @@
+<template>
+  <div class="gauge-container">
+    <svg viewBox="0 0 100 70" class="gauge-svg">
+      <!-- Background arc -->
+      <path
+        d="M 10 60 A 40 40 0 0 1 90 60"
+        fill="none"
+        stroke="var(--border-base)"
+        stroke-width="8"
+        stroke-linecap="round"
+      />
+      <!-- Value arc -->
+      <path
+        d="M 10 60 A 40 40 0 0 1 90 60"
+        fill="none"
+        :stroke="currentColor"
+        stroke-width="8"
+        stroke-linecap="round"
+        :stroke-dasharray="strokeDasharray"
+        stroke-dashoffset="0"
+        transform="rotate(0, 50, 60)"
+        class="gauge-arc"
+      />
+      <!-- Center point -->
+      <circle cx="50" cy="60" r="3" :fill="currentColor" />
+    </svg>
+    
+    <div class="gauge-value" :style="{ color: currentColor }">
+      {{ displayValue }}
+      <span v-if="gaugeConfig?.unit" class="unit">{{ gaugeConfig.unit }}</span>
+    </div>
+    
+    <div v-if="binding" class="gauge-label">
+      {{ binding.pointDescription || binding.pointName }}
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
@@ -46,44 +84,6 @@ const displayValue = computed(() => {
   return typeof val === 'number' ? val.toFixed(1) : '0.0'
 })
 </script>
-
-<template>
-  <div class="gauge-container">
-    <svg viewBox="0 0 100 70" class="gauge-svg">
-      <!-- Background arc -->
-      <path
-        d="M 10 60 A 40 40 0 0 1 90 60"
-        fill="none"
-        stroke="var(--border-base)"
-        stroke-width="8"
-        stroke-linecap="round"
-      />
-      <!-- Value arc -->
-      <path
-        d="M 10 60 A 40 40 0 0 1 90 60"
-        fill="none"
-        :stroke="currentColor"
-        stroke-width="8"
-        stroke-linecap="round"
-        :stroke-dasharray="strokeDasharray"
-        stroke-dashoffset="0"
-        transform="rotate(0, 50, 60)"
-        class="gauge-arc"
-      />
-      <!-- Center point -->
-      <circle cx="50" cy="60" r="3" :fill="currentColor" />
-    </svg>
-    
-    <div class="gauge-value" :style="{ color: currentColor }">
-      {{ displayValue }}
-      <span v-if="gaugeConfig?.unit" class="unit">{{ gaugeConfig.unit }}</span>
-    </div>
-    
-    <div v-if="binding" class="gauge-label">
-      {{ binding.pointDescription || binding.pointName }}
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .gauge-container {

@@ -1,3 +1,150 @@
+<template>
+  <div class="point-trend">
+    <div class="trend-header">
+      <div class="header-left">
+        <h3>{{ t('pointTrend.title') }}</h3>
+        <span v-if="pointStore.selectedPoint" class="point-info">
+          {{ pointStore.selectedDeviceAsset }} / {{ pointStore.selectedPoint.name }}
+        </span>
+        <el-tag v-if="pointStore.historyLoading" type="info" size="small">{{ t('pointTrend.loading') }}</el-tag>
+      </div>
+      <div class="header-right">
+        <el-select v-model="pointStore.trendTimeRange" style="width: 100px">
+          <el-option
+            v-for="opt in timeRangeOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+        <el-select v-model="pointStore.trendAggregation" style="width: 100px">
+          <el-option
+            v-for="opt in aggregationOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+        <el-button @click="loadData" :loading="pointStore.historyLoading">{{ t('pointTrend.refresh') }}</el-button>
+        <el-button @click="showConfig = !showConfig">
+          ⚙️ {{ t('pointTrend.config') }}
+        </el-button>
+        <el-button @click="emit('close')">✕ {{ t('pointTrend.close') }}</el-button>
+      </div>
+    </div>
+    
+    <div v-if="showConfig" class="config-panel">
+      <div class="config-row">
+        <label>{{ t('pointTrend.autoRefresh') }}</label>
+        <el-switch v-model="autoRefresh" />
+      </div>
+      <div class="config-row">
+        <label>{{ t('pointTrend.refreshInterval') }}</label>
+        <el-input-number v-model="refreshInterval" :min="5" :max="300" :disabled="!autoRefresh" />
+      </div>
+      <div class="config-row">
+        <label>{{ t('pointTrend.showMinMax') }}</label>
+        <el-switch v-model="showMinMax" />
+      </div>
+      <div class="config-row">
+        <label>{{ t('pointTrend.showAvgLine') }}</label>
+        <el-switch v-model="showAvgLine" />
+      </div>
+      <div class="config-row">
+        <label>{{ t('pointTrend.showDataPoints') }}</label>
+        <el-switch v-model="showDataPoints" />
+      </div>
+    </div>
+    
+    <div v-if="pointStore.selectedPoint" class="trend-content">
+      <div class="chart-container">
+        <v-chart :option="chartOption" class="trend-chart" autoresize />
+      </div>
+      
+      <div class="statistics-panel">
+        <div class="stat-card">
+          <span class="stat-label">{{ t('pointTrend.currentValue') }}</span>
+          <span class="stat-value current">
+            <template v-if="statisticsInfo?.isDigital">
+              {{ pointStore.selectedPoint.currentValue === true || pointStore.selectedPoint.currentValue === 1 ? t('pointTrend.on') : t('pointTrend.off') }}
+            </template>
+            <template v-else>
+              {{ pointStore.selectedPoint.currentValue ?? '--' }} {{ pointStore.selectedPoint.unit }}
+            </template>
+          </span>
+        </div>
+        
+        <template v-if="statisticsInfo?.isDigital">
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.onCount') }}</span>
+            <span class="stat-value on">{{ statisticsInfo?.onCount ?? 0 }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.offCount') }}</span>
+            <span class="stat-value off">{{ statisticsInfo?.offCount ?? 0 }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.onRate') }}</span>
+            <span class="stat-value percentage">{{ statisticsInfo?.onPercentage ?? 0 }}%</span>
+          </div>
+        </template>
+        
+        <template v-else>
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.minValue') }}</span>
+            <span class="stat-value min">{{ statisticsInfo?.min ?? '--' }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.maxValue') }}</span>
+            <span class="stat-value max">{{ statisticsInfo?.max ?? '--' }}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">{{ t('pointTrend.avgValue') }}</span>
+            <span class="stat-value avg">{{ statisticsInfo?.avg ?? '--' }}</span>
+          </div>
+        </template>
+        
+        <div class="stat-card">
+          <span class="stat-label">{{ t('pointTrend.dataPoints') }}</span>
+          <span class="stat-value">{{ statisticsInfo?.count ?? 0 }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">{{ t('pointTrend.timeRange') }}</span>
+          <span class="stat-value time">{{ statisticsInfo?.start ?? '--' }} ~ {{ statisticsInfo?.end ?? '--' }}</span>
+        </div>
+      </div>
+      
+      <div class="point-meta">
+        <div class="meta-item">
+          <span class="meta-label">{{ t('pointTrend.pointType') }}:</span>
+          <el-tag size="small">{{ pointStore.selectedPoint.type === 'analog' ? t('pointTrend.analog') : t('pointTrend.digital') }}</el-tag>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">{{ t('pointTrend.dataQuality') }}:</span>
+          <el-tag :type="pointStore.selectedPoint.quality === 'good' ? 'success' : 'warning'" size="small">
+            {{ pointStore.selectedPoint.quality === 'good' ? t('pointTrend.good') : t('pointTrend.uncertain') }}
+          </el-tag>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">{{ t('pointTrend.range') }}:</span>
+          <span>{{ pointStore.selectedPoint.minValue ?? '--' }} ~ {{ pointStore.selectedPoint.maxValue ?? '--' }} {{ pointStore.selectedPoint.unit }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">{{ t('pointTrend.trendRecord') }}:</span>
+          <el-tag :type="pointStore.selectedPoint.trend?.enabled ? 'success' : 'info'" size="small">
+            {{ pointStore.selectedPoint.trend?.enabled ? t('pointTrend.enabled') : t('pointTrend.disabled') }}
+          </el-tag>
+        </div>
+      </div>
+    </div>
+    
+    <div v-else class="empty-state">
+      <span class="empty-icon">📊</span>
+      <p>{{ t('pointTrend.selectPointHint') }}</p>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -310,153 +457,6 @@ onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
-
-<template>
-  <div class="point-trend">
-    <div class="trend-header">
-      <div class="header-left">
-        <h3>{{ t('pointTrend.title') }}</h3>
-        <span v-if="pointStore.selectedPoint" class="point-info">
-          {{ pointStore.selectedDeviceAsset }} / {{ pointStore.selectedPoint.name }}
-        </span>
-        <el-tag v-if="pointStore.historyLoading" type="info" size="small">{{ t('pointTrend.loading') }}</el-tag>
-      </div>
-      <div class="header-right">
-        <el-select v-model="pointStore.trendTimeRange" style="width: 100px">
-          <el-option
-            v-for="opt in timeRangeOptions"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
-          />
-        </el-select>
-        <el-select v-model="pointStore.trendAggregation" style="width: 100px">
-          <el-option
-            v-for="opt in aggregationOptions"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
-          />
-        </el-select>
-        <el-button @click="loadData" :loading="pointStore.historyLoading">{{ t('pointTrend.refresh') }}</el-button>
-        <el-button @click="showConfig = !showConfig">
-          ⚙️ {{ t('pointTrend.config') }}
-        </el-button>
-        <el-button @click="emit('close')">✕ {{ t('pointTrend.close') }}</el-button>
-      </div>
-    </div>
-    
-    <div v-if="showConfig" class="config-panel">
-      <div class="config-row">
-        <label>{{ t('pointTrend.autoRefresh') }}</label>
-        <el-switch v-model="autoRefresh" />
-      </div>
-      <div class="config-row">
-        <label>{{ t('pointTrend.refreshInterval') }}</label>
-        <el-input-number v-model="refreshInterval" :min="5" :max="300" :disabled="!autoRefresh" />
-      </div>
-      <div class="config-row">
-        <label>{{ t('pointTrend.showMinMax') }}</label>
-        <el-switch v-model="showMinMax" />
-      </div>
-      <div class="config-row">
-        <label>{{ t('pointTrend.showAvgLine') }}</label>
-        <el-switch v-model="showAvgLine" />
-      </div>
-      <div class="config-row">
-        <label>{{ t('pointTrend.showDataPoints') }}</label>
-        <el-switch v-model="showDataPoints" />
-      </div>
-    </div>
-    
-    <div v-if="pointStore.selectedPoint" class="trend-content">
-      <div class="chart-container">
-        <v-chart :option="chartOption" class="trend-chart" autoresize />
-      </div>
-      
-      <div class="statistics-panel">
-        <div class="stat-card">
-          <span class="stat-label">{{ t('pointTrend.currentValue') }}</span>
-          <span class="stat-value current">
-            <template v-if="statisticsInfo?.isDigital">
-              {{ pointStore.selectedPoint.currentValue === true || pointStore.selectedPoint.currentValue === 1 ? t('pointTrend.on') : t('pointTrend.off') }}
-            </template>
-            <template v-else>
-              {{ pointStore.selectedPoint.currentValue ?? '--' }} {{ pointStore.selectedPoint.unit }}
-            </template>
-          </span>
-        </div>
-        
-        <template v-if="statisticsInfo?.isDigital">
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.onCount') }}</span>
-            <span class="stat-value on">{{ statisticsInfo?.onCount ?? 0 }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.offCount') }}</span>
-            <span class="stat-value off">{{ statisticsInfo?.offCount ?? 0 }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.onRate') }}</span>
-            <span class="stat-value percentage">{{ statisticsInfo?.onPercentage ?? 0 }}%</span>
-          </div>
-        </template>
-        
-        <template v-else>
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.minValue') }}</span>
-            <span class="stat-value min">{{ statisticsInfo?.min ?? '--' }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.maxValue') }}</span>
-            <span class="stat-value max">{{ statisticsInfo?.max ?? '--' }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">{{ t('pointTrend.avgValue') }}</span>
-            <span class="stat-value avg">{{ statisticsInfo?.avg ?? '--' }}</span>
-          </div>
-        </template>
-        
-        <div class="stat-card">
-          <span class="stat-label">{{ t('pointTrend.dataPoints') }}</span>
-          <span class="stat-value">{{ statisticsInfo?.count ?? 0 }}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">{{ t('pointTrend.timeRange') }}</span>
-          <span class="stat-value time">{{ statisticsInfo?.start ?? '--' }} ~ {{ statisticsInfo?.end ?? '--' }}</span>
-        </div>
-      </div>
-      
-      <div class="point-meta">
-        <div class="meta-item">
-          <span class="meta-label">{{ t('pointTrend.pointType') }}:</span>
-          <el-tag size="small">{{ pointStore.selectedPoint.type === 'analog' ? t('pointTrend.analog') : t('pointTrend.digital') }}</el-tag>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">{{ t('pointTrend.dataQuality') }}:</span>
-          <el-tag :type="pointStore.selectedPoint.quality === 'good' ? 'success' : 'warning'" size="small">
-            {{ pointStore.selectedPoint.quality === 'good' ? t('pointTrend.good') : t('pointTrend.uncertain') }}
-          </el-tag>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">{{ t('pointTrend.range') }}:</span>
-          <span>{{ pointStore.selectedPoint.minValue ?? '--' }} ~ {{ pointStore.selectedPoint.maxValue ?? '--' }} {{ pointStore.selectedPoint.unit }}</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">{{ t('pointTrend.trendRecord') }}:</span>
-          <el-tag :type="pointStore.selectedPoint.trend?.enabled ? 'success' : 'info'" size="small">
-            {{ pointStore.selectedPoint.trend?.enabled ? t('pointTrend.enabled') : t('pointTrend.disabled') }}
-          </el-tag>
-        </div>
-      </div>
-    </div>
-    
-    <div v-else class="empty-state">
-      <span class="empty-icon">📊</span>
-      <p>{{ t('pointTrend.selectPointHint') }}</p>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .point-trend {

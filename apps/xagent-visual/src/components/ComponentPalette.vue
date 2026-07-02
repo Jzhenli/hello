@@ -1,48 +1,3 @@
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { type ComponentType } from '@/types/scada'
-import {
-  getSortedCategories,
-  getComponentsByCategory
-} from '@/config/component-categories'
-import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
-
-const { t } = useI18n()
-
-const emit = defineEmits<{
-  (e: 'dragStart', type: ComponentType): void
-  (e: 'toggleList'): void
-}>()
-
-const props = defineProps<{
-  showComponentList?: boolean
-}>()
-
-// Active category state
-const activeCategory = ref<string>('basic')
-
-// Get all categories sorted by order
-const categories = computed(() => getSortedCategories())
-
-// Get components for active category
-const activeComponents = computed(() => {
-  return getComponentsByCategory(activeCategory.value)
-})
-
-const onDragStart = (type: ComponentType, event: DragEvent) => {
-  if (event.dataTransfer) {
-    event.dataTransfer.setData('component-type', type)
-    event.dataTransfer.effectAllowed = 'copy'
-  }
-  emit('dragStart', type)
-}
-
-const selectCategory = (key: string) => {
-  activeCategory.value = key
-}
-</script>
-
 <template>
   <div class="component-palette">
     <div class="palette-header">
@@ -93,6 +48,51 @@ const selectCategory = (key: string) => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { type ComponentType } from '@/types/scada'
+import {
+  getSortedCategories,
+  getComponentsByCategory
+} from '@/config/component-categories'
+import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
+
+const emit = defineEmits<{
+  (e: 'dragStart', type: ComponentType): void
+  (e: 'toggleList'): void
+}>()
+
+const props = defineProps<{
+  showComponentList?: boolean
+}>()
+
+// Active category state
+const activeCategory = ref<string>('basic')
+
+// Get all categories sorted by order
+const categories = computed(() => getSortedCategories())
+
+// Get components for active category
+const activeComponents = computed(() => {
+  return getComponentsByCategory(activeCategory.value)
+})
+
+const onDragStart = (type: ComponentType, event: DragEvent) => {
+  if (event.dataTransfer) {
+    event.dataTransfer.setData('component-type', type)
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+  emit('dragStart', type)
+}
+
+const selectCategory = (key: string) => {
+  activeCategory.value = key
+}
+</script>
 
 <style scoped>
 .component-palette {

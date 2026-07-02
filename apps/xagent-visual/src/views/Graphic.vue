@@ -1,3 +1,16 @@
+<template>
+  <div class="graphic-editor-container">
+    <GraphicEditor
+      class="graphic-editor"
+      v-if="graphicData !== null && showEditor"
+      :graphicData="graphicData"
+      @onExit="onExit()"
+      @onSave="onSave"
+      @showPreview="showPreview"
+    ></GraphicEditor>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -75,19 +88,6 @@ const onSave = (data: any, callback?: (success: boolean) => void) => {
 
 const showPreview = () => {};
 </script>
-
-<template>
-  <div class="graphic-editor-container">
-    <GraphicEditor
-      class="graphic-editor"
-      v-if="graphicData !== null && showEditor"
-      :graphicData="graphicData"
-      @onExit="onExit()"
-      @onSave="onSave"
-      @showPreview="showPreview"
-    ></GraphicEditor>
-  </div>
-</template>
 
 <style scoped>
 .graphic-editor-container {

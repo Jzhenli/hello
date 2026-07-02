@@ -1,3 +1,39 @@
+<template>
+  <div class="component-list">
+    <div class="list-header">
+      <span class="header-title">{{ $t('scada.componentList') }}</span>
+      <span class="header-count">{{ components.length }}</span>
+    </div>
+    
+    <div class="list-content">
+      <div v-if="components.length === 0" class="empty-list">
+        {{ $t('scada.noComponents') }}
+      </div>
+      
+      <div
+        v-for="component in components"
+        :key="component.id"
+        class="list-item"
+        :class="{ 'active': scadaStore.selectedComponentIds.includes(component.id) }"
+        @click="handleLocateComponent(component)"
+      >
+        <div class="item-icon">{{ getComponentIcon(component.type) }}</div>
+        <div class="item-info">
+          <div class="item-name">{{ getComponentName(component) }}</div>
+          <div class="item-position">X: {{ Math.round(component.x) }}, Y: {{ Math.round(component.y) }}</div>
+        </div>
+        <el-button
+          :icon="Delete"
+          size="small"
+          text
+          class="delete-btn"
+          @click="handleDeleteComponent(component, $event)"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -46,42 +82,6 @@ const getComponentIcon = (type: string) => {
   return iconMap[type] || '☐'
 }
 </script>
-
-<template>
-  <div class="component-list">
-    <div class="list-header">
-      <span class="header-title">{{ $t('scada.componentList') }}</span>
-      <span class="header-count">{{ components.length }}</span>
-    </div>
-    
-    <div class="list-content">
-      <div v-if="components.length === 0" class="empty-list">
-        {{ $t('scada.noComponents') }}
-      </div>
-      
-      <div
-        v-for="component in components"
-        :key="component.id"
-        class="list-item"
-        :class="{ 'active': scadaStore.selectedComponentIds.includes(component.id) }"
-        @click="handleLocateComponent(component)"
-      >
-        <div class="item-icon">{{ getComponentIcon(component.type) }}</div>
-        <div class="item-info">
-          <div class="item-name">{{ getComponentName(component) }}</div>
-          <div class="item-position">X: {{ Math.round(component.x) }}, Y: {{ Math.round(component.y) }}</div>
-        </div>
-        <el-button
-          :icon="Delete"
-          size="small"
-          text
-          class="delete-btn"
-          @click="handleDeleteComponent(component, $event)"
-        />
-      </div>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .component-list {

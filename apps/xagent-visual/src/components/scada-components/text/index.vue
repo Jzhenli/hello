@@ -1,3 +1,17 @@
+<template>
+  <div 
+    class="text-container"
+    :style="{
+      fontSize: `${textConfig?.fontSize || 14}px`,
+      color: textConfig?.fontColor || '#2c3e50',
+      fontWeight: textConfig?.fontWeight || 'normal',
+      textAlign: textConfig?.textAlign || 'center'
+    }"
+  >
+    {{ textConfig?.content || t('scadaComponents.defaultText') }}
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,20 +26,6 @@ const props = defineProps<{
 
 const textConfig = computed(() => props.config.textConfig)
 </script>
-
-<template>
-  <div 
-    class="text-container"
-    :style="{
-      fontSize: `${textConfig?.fontSize || 14}px`,
-      color: textConfig?.fontColor || '#2c3e50',
-      fontWeight: textConfig?.fontWeight || 'normal',
-      textAlign: textConfig?.textAlign || 'center'
-    }"
-  >
-    {{ textConfig?.content || t('scadaComponents.defaultText') }}
-  </div>
-</template>
 
 <style scoped>
 .text-container {

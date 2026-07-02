@@ -1,17 +1,3 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import type { ScadaComponent } from '@/types/scada'
-
-const props = defineProps<{
-  config: ScadaComponent
-  editing?: boolean
-}>()
-
-const imageUrl = computed(() => props.config.imageConfig?.url || '')
-const objectFit = computed(() => props.config.imageConfig?.fit || 'contain')
-const imageStyle = computed(() => `object-fit: ${objectFit.value};`)
-</script>
-
 <template>
   <div class="image-container">
     <div v-if="!imageUrl && editing" class="image-placeholder">
@@ -27,6 +13,20 @@ const imageStyle = computed(() => `object-fit: ${objectFit.value};`)
     />
   </div>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { ScadaComponent } from '@/types/scada'
+
+const props = defineProps<{
+  config: ScadaComponent
+  editing?: boolean
+}>()
+
+const imageUrl = computed(() => props.config.imageConfig?.url || '')
+const objectFit = computed(() => props.config.imageConfig?.fit || 'contain')
+const imageStyle = computed(() => `object-fit: ${objectFit.value};`)
+</script>
 
 <style scoped>
 .image-container {

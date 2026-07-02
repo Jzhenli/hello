@@ -1,26 +1,3 @@
-<script setup lang="ts">
-import { Handle, Position, useNode } from '@vue-flow/core'
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { RuleNodeData } from '@/types/rule'
-
-const { t } = useI18n()
-const { node } = useNode<RuleNodeData>()
-
-const nodeData = computed(() => node.data?.action)
-const hasValidData = computed(() => 
-  nodeData.value?.target_asset && nodeData.value?.operation
-)
-
-const delayText = computed(() => {
-  const delay = nodeData.value?.delay || 0
-  if (delay === 0) return t('nodeViews.instant')
-  if (delay < 60) return `${t('nodeViews.delay')} ${delay}${t('nodeViews.seconds')}`
-  if (delay < 3600) return `${t('nodeViews.delay')} ${Math.floor(delay / 60)}${t('nodeViews.minutes')}`
-  return `${t('nodeViews.delay')} ${Math.floor(delay / 3600)}${t('nodeViews.hours')}`
-})
-</script>
-
 <template>
   <div class="rule-node action-node">
     <Handle type="target" :position="Position.Top" />
@@ -49,6 +26,29 @@ const delayText = computed(() => {
     <Handle type="source" :position="Position.Bottom" />
   </div>
 </template>
+
+<script setup lang="ts">
+import { Handle, Position, useNode } from '@vue-flow/core'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { RuleNodeData } from '@/types/rule'
+
+const { t } = useI18n()
+const { node } = useNode<RuleNodeData>()
+
+const nodeData = computed(() => node.data?.action)
+const hasValidData = computed(() => 
+  nodeData.value?.target_asset && nodeData.value?.operation
+)
+
+const delayText = computed(() => {
+  const delay = nodeData.value?.delay || 0
+  if (delay === 0) return t('nodeViews.instant')
+  if (delay < 60) return `${t('nodeViews.delay')} ${delay}${t('nodeViews.seconds')}`
+  if (delay < 3600) return `${t('nodeViews.delay')} ${Math.floor(delay / 60)}${t('nodeViews.minutes')}`
+  return `${t('nodeViews.delay')} ${Math.floor(delay / 3600)}${t('nodeViews.hours')}`
+})
+</script>
 
 <style scoped>
 .action-node {

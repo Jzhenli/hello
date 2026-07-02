@@ -1,3 +1,108 @@
+<template>
+  <div class="scada-page" :class="{ 'preview-mode': isPreviewMode }">
+    <div v-if="!isPreviewMode" class="page-header">
+      <div class="header-left">
+        <el-button :icon="ArrowLeft" @click="handleGoBack">{{ $t('scada.backToList') }}</el-button>
+        <span class="project-name">{{ currentPanel?.name }}</span>
+      </div>
+      <div class="header-actions">
+        <el-button :icon="View" @click="handlePreview">{{ $t('scada.preview') }}</el-button>
+        <el-button :icon="FullScreen" @click="handleFullscreen">{{ $t('scada.fullscreen') }}</el-button>
+        <el-button @click="handleExport">{{ $t('common.export') }}</el-button>
+        <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">{{ $t('scada.publish') }}</el-button>
+        <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">{{ $t('common.save') }}</el-button>
+      </div>
+    </div>
+    
+    <div v-if="isPreviewMode" class="preview-header">
+      <span class="preview-title">{{ currentPanel?.name }}</span>
+      <div class="preview-actions">
+        <el-button size="small" @click="handleExitPreview">{{ $t('scada.exitPreview') }}</el-button>
+      </div>
+    </div>
+    
+    <div v-if="currentPanel" class="scada-editor">
+      <div v-if="!isPreviewMode" class="editor-left">
+        <ComponentPalette :showComponentList="showComponentList" @toggleList="showComponentList = !showComponentList" />
+      </div>
+      
+      <div v-if="!isPreviewMode" class="editor-list" :class="{ collapsed: !showComponentList }">
+        <div v-if="showComponentList" class="list-panel">
+          <ComponentList />
+        </div>
+      </div>
+      
+      <div class="editor-center">
+        <div v-if="!isPreviewMode" class="editor-toolbar">
+          <div class="toolbar-left">
+            <el-button-group>
+              <el-button size="small" @click="handleZoomOut">-</el-button>
+              <el-button size="small" @click="handleZoomReset">{{ Math.round(scadaStore.zoom * 100) }}%</el-button>
+              <el-button size="small" @click="handleZoomIn">+</el-button>
+            </el-button-group>
+            <el-checkbox v-model="scadaStore.showGrid" size="small">{{ $t('scada.showGrid') }}</el-checkbox>
+            <el-checkbox v-model="scadaStore.isEditing" size="small">{{ $t('scada.editMode') }}</el-checkbox>
+            <el-popover
+              placement="bottom-start"
+              :width="320"
+              trigger="hover"
+            >
+              <template #reference>
+                <el-button size="small" text class="shortcut-btn">
+                  ⌨️ {{ $t('scada.shortcuts') }}
+                </el-button>
+              </template>
+              <div class="shortcut-list">
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>C</kbd></span>
+                  <span class="desc">{{ $t('scada.copy') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>V</kbd></span>
+                  <span class="desc">{{ $t('scada.paste') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>D</kbd></span>
+                  <span class="desc">{{ $t('scada.duplicate') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Delete</kbd></span>
+                  <span class="desc">{{ $t('scada.delete') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></span>
+                  <span class="desc">{{ $t('scada.move') }}</span>
+                </div>
+                <div class="shortcut-item">
+                  <span class="key-group"><kbd>Esc</kbd></span>
+                  <span class="desc">{{ $t('scada.closeMenu') }}</span>
+                </div>
+              </div>
+            </el-popover>
+          </div>
+          <div class="toolbar-right">
+            <span class="component-count">{{ $t('scada.componentCount', { count: currentPanel.components.length }) }}</span>
+          </div>
+        </div>
+        
+        <div class="canvas-wrapper">
+          <ScadaCanvas />
+        </div>
+      </div>
+      
+      <div v-if="!isPreviewMode" class="editor-right">
+        <ComponentConfig />
+      </div>
+    </div>
+    
+    <div v-else class="empty-state">
+      <el-empty :description="$t('scada.projectNotExist')">
+        <el-button type="primary" @click="handleGoBack">{{ $t('scada.backToProjectList') }}</el-button>
+      </el-empty>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -118,111 +223,6 @@ const handleExport = () => {
   ElMessage.success(t('scada.exportSuccess'))
 }
 </script>
-
-<template>
-  <div class="scada-page" :class="{ 'preview-mode': isPreviewMode }">
-    <div v-if="!isPreviewMode" class="page-header">
-      <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="handleGoBack">{{ $t('scada.backToList') }}</el-button>
-        <span class="project-name">{{ currentPanel?.name }}</span>
-      </div>
-      <div class="header-actions">
-        <el-button :icon="View" @click="handlePreview">{{ $t('scada.preview') }}</el-button>
-        <el-button :icon="FullScreen" @click="handleFullscreen">{{ $t('scada.fullscreen') }}</el-button>
-        <el-button @click="handleExport">{{ $t('common.export') }}</el-button>
-        <el-button type="primary" :icon="Upload" v-if="userStore.hasPermission('scada', 'update')" @click="handlePublish">{{ $t('scada.publish') }}</el-button>
-        <el-button v-if="userStore.hasPermission('scada', 'update')" @click="handleSave">{{ $t('common.save') }}</el-button>
-      </div>
-    </div>
-    
-    <div v-if="isPreviewMode" class="preview-header">
-      <span class="preview-title">{{ currentPanel?.name }}</span>
-      <div class="preview-actions">
-        <el-button size="small" @click="handleExitPreview">{{ $t('scada.exitPreview') }}</el-button>
-      </div>
-    </div>
-    
-    <div v-if="currentPanel" class="scada-editor">
-      <div v-if="!isPreviewMode" class="editor-left">
-        <ComponentPalette :showComponentList="showComponentList" @toggleList="showComponentList = !showComponentList" />
-      </div>
-      
-      <div v-if="!isPreviewMode" class="editor-list" :class="{ collapsed: !showComponentList }">
-        <div v-if="showComponentList" class="list-panel">
-          <ComponentList />
-        </div>
-      </div>
-      
-      <div class="editor-center">
-        <div v-if="!isPreviewMode" class="editor-toolbar">
-          <div class="toolbar-left">
-            <el-button-group>
-              <el-button size="small" @click="handleZoomOut">-</el-button>
-              <el-button size="small" @click="handleZoomReset">{{ Math.round(scadaStore.zoom * 100) }}%</el-button>
-              <el-button size="small" @click="handleZoomIn">+</el-button>
-            </el-button-group>
-            <el-checkbox v-model="scadaStore.showGrid" size="small">{{ $t('scada.showGrid') }}</el-checkbox>
-            <el-checkbox v-model="scadaStore.isEditing" size="small">{{ $t('scada.editMode') }}</el-checkbox>
-            <el-popover
-              placement="bottom-start"
-              :width="320"
-              trigger="hover"
-            >
-              <template #reference>
-                <el-button size="small" text class="shortcut-btn">
-                  ⌨️ {{ $t('scada.shortcuts') }}
-                </el-button>
-              </template>
-              <div class="shortcut-list">
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>C</kbd></span>
-                  <span class="desc">{{ $t('scada.copy') }}</span>
-                </div>
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>V</kbd></span>
-                  <span class="desc">{{ $t('scada.paste') }}</span>
-                </div>
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>Ctrl</kbd> + <kbd>D</kbd></span>
-                  <span class="desc">{{ $t('scada.duplicate') }}</span>
-                </div>
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>Delete</kbd></span>
-                  <span class="desc">{{ $t('scada.delete') }}</span>
-                </div>
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd></span>
-                  <span class="desc">{{ $t('scada.move') }}</span>
-                </div>
-                <div class="shortcut-item">
-                  <span class="key-group"><kbd>Esc</kbd></span>
-                  <span class="desc">{{ $t('scada.closeMenu') }}</span>
-                </div>
-              </div>
-            </el-popover>
-          </div>
-          <div class="toolbar-right">
-            <span class="component-count">{{ $t('scada.componentCount', { count: currentPanel.components.length }) }}</span>
-          </div>
-        </div>
-        
-        <div class="canvas-wrapper">
-          <ScadaCanvas />
-        </div>
-      </div>
-      
-      <div v-if="!isPreviewMode" class="editor-right">
-        <ComponentConfig />
-      </div>
-    </div>
-    
-    <div v-else class="empty-state">
-      <el-empty :description="$t('scada.projectNotExist')">
-        <el-button type="primary" @click="handleGoBack">{{ $t('scada.backToProjectList') }}</el-button>
-      </el-empty>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .scada-page {

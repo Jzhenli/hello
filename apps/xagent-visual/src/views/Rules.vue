@@ -1,3 +1,126 @@
+<template>
+  <div class="rules-page">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <el-input
+          v-model="searchQuery"
+          :placeholder="$t('rules.searchPlaceholder')"
+          :prefix-icon="Search"
+          clearable
+          class="toolbar-search"
+        />
+        <el-select 
+          v-model="typeFilter" 
+          :placeholder="$t('rules.typeFilter')" 
+          clearable
+          class="toolbar-filter"
+        >
+          <el-option :label="$t('rules.allTypes')" value="" />
+          <el-option :label="$t('rules.typeScene')" value="scene" />
+          <el-option :label="$t('rules.typeAlert')" value="alert" />
+          <el-option :label="$t('rules.typeSchedule')" value="schedule" />
+        </el-select>
+      </div>
+      <div class="toolbar-right">
+        <el-button type="primary" :icon="Plus" @click="openEditor()" v-if="userStore.hasPermission('rules', 'create')">
+          {{ $t('rules.createNew') }}
+        </el-button>
+        <el-button :icon="Upload" @click="handleImportRules" v-if="userStore.hasPermission('rules', 'create')">{{ $t('common.import') }}</el-button>
+        <el-button :icon="Download" @click="handleExportRules">{{ $t('common.export') }}</el-button>
+        <el-button :icon="Refresh" circle @click="handleRefresh" :loading="ruleStore.loading" />
+      </div>
+    </div>
+
+    <div v-if="ruleStore.loading && ruleStore.rules.length === 0" class="loading-state">
+      <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+      <span>{{ $t('rules.loadingMessage') }}</span>
+    </div>
+
+    <div v-else-if="ruleStore.error" class="error-state">
+      <span>{{ ruleStore.error }}</span>
+      <el-button size="small" @click="ruleStore.fetchRules()">{{ $t('common.retry') }}</el-button>
+    </div>
+
+    <div v-else-if="filteredRules.length === 0" class="empty-state">
+      <span>{{ searchQuery || typeFilter ? $t('rules.noMatchingRules') : $t('rules.emptyMessage') }}</span>
+    </div>
+    
+    <div v-else class="rules-list">
+      <el-card 
+        v-for="rule in filteredRules" 
+        :key="rule.id" 
+        class="rule-card"
+        shadow="hover"
+        :class="{ disabled: !rule.enabled }"
+      >
+        <div class="rule-header">
+          <div class="rule-status" :class="{ active: rule.enabled }">
+            <el-icon v-if="rule.enabled"><CircleCheck /></el-icon>
+            <el-icon v-else><CircleClose /></el-icon>
+          </div>
+          <div class="rule-title">
+            <span class="rule-name">{{ rule.name }}</span>
+            <el-tag :type="getTypeTag(rule.type)" size="small">
+              {{ getTypeLabel(rule.type) }}
+            </el-tag>
+          </div>
+          <el-switch 
+            v-model="rule.enabled"
+            size="small"
+            @change="handleToggleRule(rule.id)"
+            v-if="userStore.hasPermission('rules', 'update')"
+          />
+        </div>
+        
+        <div class="rule-expression">
+          <code>{{ rule.expression || $t('rules.noExpression') }}</code>
+        </div>
+        
+        <div class="rule-meta">
+          <span class="meta-item">
+            <span class="meta-label">{{ $t('rules.executionCount') }}:</span>
+            <span class="meta-value">{{ rule.executionCount }} {{ $t('rules.times') }}</span>
+          </span>
+          <span class="meta-item">
+            <span class="meta-label">{{ $t('rules.lastTriggered') }}:</span>
+            <span class="meta-value">{{ rule.lastTriggered || $t('rules.neverTriggered') }}</span>
+          </span>
+        </div>
+        
+        <div class="rule-actions">
+          <el-button type="primary" :icon="Edit" size="small" @click="openEditor(rule.id)" v-if="userStore.hasPermission('rules', 'update')">
+            {{ $t('rules.edit') }}
+          </el-button>
+          <el-button :icon="CopyDocument" size="small" @click="handleCopyRule(rule)" v-if="userStore.hasPermission('rules', 'create')">
+            {{ $t('rules.copy') }}
+          </el-button>
+          <el-button 
+            :type="rule.enabled ? 'warning' : 'success'" 
+            size="small"
+            @click="handleToggleRule(rule.id)"
+            v-if="userStore.hasPermission('rules', 'update')"
+          >
+            {{ rule.enabled ? $t('rules.disable') : $t('rules.enable') }}
+          </el-button>
+          <el-button type="danger" :icon="Delete" size="small" @click="handleDeleteRule(rule.id, rule.name)" v-if="userStore.hasPermission('rules', 'delete')">
+            {{ $t('rules.delete') }}
+          </el-button>
+        </div>
+      </el-card>
+    </div>
+    
+    <el-drawer
+      v-model="showEditor"
+      :title="currentRuleId ? $t('rules.editRule') : $t('rules.newRule')"
+      direction="rtl"
+      size="80%"
+      :with-header="true"
+    >
+      <RuleEditorCanvas :rule-id="currentRuleId" @close="showEditor = false" @saved="handleEditorSaved" />
+    </el-drawer>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,9 +135,12 @@ import {
   CircleClose,
   Edit,
   CopyDocument,
-  Delete
+  Delete,
+  Search,
+  Loading
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import RuleEditorCanvas from '@/components/RuleEditorCanvas.vue'
 
 const { t } = useI18n()
 
@@ -191,138 +317,6 @@ const handleEditorSaved = () => {
 onMounted(() => {
   ruleStore.fetchRules()
 })
-</script>
-
-<template>
-  <div class="rules-page">
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <el-input
-          v-model="searchQuery"
-          :placeholder="$t('rules.searchPlaceholder')"
-          :prefix-icon="Search"
-          clearable
-          class="toolbar-search"
-        />
-        <el-select 
-          v-model="typeFilter" 
-          :placeholder="$t('rules.typeFilter')" 
-          clearable
-          class="toolbar-filter"
-        >
-          <el-option :label="$t('rules.allTypes')" value="" />
-          <el-option :label="$t('rules.typeScene')" value="scene" />
-          <el-option :label="$t('rules.typeAlert')" value="alert" />
-          <el-option :label="$t('rules.typeSchedule')" value="schedule" />
-        </el-select>
-      </div>
-      <div class="toolbar-right">
-        <el-button type="primary" :icon="Plus" @click="openEditor()" v-if="userStore.hasPermission('rules', 'create')">
-          {{ $t('rules.createNew') }}
-        </el-button>
-        <el-button :icon="Upload" @click="handleImportRules" v-if="userStore.hasPermission('rules', 'create')">{{ $t('common.import') }}</el-button>
-        <el-button :icon="Download" @click="handleExportRules">{{ $t('common.export') }}</el-button>
-        <el-button :icon="Refresh" circle @click="handleRefresh" :loading="ruleStore.loading" />
-      </div>
-    </div>
-
-    <div v-if="ruleStore.loading && ruleStore.rules.length === 0" class="loading-state">
-      <el-icon class="is-loading" :size="24"><Loading /></el-icon>
-      <span>{{ $t('rules.loadingMessage') }}</span>
-    </div>
-
-    <div v-else-if="ruleStore.error" class="error-state">
-      <span>{{ ruleStore.error }}</span>
-      <el-button size="small" @click="ruleStore.fetchRules()">{{ $t('common.retry') }}</el-button>
-    </div>
-
-    <div v-else-if="filteredRules.length === 0" class="empty-state">
-      <span>{{ searchQuery || typeFilter ? $t('rules.noMatchingRules') : $t('rules.emptyMessage') }}</span>
-    </div>
-    
-    <div v-else class="rules-list">
-      <el-card 
-        v-for="rule in filteredRules" 
-        :key="rule.id" 
-        class="rule-card"
-        shadow="hover"
-        :class="{ disabled: !rule.enabled }"
-      >
-        <div class="rule-header">
-          <div class="rule-status" :class="{ active: rule.enabled }">
-            <el-icon v-if="rule.enabled"><CircleCheck /></el-icon>
-            <el-icon v-else><CircleClose /></el-icon>
-          </div>
-          <div class="rule-title">
-            <span class="rule-name">{{ rule.name }}</span>
-            <el-tag :type="getTypeTag(rule.type)" size="small">
-              {{ getTypeLabel(rule.type) }}
-            </el-tag>
-          </div>
-          <el-switch 
-            v-model="rule.enabled"
-            size="small"
-            @change="handleToggleRule(rule.id)"
-            v-if="userStore.hasPermission('rules', 'update')"
-          />
-        </div>
-        
-        <div class="rule-expression">
-          <code>{{ rule.expression || $t('rules.noExpression') }}</code>
-        </div>
-        
-        <div class="rule-meta">
-          <span class="meta-item">
-            <span class="meta-label">{{ $t('rules.executionCount') }}:</span>
-            <span class="meta-value">{{ rule.executionCount }} {{ $t('rules.times') }}</span>
-          </span>
-          <span class="meta-item">
-            <span class="meta-label">{{ $t('rules.lastTriggered') }}:</span>
-            <span class="meta-value">{{ rule.lastTriggered || $t('rules.neverTriggered') }}</span>
-          </span>
-        </div>
-        
-        <div class="rule-actions">
-          <el-button type="primary" :icon="Edit" size="small" @click="openEditor(rule.id)" v-if="userStore.hasPermission('rules', 'update')">
-            {{ $t('rules.edit') }}
-          </el-button>
-          <el-button :icon="CopyDocument" size="small" @click="handleCopyRule(rule)" v-if="userStore.hasPermission('rules', 'create')">
-            {{ $t('rules.copy') }}
-          </el-button>
-          <el-button 
-            :type="rule.enabled ? 'warning' : 'success'" 
-            size="small"
-            @click="handleToggleRule(rule.id)"
-            v-if="userStore.hasPermission('rules', 'update')"
-          >
-            {{ rule.enabled ? $t('rules.disable') : $t('rules.enable') }}
-          </el-button>
-          <el-button type="danger" :icon="Delete" size="small" @click="handleDeleteRule(rule.id, rule.name)" v-if="userStore.hasPermission('rules', 'delete')">
-            {{ $t('rules.delete') }}
-          </el-button>
-        </div>
-      </el-card>
-    </div>
-    
-    <el-drawer
-      v-model="showEditor"
-      :title="currentRuleId ? $t('rules.editRule') : $t('rules.newRule')"
-      direction="rtl"
-      size="80%"
-      :with-header="true"
-    >
-      <RuleEditorCanvas :rule-id="currentRuleId" @close="showEditor = false" @saved="handleEditorSaved" />
-    </el-drawer>
-  </div>
-</template>
-
-<script lang="ts">
-import { Search, Loading } from '@element-plus/icons-vue'
-import RuleEditorCanvas from '@/components/RuleEditorCanvas.vue'
-
-export default {
-  components: { Search, Loading, RuleEditorCanvas }
-}
 </script>
 
 <style scoped>

@@ -1,23 +1,3 @@
-<script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { useScadaStore } from '@/stores/scada'
-import type { ScadaComponent } from '@/types/scada'
-
-const { t } = useI18n()
-const scadaStore = useScadaStore()
-
-const props = defineProps<{
-  component: ScadaComponent
-}>()
-
-const updateConfig = (key: string, value: any) => {
-  const config = props.component.gaugeConfig || { min: 0, max: 100, unit: '', thresholds: [], showValue: true }
-  scadaStore.updateComponent(props.component.id, {
-    gaugeConfig: { ...config, [key]: value }
-  })
-}
-</script>
-
 <template>
   <div class="config-section">
     <div class="section-title">{{ t('componentConfig.gaugeConfig') }}</div>
@@ -37,6 +17,26 @@ const updateConfig = (key: string, value: any) => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+import { useScadaStore } from '@/stores/scada'
+import type { ScadaComponent } from '@/types/scada'
+
+const { t } = useI18n()
+const scadaStore = useScadaStore()
+
+const props = defineProps<{
+  component: ScadaComponent
+}>()
+
+const updateConfig = (key: string, value: any) => {
+  const config = props.component.gaugeConfig || { min: 0, max: 100, unit: '', thresholds: [], showValue: true }
+  scadaStore.updateComponent(props.component.id, {
+    gaugeConfig: { ...config, [key]: value }
+  })
+}
+</script>
 
 <style scoped>
 .config-section {

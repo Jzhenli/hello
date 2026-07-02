@@ -1,294 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, onActivated, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { useDeviceStore } from '@/stores/devices'
-import { useRuleStore } from '@/stores/rules'
-import { useAlertStore } from '@/stores/alerts'
-import { useSystemStore } from '@/stores/system'
-import { useChannelStore } from '@/stores/channels'
-import { useResponsive } from '@/utils/useResponsive'
-import { use } from 'echarts/core'
-
-// 定义组件名称，用于 keep-alive 缓存
-defineOptions({
-  name: 'Dashboard'
-})
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart, GaugeChart } from 'echarts/charts'
-import {
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent
-} from 'echarts/components'
-import VChart from 'vue-echarts'
-import dayjs from 'dayjs'
-import { RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-
-import { useI18n } from 'vue-i18n'
-
-use([
-  CanvasRenderer,
-  LineChart,
-  BarChart,
-  GaugeChart,
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent
-])
-
-const { t } = useI18n()
-const router = useRouter()
-const deviceStore = useDeviceStore()
-const ruleStore = useRuleStore()
-const alertStore = useAlertStore()
-const systemStore = useSystemStore()
-const channelStore = useChannelStore()
-const { isTablet, isMobile, isSmallTablet, isMediumTablet, isLargeTablet } = useResponsive()
-
-const lastUpdateTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
-const refreshing = ref(false)
-const timeRange = ref('24h')
-
-const statCardSpan = computed(() => {
-  if (isMobile.value) return 24
-  if (isSmallTablet.value) return 12
-  if (isMediumTablet.value) return 12
-  if (isLargeTablet.value) return 6
-  if (isTablet.value) return 12
-  return 6
-})
-
-const infoColSpan = computed(() => {
-  if (isMobile.value) return 24
-  if (isSmallTablet.value) return 24
-  if (isMediumTablet.value) return 12
-  if (isLargeTablet.value) return 12
-  if (isTablet.value) return 12
-  return 12
-})
-
-const chartHeight = computed(() => {
-  if (isSmallTablet.value) return 280
-  if (isMediumTablet.value) return 360
-  if (isLargeTablet.value) return 420
-  if (isMobile.value) return 300
-  return 420
-})
-
-function getProgressColor(percentage: number): string {
-  if (percentage > 80) return 'var(--color-danger)'
-  if (percentage > 60) return 'var(--color-warning)'
-  return 'var(--color-success)'
-}
-
-const alertTrend = computed(() => {
-  const pending = alertStore.pendingAlerts
-  if (pending > 0) return { text: t('dashboard.pendingAlerts') + ` (${pending})`, type: 'danger' }
-  return { text: t('dashboard.noNew'), type: 'success' }
-})
-
-const deviceTrend = computed(() => {
-  const online = deviceStore.onlineDevices
-  const total = deviceStore.totalDevices
-  if (total === 0) return { text: t('dashboard.noDevices'), type: 'info' }
-  const percentage = Math.round((online / total) * 100)
-  if (percentage >= 80) return { text: t('dashboard.runningWell'), type: 'success' }
-  if (percentage >= 50) return { text: t('dashboard.partiallyOffline'), type: 'warning' }
-  return { text: t('dashboard.mostlyOffline'), type: 'danger' }
-})
-
-const channelTrend = computed(() => {
-  const online = channelStore.onlineChannels
-  const total = channelStore.totalChannels
-  if (total === 0) return { text: t('dashboard.noChannels'), type: 'info' }
-  const percentage = Math.round((online / total) * 100)
-  if (percentage >= 80) return { text: t('dashboard.connectionNormal'), type: 'success' }
-  if (percentage >= 50) return { text: t('dashboard.partiallyDisconnected'), type: 'warning' }
-  return { text: t('dashboard.mostlyDisconnected'), type: 'danger' }
-})
-
-const ruleTrend = computed(() => {
-  const active = ruleStore.activeRules
-  const total = ruleStore.totalRules
-  if (total === 0) return { text: t('dashboard.noRules'), type: 'info' }
-  return { text: `${active}/${total} ` + t('dashboard.enabled'), type: active > 0 ? 'success' : 'warning' }
-})
-
-const chartSummary = computed(() => {
-  const data = dataChartOption.value.series[0].data
-  if (data.length === 0) return { peak: 0, average: 0 }
-
-  const peak = Math.max(...data)
-  const average = Math.round(data.reduce((a, b) => a + b, 0) / data.length)
-
-  return { peak, average }
-})
-
-const dataChartOption = ref({
-  tooltip: {
-    trigger: 'axis'
-  },
-  grid: {
-    left: '3%',
-    right: '4%',
-    bottom: '3%',
-    containLabel: true
-  },
-  xAxis: {
-    type: 'category',
-    boundaryGap: false,
-    data: [] as string[]
-  },
-  yAxis: {
-    type: 'value'
-  },
-  series: [{
-    name: t('dashboard.dataCollection'),
-    type: 'line',
-    smooth: true,
-    areaStyle: {
-      color: {
-        type: 'linear',
-        x: 0, y: 0, x2: 0, y2: 1,
-        colorStops: [
-          { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-          { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
-        ]
-      }
-    },
-    lineStyle: { color: '#3b82f6', width: 2 },
-    itemStyle: { color: '#3b82f6' },
-    data: [] as number[]
-  }]
-})
-
-async function fetchAllData() {
-  try {
-    const results = await Promise.allSettled([
-      deviceStore.fetchDevices(),
-      ruleStore.fetchRules(),
-      alertStore.fetchAlerts(),
-      channelStore.fetchChannels(),
-      systemStore.fetchAllStats()
-    ])
-
-    const failedRequests = results.filter(r => r.status === 'rejected')
-    if (failedRequests.length > 0) {
-      console.warn('Some requests failed:', failedRequests)
-    }
-
-    updateChartData()
-
-  } catch (error) {
-    console.error('Failed to fetch data:', error)
-    ElMessage.error(t('dashboard.dataLoadFailed'))
-  }
-}
-
-async function updateChartData() {
-  try {
-    const chartData = await systemStore.generateChartData(timeRange.value)
-    
-    requestAnimationFrame(() => {
-      dataChartOption.value.xAxis.data = chartData.map(d => d.time)
-      dataChartOption.value.series[0].data = chartData.map(d => d.value)
-    })
-  } catch (error) {
-    console.error('Failed to update chart data:', error)
-    ElMessage.error(t('dashboard.dataFetchFailed'))
-  }
-}
-
-// 监听时间范围变化，自动更新图表
-watch(timeRange, async () => {
-  await updateChartData()
-})
-
-async function refreshData() {
-  if (refreshing.value) return
-  
-  refreshing.value = true
-  try {
-    await fetchAllData()
-    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-    ElMessage.success(t('dashboard.dataRefreshed'))
-  } finally {
-    refreshing.value = false
-  }
-}
-
-const showContent = ref(false)        // 是否显示真实内容
-const showSkeleton = ref(true)        // 是否显示骨架屏
-const isInitialized = ref(false)      // 是否已初始化（用于 keep-alive）
-
-// 首次加载逻辑（只在组件创建时执行一次）
-onMounted(async () => {
-  // 检查 store 中是否已有已加载的数据（来自 sessionStorage 持久化）
-  const hasCacheData = deviceStore.devices.length > 0 ||
-                       ruleStore.rules.length > 0 ||
-                       alertStore.alerts.length > 0 ||
-                       systemStore.stats.totalReadings > 0
-
-  // 如果有缓存数据，立即显示内容
-  if (hasCacheData) {
-    showSkeleton.value = false
-    showContent.value = true
-    isInitialized.value = true
-    // 后台刷新数据，但不显示 loading
-    try {
-      await fetchAllData()
-      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-    } catch (error) {
-      console.error('Failed to refresh data:', error)
-    }
-    return
-  }
-
-  // 无缓存数据（首次访问），保持骨架屏显示，后台加载数据
-  try {
-    await fetchAllData()
-    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-
-    // 等待DOM更新完成
-    await nextTick()
-
-    // 平滑过渡：隐藏骨架屏并显示内容
-    requestAnimationFrame(() => {
-      showSkeleton.value = false
-      showContent.value = true
-      isInitialized.value = true
-    })
-  } catch (error) {
-    console.error('Failed to fetch data:', error)
-    ElMessage.error(t('dashboard.dataLoadFailed'))
-    showSkeleton.value = false
-    showContent.value = true
-    isInitialized.value = true
-  }
-})
-
-// 组件激活逻辑（每次从缓存中激活时执行）
-onActivated(async () => {
-  // 如果已经初始化，直接显示内容，后台刷新数据
-  if (isInitialized.value) {
-    // 确保显示内容（防止状态异常）
-    showSkeleton.value = false
-    showContent.value = true
-
-    // 后台静默刷新数据
-    try {
-      await fetchAllData()
-      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
-    } catch (error) {
-      console.error('Failed to refresh data on activation:', error)
-    }
-  }
-})
-</script>
-
 <template>
   <div class="dashboard">
     <!-- 骨架屏：模拟真实内容布局 -->
@@ -585,6 +294,297 @@ onActivated(async () => {
       </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onActivated, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useDeviceStore } from '@/stores/devices'
+import { useRuleStore } from '@/stores/rules'
+import { useAlertStore } from '@/stores/alerts'
+import { useSystemStore } from '@/stores/system'
+import { useChannelStore } from '@/stores/channels'
+import { useResponsive } from '@/utils/useResponsive'
+import { use } from 'echarts/core'
+
+// 定义组件名称，用于 keep-alive 缓存
+defineOptions({
+  name: 'Dashboard'
+})
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, BarChart, GaugeChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
+import dayjs from 'dayjs'
+import { RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+
+import { useI18n } from 'vue-i18n'
+
+use([
+  CanvasRenderer,
+  LineChart,
+  BarChart,
+  GaugeChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+])
+
+const { t } = useI18n()
+const router = useRouter()
+const deviceStore = useDeviceStore()
+const ruleStore = useRuleStore()
+const alertStore = useAlertStore()
+const systemStore = useSystemStore()
+const channelStore = useChannelStore()
+const { isTablet, isMobile, isSmallTablet, isMediumTablet, isLargeTablet } = useResponsive()
+
+const lastUpdateTime = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
+const refreshing = ref(false)
+const timeRange = ref('24h')
+
+const statCardSpan = computed(() => {
+  if (isMobile.value) return 24
+  if (isSmallTablet.value) return 12
+  if (isMediumTablet.value) return 12
+  if (isLargeTablet.value) return 6
+  if (isTablet.value) return 12
+  return 6
+})
+
+const infoColSpan = computed(() => {
+  if (isMobile.value) return 24
+  if (isSmallTablet.value) return 24
+  if (isMediumTablet.value) return 12
+  if (isLargeTablet.value) return 12
+  if (isTablet.value) return 12
+  return 12
+})
+
+const chartHeight = computed(() => {
+  if (isSmallTablet.value) return 280
+  if (isMediumTablet.value) return 360
+  if (isLargeTablet.value) return 420
+  if (isMobile.value) return 300
+  return 420
+})
+
+function getProgressColor(percentage: number): string {
+  if (percentage > 80) return 'var(--color-danger)'
+  if (percentage > 60) return 'var(--color-warning)'
+  return 'var(--color-success)'
+}
+
+const alertTrend = computed(() => {
+  const pending = alertStore.pendingAlerts
+  if (pending > 0) return { text: t('dashboard.pendingAlerts') + ` (${pending})`, type: 'danger' }
+  return { text: t('dashboard.noNew'), type: 'success' }
+})
+
+const deviceTrend = computed(() => {
+  const online = deviceStore.onlineDevices
+  const total = deviceStore.totalDevices
+  if (total === 0) return { text: t('dashboard.noDevices'), type: 'info' }
+  const percentage = Math.round((online / total) * 100)
+  if (percentage >= 80) return { text: t('dashboard.runningWell'), type: 'success' }
+  if (percentage >= 50) return { text: t('dashboard.partiallyOffline'), type: 'warning' }
+  return { text: t('dashboard.mostlyOffline'), type: 'danger' }
+})
+
+const channelTrend = computed(() => {
+  const online = channelStore.onlineChannels
+  const total = channelStore.totalChannels
+  if (total === 0) return { text: t('dashboard.noChannels'), type: 'info' }
+  const percentage = Math.round((online / total) * 100)
+  if (percentage >= 80) return { text: t('dashboard.connectionNormal'), type: 'success' }
+  if (percentage >= 50) return { text: t('dashboard.partiallyDisconnected'), type: 'warning' }
+  return { text: t('dashboard.mostlyDisconnected'), type: 'danger' }
+})
+
+const ruleTrend = computed(() => {
+  const active = ruleStore.activeRules
+  const total = ruleStore.totalRules
+  if (total === 0) return { text: t('dashboard.noRules'), type: 'info' }
+  return { text: `${active}/${total} ` + t('dashboard.enabled'), type: active > 0 ? 'success' : 'warning' }
+})
+
+const chartSummary = computed(() => {
+  const data = dataChartOption.value.series[0].data
+  if (data.length === 0) return { peak: 0, average: 0 }
+
+  const peak = Math.max(...data)
+  const average = Math.round(data.reduce((a, b) => a + b, 0) / data.length)
+
+  return { peak, average }
+})
+
+const dataChartOption = ref({
+  tooltip: {
+    trigger: 'axis'
+  },
+  grid: {
+    left: '3%',
+    right: '4%',
+    bottom: '3%',
+    containLabel: true
+  },
+  xAxis: {
+    type: 'category',
+    boundaryGap: false,
+    data: [] as string[]
+  },
+  yAxis: {
+    type: 'value'
+  },
+  series: [{
+    name: t('dashboard.dataCollection'),
+    type: 'line',
+    smooth: true,
+    areaStyle: {
+      color: {
+        type: 'linear',
+        x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [
+          { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+          { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+        ]
+      }
+    },
+    lineStyle: { color: '#3b82f6', width: 2 },
+    itemStyle: { color: '#3b82f6' },
+    data: [] as number[]
+  }]
+})
+
+async function fetchAllData() {
+  try {
+    const results = await Promise.allSettled([
+      deviceStore.fetchDevices(),
+      ruleStore.fetchRules(),
+      alertStore.fetchAlerts(),
+      channelStore.fetchChannels(),
+      systemStore.fetchAllStats()
+    ])
+
+    const failedRequests = results.filter(r => r.status === 'rejected')
+    if (failedRequests.length > 0) {
+      console.warn('Some requests failed:', failedRequests)
+    }
+
+    updateChartData()
+
+  } catch (error) {
+    console.error('Failed to fetch data:', error)
+    ElMessage.error(t('dashboard.dataLoadFailed'))
+  }
+}
+
+async function updateChartData() {
+  try {
+    const chartData = await systemStore.generateChartData(timeRange.value)
+    
+    requestAnimationFrame(() => {
+      dataChartOption.value.xAxis.data = chartData.map(d => d.time)
+      dataChartOption.value.series[0].data = chartData.map(d => d.value)
+    })
+  } catch (error) {
+    console.error('Failed to update chart data:', error)
+    ElMessage.error(t('dashboard.dataFetchFailed'))
+  }
+}
+
+// 监听时间范围变化，自动更新图表
+watch(timeRange, async () => {
+  await updateChartData()
+})
+
+async function refreshData() {
+  if (refreshing.value) return
+  
+  refreshing.value = true
+  try {
+    await fetchAllData()
+    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    ElMessage.success(t('dashboard.dataRefreshed'))
+  } finally {
+    refreshing.value = false
+  }
+}
+
+const showContent = ref(false)        // 是否显示真实内容
+const showSkeleton = ref(true)        // 是否显示骨架屏
+const isInitialized = ref(false)      // 是否已初始化（用于 keep-alive）
+
+// 首次加载逻辑（只在组件创建时执行一次）
+onMounted(async () => {
+  // 检查 store 中是否已有已加载的数据（来自 sessionStorage 持久化）
+  const hasCacheData = deviceStore.devices.length > 0 ||
+                       ruleStore.rules.length > 0 ||
+                       alertStore.alerts.length > 0 ||
+                       systemStore.stats.totalReadings > 0
+
+  // 如果有缓存数据，立即显示内容
+  if (hasCacheData) {
+    showSkeleton.value = false
+    showContent.value = true
+    isInitialized.value = true
+    // 后台刷新数据，但不显示 loading
+    try {
+      await fetchAllData()
+      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    } catch (error) {
+      console.error('Failed to refresh data:', error)
+    }
+    return
+  }
+
+  // 无缓存数据（首次访问），保持骨架屏显示，后台加载数据
+  try {
+    await fetchAllData()
+    lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+
+    // 等待DOM更新完成
+    await nextTick()
+
+    // 平滑过渡：隐藏骨架屏并显示内容
+    requestAnimationFrame(() => {
+      showSkeleton.value = false
+      showContent.value = true
+      isInitialized.value = true
+    })
+  } catch (error) {
+    console.error('Failed to fetch data:', error)
+    ElMessage.error(t('dashboard.dataLoadFailed'))
+    showSkeleton.value = false
+    showContent.value = true
+    isInitialized.value = true
+  }
+})
+
+// 组件激活逻辑（每次从缓存中激活时执行）
+onActivated(async () => {
+  // 如果已经初始化，直接显示内容，后台刷新数据
+  if (isInitialized.value) {
+    // 确保显示内容（防止状态异常）
+    showSkeleton.value = false
+    showContent.value = true
+
+    // 后台静默刷新数据
+    try {
+      await fetchAllData()
+      lastUpdateTime.value = dayjs().format('YYYY-MM-DD HH:mm:ss')
+    } catch (error) {
+      console.error('Failed to refresh data on activation:', error)
+    }
+  }
+})
+</script>
 
 <style scoped>
 .dashboard {
@@ -1307,7 +1307,7 @@ onActivated(async () => {
   transform: translateY(-10px);
 }
 
-/* 优化loading遮罩的过渡 */
+/* 优化 loading遮罩的过渡 */
 .dashboard :deep(.el-loading-mask) {
   transition: opacity 0.3s ease-in-out;
 }

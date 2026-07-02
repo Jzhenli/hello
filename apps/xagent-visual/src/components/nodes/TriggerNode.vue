@@ -1,18 +1,3 @@
-<script setup lang="ts">
-import { Handle, Position, useNode } from '@vue-flow/core'
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { RuleNodeData } from '@/types/rule'
-
-const { t } = useI18n()
-const { node } = useNode<RuleNodeData>()
-
-const nodeData = computed(() => node.data?.trigger)
-const hasValidData = computed(() => 
-  nodeData.value?.source && nodeData.value?.field
-)
-</script>
-
 <template>
   <div class="rule-node trigger-node">
     <Handle type="target" :position="Position.Top" />
@@ -38,6 +23,21 @@ const hasValidData = computed(() =>
     <Handle type="source" :position="Position.Bottom" />
   </div>
 </template>
+
+<script setup lang="ts">
+import { Handle, Position, useNode } from '@vue-flow/core'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { RuleNodeData } from '@/types/rule'
+
+const { t } = useI18n()
+const { node } = useNode<RuleNodeData>()
+
+const nodeData = computed(() => node.data?.trigger)
+const hasValidData = computed(() => 
+  nodeData.value?.source && nodeData.value?.field
+)
+</script>
 
 <style scoped>
 .trigger-node {

@@ -1,3 +1,29 @@
+<template>
+  <div class="rule-node condition-node">
+    <Handle type="target" :position="Position.Top" />
+    
+    <div class="node-header">
+      <span class="node-icon">⚙️</span>
+      <span class="node-title">{{ t('nodeViews.condition') }}</span>
+    </div>
+    
+    <div class="node-body">
+      <div class="node-info" :class="{ 'has-data': hasValidData }">
+        <div class="condition-expression">
+          <span class="field">{{ nodeData?.field || t('nodeViews.triggerField') }}</span>
+          <span class="operator">{{ operatorSymbol }}</span>
+          <span class="value">{{ nodeData?.value || t('ruleNodes.conditionValue') }}</span>
+        </div>
+        <div class="duration-badge" v-if="nodeData?.duration">
+          {{ t('nodeViews.duration') }}: {{ durationText }}
+        </div>
+      </div>
+    </div>
+    
+    <Handle type="source" :position="Position.Bottom" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
@@ -34,32 +60,6 @@ const durationText = computed(() => {
   return `${Math.floor(duration / 3600)}${t('nodeViews.hours')}`
 })
 </script>
-
-<template>
-  <div class="rule-node condition-node">
-    <Handle type="target" :position="Position.Top" />
-    
-    <div class="node-header">
-      <span class="node-icon">⚙️</span>
-      <span class="node-title">{{ t('nodeViews.condition') }}</span>
-    </div>
-    
-    <div class="node-body">
-      <div class="node-info" :class="{ 'has-data': hasValidData }">
-        <div class="condition-expression">
-          <span class="field">{{ nodeData?.field || t('nodeViews.triggerField') }}</span>
-          <span class="operator">{{ operatorSymbol }}</span>
-          <span class="value">{{ nodeData?.value || t('ruleNodes.conditionValue') }}</span>
-        </div>
-        <div class="duration-badge" v-if="nodeData?.duration">
-          {{ t('nodeViews.duration') }}: {{ durationText }}
-        </div>
-      </div>
-    </div>
-    
-    <Handle type="source" :position="Position.Bottom" />
-  </div>
-</template>
 
 <style scoped>
 .condition-node {

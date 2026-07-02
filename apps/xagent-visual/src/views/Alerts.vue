@@ -1,350 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
-import { useUserStore } from '@/stores/users'
-import { useResponsive } from '@/utils/useResponsive'
-import { ElMessage, ElMessageBox } from 'element-plus'
-
-const { t } = useI18n()
-
-const alertStore = useAlertStore()
-const userStore = useUserStore()
-const { isTablet, isMobile } = useResponsive()
-
-onMounted(() => {
-  alertStore.fetchAlerts()
-})
-
-const channelColSpan = computed(() => {
-  if (isMobile.value) return 24
-  if (isTablet.value) return 12
-  return 8
-})
-
-const activeTab = ref('alerts')
-const searchQuery = ref('')
-const levelFilter = ref('')
-const statusFilter = ref('')
-
-const systemConfigDialogVisible = ref(false)
-const systemConfigForm = reactive<SystemNotificationConfig>({
-  retentionDays: 30,
-  maxNotifications: 1000,
-  soundEnabled: true,
-  desktopEnabled: true,
-  autoReadMinutes: 0,
-  quietHoursEnabled: false,
-  quietHoursStart: '22:00',
-  quietHoursEnd: '08:00',
-  notifyLevels: ['critical', 'warning', 'info']
-})
-
-const systemConfigRules = {
-  retentionDays: [{ required: true, message: t('alerts.retentionDaysRequired'), trigger: 'blur' }],
-  maxNotifications: [{ required: true, message: t('alerts.maxNotificationsRequired'), trigger: 'blur' }],
-  quietHoursStart: [{ required: true, message: t('alerts.startTimeRequired'), trigger: 'change' }],
-  quietHoursEnd: [{ required: true, message: t('alerts.endTimeRequired'), trigger: 'change' }]
-}
-
-const systemConfigFormRef = ref()
-
-const emailConfigDialogVisible = ref(false)
-const emailConfigForm = reactive({
-  smtpHost: '',
-  smtpPort: 587,
-  username: '',
-  password: '',
-  fromAddress: '',
-  useTls: true,
-})
-const emailConfigRules = {
-  smtpHost: [{ required: true, message: t('alerts.smtpHostRequired'), trigger: 'blur' }],
-  smtpPort: [{ required: true, message: t('alerts.smtpPortRequired'), trigger: 'blur' }],
-  fromAddress: [{ required: true, message: t('alerts.fromAddressRequired'), trigger: 'blur' }],
-}
-const emailConfigFormRef = ref()
-
-const webhookConfigDialogVisible = ref(false)
-const webhookConfigForm = reactive({
-  url: '',
-  method: 'POST',
-  headers: '',
-  secret: '',
-})
-const webhookConfigRules = {
-  url: [{ required: true, message: t('alerts.webhookUrlRequired'), trigger: 'blur' }],
-}
-const webhookConfigFormRef = ref()
-
-const filteredAlerts = computed(() => {
-  let alerts = [...alertStore.alerts]
-  
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    alerts = alerts.filter(a => 
-      a.ruleName.toLowerCase().includes(query) || 
-      a.message.toLowerCase().includes(query)
-    )
-  }
-  
-  if (levelFilter.value) {
-    alerts = alerts.filter(a => a.level === levelFilter.value)
-  }
-  
-  if (statusFilter.value) {
-    alerts = alerts.filter(a => a.status === statusFilter.value)
-  }
-  
-  return alerts
-})
-
-const getLevelLabel = (level: string) => {
-  const labels: Record<string, string> = {
-    critical: t('alerts.levelCritical'),
-    warning: t('alerts.levelWarning'),
-    info: t('alerts.levelInfo')
-  }
-  return labels[level] || level
-}
-
-const getLevelTag = (level: string) => {
-  const tags: Record<string, string> = {
-    critical: 'danger',
-    warning: 'warning',
-    info: 'info'
-  }
-  return tags[level] || 'info'
-}
-
-const getStatusLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    new: t('alerts.statusNew'),
-    acknowledged: t('alerts.statusAcknowledged'),
-    resolved: t('alerts.statusResolved'),
-    ignored: t('alerts.statusIgnored')
-  }
-  return labels[status] || status
-}
-
-const getStatusTag = (status: string) => {
-  const tags: Record<string, string> = {
-    new: 'danger',
-    acknowledged: 'warning',
-    resolved: 'success',
-    ignored: 'info'
-  }
-  return tags[status] || 'info'
-}
-
-const handleAcknowledge = async (id: string) => {
-  try {
-    await alertStore.acknowledgeAlert(id)
-    ElMessage.success(t('alerts.acknowledgeSuccess'))
-  } catch {
-    ElMessage.error(t('common.operationFailed'))
-  }
-}
-
-const handleResolve = async (id: string) => {
-  try {
-    await alertStore.resolveAlert(id)
-    ElMessage.success(t('alerts.resolveSuccess'))
-  } catch {
-    ElMessage.error(t('common.operationFailed'))
-  }
-}
-
-const handleIgnore = async (id: string) => {
-  try {
-    await alertStore.ignoreAlert(id)
-    ElMessage.success(t('alerts.ignoreSuccess'))
-  } catch {
-    ElMessage.error(t('common.operationFailed'))
-  }
-}
-
-const handleClearAll = () => {
-  ElMessageBox.confirm(
-    t('alerts.clearAllConfirm'),
-    t('alerts.clearConfirmTitle'),
-    {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      await alertStore.clearResolvedAlerts()
-      ElMessage.success(t('alerts.clearSuccess'))
-    } catch {
-      ElMessage.error(t('alerts.clearFailed'))
-    }
-  }).catch(() => {})
-}
-
-const handleToggleChannel = (id: string) => {
-  alertStore.toggleChannel(id)
-  const channel = alertStore.channels.find(c => c.id === id)
-  if (channel) {
-    ElMessage.success(channel.enabled ? t('alerts.channelEnabled') : t('alerts.channelDisabled'))
-  }
-}
-
-const getChannelTypeLabel = (type: string) => {
-  const labels: Record<string, string> = {
-    email: t('alerts.channelEmail'),
-    sms: t('alerts.channelSms'),
-    webhook: 'Webhook',
-    system: t('alerts.channelSystem')
-  }
-  return labels[type] || type
-}
-
-const getSystemNotifyLevelLabels = (levels: Array<'critical' | 'warning' | 'info'>) => {
-  const map: Record<string, string> = { critical: t('alerts.levelCritical'), warning: t('alerts.levelWarning'), info: t('alerts.levelInfo') }
-  return levels.map(l => map[l]).join('、')
-}
-
-const handleConfigureChannel = (channelId: string) => {
-  const channel = alertStore.channels.find(c => c.id === channelId)
-  if (!channel) return
-
-  if (channel.type === 'system') {
-    Object.assign(systemConfigForm, {
-      retentionDays: channel.config.retentionDays ?? 30,
-      maxNotifications: channel.config.maxNotifications ?? 1000,
-      soundEnabled: channel.config.soundEnabled ?? true,
-      desktopEnabled: channel.config.desktopEnabled ?? true,
-      autoReadMinutes: channel.config.autoReadMinutes ?? 0,
-      quietHoursEnabled: channel.config.quietHoursEnabled ?? false,
-      quietHoursStart: channel.config.quietHoursStart ?? '22:00',
-      quietHoursEnd: channel.config.quietHoursEnd ?? '08:00',
-      notifyLevels: [...(channel.config.notifyLevels ?? ['critical', 'warning', 'info'])]
-    })
-    systemConfigDialogVisible.value = true
-  } else if (channel.type === 'email') {
-    Object.assign(emailConfigForm, {
-      smtpHost: channel.config.smtpHost ?? '',
-      smtpPort: channel.config.smtpPort ?? 587,
-      username: channel.config.username ?? '',
-      password: channel.config.password ?? '',
-      fromAddress: channel.config.fromAddress ?? '',
-      useTls: channel.config.useTls ?? true,
-    })
-    emailConfigDialogVisible.value = true
-  } else if (channel.type === 'webhook') {
-    Object.assign(webhookConfigForm, {
-      url: channel.config.url ?? '',
-      method: channel.config.method ?? 'POST',
-      headers: channel.config.headers ?? '',
-      secret: channel.config.secret ?? '',
-    })
-    webhookConfigDialogVisible.value = true
-  }
-}
-
-const handleSaveSystemConfig = async () => {
-  if (!systemConfigFormRef.value) return
-  try {
-    await systemConfigFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  const systemChannel = alertStore.channels.find(c => c.type === 'system')
-  if (systemChannel) {
-    alertStore.updateChannelConfig(systemChannel.id, { ...systemConfigForm })
-    ElMessage.success(t('alerts.systemConfigSaved'))
-    systemConfigDialogVisible.value = false
-  }
-}
-
-const handleSaveEmailConfig = async () => {
-  if (!emailConfigFormRef.value) return
-  try {
-    await emailConfigFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  const emailChannel = alertStore.channels.find(c => c.type === 'email')
-  if (emailChannel) {
-    alertStore.updateChannelConfig(emailChannel.id, { ...emailConfigForm })
-    ElMessage.success(t('alerts.emailConfigSaved'))
-    emailConfigDialogVisible.value = false
-  }
-}
-
-const handleSaveWebhookConfig = async () => {
-  if (!webhookConfigFormRef.value) return
-  try {
-    await webhookConfigFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  const webhookChannel = alertStore.channels.find(c => c.type === 'webhook')
-  if (webhookChannel) {
-    alertStore.updateChannelConfig(webhookChannel.id, { ...webhookConfigForm })
-    ElMessage.success(t('alerts.webhookConfigSaved'))
-    webhookConfigDialogVisible.value = false
-  }
-}
-
-const handleTestChannel = (channelId: string) => {
-  const channel = alertStore.channels.find(c => c.id === channelId)
-  if (!channel) return
-
-  if (!channel.enabled) {
-    ElMessage.warning(t('alerts.enableChannelFirst'))
-    return
-  }
-
-  if (channel.type === 'system') {
-    testSystemNotification()
-  }
-}
-
-const testSystemNotification = () => {
-  if (Notification.permission === 'denied') {
-    ElMessage.warning(t('alerts.notificationDenied'))
-    return
-  }
-
-  if (systemConfigForm.desktopEnabled && Notification.permission !== 'granted') {
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        sendTestDesktopNotification()
-      } else {
-        ElMessage.warning(t('alerts.desktopNotificationDenied'))
-        sendTestInAppNotification()
-      }
-    })
-  } else if (systemConfigForm.desktopEnabled && Notification.permission === 'granted') {
-    sendTestDesktopNotification()
-  } else {
-    sendTestInAppNotification()
-  }
-}
-
-const sendTestDesktopNotification = () => {
-  new Notification(t('alerts.testNotificationTitle'), {
-    body: t('alerts.testNotificationBody'),
-    icon: '/favicon.ico',
-    tag: 'xagent-test-notification'
-  })
-  sendTestInAppNotification()
-}
-
-const sendTestInAppNotification = () => {
-  ElMessage.success({
-    message: t('alerts.testNotificationSuccess'),
-    duration: 5000
-  })
-}
-</script>
-
 <template>
   <div class="alerts-page">
     <el-tabs v-model="activeTab" class="alerts-tabs">
@@ -751,6 +404,353 @@ const sendTestInAppNotification = () => {
     </el-dialog>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useAlertStore, type SystemNotificationConfig } from '@/stores/alerts'
+import { useUserStore } from '@/stores/users'
+import { useResponsive } from '@/utils/useResponsive'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
+
+const alertStore = useAlertStore()
+const userStore = useUserStore()
+const { isTablet, isMobile } = useResponsive()
+
+onMounted(() => {
+  alertStore.fetchAlerts()
+})
+
+const channelColSpan = computed(() => {
+  if (isMobile.value) return 24
+  if (isTablet.value) return 12
+  return 8
+})
+
+const activeTab = ref('alerts')
+const searchQuery = ref('')
+const levelFilter = ref('')
+const statusFilter = ref('')
+
+const systemConfigDialogVisible = ref(false)
+const systemConfigForm = reactive<SystemNotificationConfig>({
+  retentionDays: 30,
+  maxNotifications: 1000,
+  soundEnabled: true,
+  desktopEnabled: true,
+  autoReadMinutes: 0,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '08:00',
+  notifyLevels: ['critical', 'warning', 'info']
+})
+
+const systemConfigRules = {
+  retentionDays: [{ required: true, message: t('alerts.retentionDaysRequired'), trigger: 'blur' }],
+  maxNotifications: [{ required: true, message: t('alerts.maxNotificationsRequired'), trigger: 'blur' }],
+  quietHoursStart: [{ required: true, message: t('alerts.startTimeRequired'), trigger: 'change' }],
+  quietHoursEnd: [{ required: true, message: t('alerts.endTimeRequired'), trigger: 'change' }]
+}
+
+const systemConfigFormRef = ref()
+
+const emailConfigDialogVisible = ref(false)
+const emailConfigForm = reactive({
+  smtpHost: '',
+  smtpPort: 587,
+  username: '',
+  password: '',
+  fromAddress: '',
+  useTls: true,
+})
+const emailConfigRules = {
+  smtpHost: [{ required: true, message: t('alerts.smtpHostRequired'), trigger: 'blur' }],
+  smtpPort: [{ required: true, message: t('alerts.smtpPortRequired'), trigger: 'blur' }],
+  fromAddress: [{ required: true, message: t('alerts.fromAddressRequired'), trigger: 'blur' }],
+}
+const emailConfigFormRef = ref()
+
+const webhookConfigDialogVisible = ref(false)
+const webhookConfigForm = reactive({
+  url: '',
+  method: 'POST',
+  headers: '',
+  secret: '',
+})
+const webhookConfigRules = {
+  url: [{ required: true, message: t('alerts.webhookUrlRequired'), trigger: 'blur' }],
+}
+const webhookConfigFormRef = ref()
+
+const filteredAlerts = computed(() => {
+  let alerts = [...alertStore.alerts]
+  
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    alerts = alerts.filter(a => 
+      a.ruleName.toLowerCase().includes(query) || 
+      a.message.toLowerCase().includes(query)
+    )
+  }
+  
+  if (levelFilter.value) {
+    alerts = alerts.filter(a => a.level === levelFilter.value)
+  }
+  
+  if (statusFilter.value) {
+    alerts = alerts.filter(a => a.status === statusFilter.value)
+  }
+  
+  return alerts
+})
+
+const getLevelLabel = (level: string) => {
+  const labels: Record<string, string> = {
+    critical: t('alerts.levelCritical'),
+    warning: t('alerts.levelWarning'),
+    info: t('alerts.levelInfo')
+  }
+  return labels[level] || level
+}
+
+const getLevelTag = (level: string) => {
+  const tags: Record<string, string> = {
+    critical: 'danger',
+    warning: 'warning',
+    info: 'info'
+  }
+  return tags[level] || 'info'
+}
+
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    new: t('alerts.statusNew'),
+    acknowledged: t('alerts.statusAcknowledged'),
+    resolved: t('alerts.statusResolved'),
+    ignored: t('alerts.statusIgnored')
+  }
+  return labels[status] || status
+}
+
+const getStatusTag = (status: string) => {
+  const tags: Record<string, string> = {
+    new: 'danger',
+    acknowledged: 'warning',
+    resolved: 'success',
+    ignored: 'info'
+  }
+  return tags[status] || 'info'
+}
+
+const handleAcknowledge = async (id: string) => {
+  try {
+    await alertStore.acknowledgeAlert(id)
+    ElMessage.success(t('alerts.acknowledgeSuccess'))
+  } catch {
+    ElMessage.error(t('common.operationFailed'))
+  }
+}
+
+const handleResolve = async (id: string) => {
+  try {
+    await alertStore.resolveAlert(id)
+    ElMessage.success(t('alerts.resolveSuccess'))
+  } catch {
+    ElMessage.error(t('common.operationFailed'))
+  }
+}
+
+const handleIgnore = async (id: string) => {
+  try {
+    await alertStore.ignoreAlert(id)
+    ElMessage.success(t('alerts.ignoreSuccess'))
+  } catch {
+    ElMessage.error(t('common.operationFailed'))
+  }
+}
+
+const handleClearAll = () => {
+  ElMessageBox.confirm(
+    t('alerts.clearAllConfirm'),
+    t('alerts.clearConfirmTitle'),
+    {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      await alertStore.clearResolvedAlerts()
+      ElMessage.success(t('alerts.clearSuccess'))
+    } catch {
+      ElMessage.error(t('alerts.clearFailed'))
+    }
+  }).catch(() => {})
+}
+
+const handleToggleChannel = (id: string) => {
+  alertStore.toggleChannel(id)
+  const channel = alertStore.channels.find(c => c.id === id)
+  if (channel) {
+    ElMessage.success(channel.enabled ? t('alerts.channelEnabled') : t('alerts.channelDisabled'))
+  }
+}
+
+const getChannelTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    email: t('alerts.channelEmail'),
+    sms: t('alerts.channelSms'),
+    webhook: 'Webhook',
+    system: t('alerts.channelSystem')
+  }
+  return labels[type] || type
+}
+
+const getSystemNotifyLevelLabels = (levels: Array<'critical' | 'warning' | 'info'>) => {
+  const map: Record<string, string> = { critical: t('alerts.levelCritical'), warning: t('alerts.levelWarning'), info: t('alerts.levelInfo') }
+  return levels.map(l => map[l]).join('、')
+}
+
+const handleConfigureChannel = (channelId: string) => {
+  const channel = alertStore.channels.find(c => c.id === channelId)
+  if (!channel) return
+
+  if (channel.type === 'system') {
+    Object.assign(systemConfigForm, {
+      retentionDays: channel.config.retentionDays ?? 30,
+      maxNotifications: channel.config.maxNotifications ?? 1000,
+      soundEnabled: channel.config.soundEnabled ?? true,
+      desktopEnabled: channel.config.desktopEnabled ?? true,
+      autoReadMinutes: channel.config.autoReadMinutes ?? 0,
+      quietHoursEnabled: channel.config.quietHoursEnabled ?? false,
+      quietHoursStart: channel.config.quietHoursStart ?? '22:00',
+      quietHoursEnd: channel.config.quietHoursEnd ?? '08:00',
+      notifyLevels: [...(channel.config.notifyLevels ?? ['critical', 'warning', 'info'])]
+    })
+    systemConfigDialogVisible.value = true
+  } else if (channel.type === 'email') {
+    Object.assign(emailConfigForm, {
+      smtpHost: channel.config.smtpHost ?? '',
+      smtpPort: channel.config.smtpPort ?? 587,
+      username: channel.config.username ?? '',
+      password: channel.config.password ?? '',
+      fromAddress: channel.config.fromAddress ?? '',
+      useTls: channel.config.useTls ?? true,
+    })
+    emailConfigDialogVisible.value = true
+  } else if (channel.type === 'webhook') {
+    Object.assign(webhookConfigForm, {
+      url: channel.config.url ?? '',
+      method: channel.config.method ?? 'POST',
+      headers: channel.config.headers ?? '',
+      secret: channel.config.secret ?? '',
+    })
+    webhookConfigDialogVisible.value = true
+  }
+}
+
+const handleSaveSystemConfig = async () => {
+  if (!systemConfigFormRef.value) return
+  try {
+    await systemConfigFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  const systemChannel = alertStore.channels.find(c => c.type === 'system')
+  if (systemChannel) {
+    alertStore.updateChannelConfig(systemChannel.id, { ...systemConfigForm })
+    ElMessage.success(t('alerts.systemConfigSaved'))
+    systemConfigDialogVisible.value = false
+  }
+}
+
+const handleSaveEmailConfig = async () => {
+  if (!emailConfigFormRef.value) return
+  try {
+    await emailConfigFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  const emailChannel = alertStore.channels.find(c => c.type === 'email')
+  if (emailChannel) {
+    alertStore.updateChannelConfig(emailChannel.id, { ...emailConfigForm })
+    ElMessage.success(t('alerts.emailConfigSaved'))
+    emailConfigDialogVisible.value = false
+  }
+}
+
+const handleSaveWebhookConfig = async () => {
+  if (!webhookConfigFormRef.value) return
+  try {
+    await webhookConfigFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  const webhookChannel = alertStore.channels.find(c => c.type === 'webhook')
+  if (webhookChannel) {
+    alertStore.updateChannelConfig(webhookChannel.id, { ...webhookConfigForm })
+    ElMessage.success(t('alerts.webhookConfigSaved'))
+    webhookConfigDialogVisible.value = false
+  }
+}
+
+const handleTestChannel = (channelId: string) => {
+  const channel = alertStore.channels.find(c => c.id === channelId)
+  if (!channel) return
+
+  if (!channel.enabled) {
+    ElMessage.warning(t('alerts.enableChannelFirst'))
+    return
+  }
+
+  if (channel.type === 'system') {
+    testSystemNotification()
+  }
+}
+
+const testSystemNotification = () => {
+  if (Notification.permission === 'denied') {
+    ElMessage.warning(t('alerts.notificationDenied'))
+    return
+  }
+
+  if (systemConfigForm.desktopEnabled && Notification.permission !== 'granted') {
+    Notification.requestPermission().then(permission => {
+      if (permission === 'granted') {
+        sendTestDesktopNotification()
+      } else {
+        ElMessage.warning(t('alerts.desktopNotificationDenied'))
+        sendTestInAppNotification()
+      }
+    })
+  } else if (systemConfigForm.desktopEnabled && Notification.permission === 'granted') {
+    sendTestDesktopNotification()
+  } else {
+    sendTestInAppNotification()
+  }
+}
+
+const sendTestDesktopNotification = () => {
+  new Notification(t('alerts.testNotificationTitle'), {
+    body: t('alerts.testNotificationBody'),
+    icon: '/favicon.ico',
+    tag: 'xagent-test-notification'
+  })
+  sendTestInAppNotification()
+}
+
+const sendTestInAppNotification = () => {
+  ElMessage.success({
+    message: t('alerts.testNotificationSuccess'),
+    duration: 5000
+  })
+}
+</script>
 
 <script lang="ts">
 import { Search, Plus } from '@element-plus/icons-vue'

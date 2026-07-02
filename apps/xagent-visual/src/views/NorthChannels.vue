@@ -1,623 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useChannelStore } from '@/stores/channels'
-import { useUserStore } from '@/stores/users'
-import { channelApi } from '@/api/channels'
-import type { NorthChannelConfig, NorthChannelProtocol } from '@/api/types'
-import type { ChannelListItem } from '@/stores/channels'
-import { useResponsive } from '@/utils/useResponsive'
-import yaml from 'js-yaml'
-import { 
-  Plus, 
-  Upload, 
-  Download, 
-  Refresh,
-  CircleCheck,
-  CircleClose,
-  Search,
-  Connection,
-  Delete,
-  Edit,
-  MoreFilled,
-  RefreshRight
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-
-const { t } = useI18n()
-
-// XNC映射配置模板
-const XNC_MAPPING_TEMPLATE = {
-  "vdid_mapping": {
-    "device_1": 1,
-    "device_2": 2
-  },
-  "oid_mapping": {
-    "device_1.temperature": 1,
-    "device_1.humidity": 2,
-    "device_2.pressure": 3
-  },
-  "pid": {
-    "point_value": 85,
-    "point_error": 103
-  }
-}
-
-const channelStore = useChannelStore()
-const userStore = useUserStore()
-const { isTouch, isTablet, isMobile, width } = useResponsive()
-
-const searchQuery = ref('')
-const statusFilter = ref('')
-const protocolFilter = ref('')
-const selectedChannelId = ref<string | null>(null)
-
-const activeTab = ref('channels')
-
-const isCompactMode = computed(() => isTablet.value || isMobile.value || width.value <= 1024)
-
-const filteredChannels = computed(() => {
-  let list = channelStore.channelList
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    list = list.filter(c =>
-      c.name.toLowerCase().includes(query) ||
-      c.id.toLowerCase().includes(query) ||
-      c.protocol.toLowerCase().includes(query)
-    )
-  }
-  if (statusFilter.value === 'online') {
-    list = list.filter(c => c.connectionStatus === 'online')
-  } else if (statusFilter.value === 'offline') {
-    list = list.filter(c => c.connectionStatus !== 'online')
-  }
-  if (protocolFilter.value) {
-    list = list.filter(c => c.protocol === protocolFilter.value)
-  }
-  return list
-})
-
-const handleSearch = () => {}
-
-const handleFilterChange = () => {}
-
-const handleToggleChannel = async (id: string) => {
-  try {
-    await channelStore.toggleChannel(id)
-    ElMessage.success(t('channels.statusChanged'))
-  } catch (e: unknown) {
-    ElMessage.error(t('channels.operationFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
-  }
-}
-
-const handleRefresh = async () => {
-  await channelStore.fetchChannels()
-}
-
-const showChannelDialog = ref(false)
-const channelForm = ref({
-  id: '',
-  name: '',
-  description: '',
-  enabled: true,
-  protocol: 'mqtt' as NorthChannelProtocol,
-  host: '',
-  port: 1883,
-  username: '',
-  password: '',
-  client_id: '',
-  topic: '',
-  qos: 0 as 0 | 1 | 2,
-  keepalive: 60,
-  clean_session: true,
-  adapter: 'standard',
-  adapter_config: '{}',
-  command_topic: '',
-  publish_mode: 'single' as 'single' | 'batch',
-  command_timeout: 30,
-  local_port: 8888,
-  remote_host: '127.0.0.1',
-  remote_port: 9000,
-  reconnect_interval: 5,
-  mapping_config: '{}',
-  endpoint: '',
-  method: 'POST' as 'GET' | 'POST' | 'PUT',
-  headers: '{}',
-  timeout: 30,
-  immediate_upload: true,
-  batch_size: 100,
-  interval: 5,
-  retry_times: 3,
-  retry_interval: 5,
-  tags: ''
-})
-const channelFormRef = ref()
-const isEditing = ref(false)
-const editingId = ref('')
-const saving = ref(false)
-
-const protocolOptions = [
-  { 
-    label: 'MQTT', 
-    value: 'mqtt', 
-    defaultPort: 1883,
-    defaultConfig: {
-      client_id: `xagent_${Date.now()}`,
-      topic: 'data/upload',
-      qos: 1,
-      keepalive: 60,
-      clean_session: true,
-      command_topic: 'xagent/command',
-      publish_mode: 'single',
-      command_timeout: 30
-    }
-  },
-  { 
-    label: 'XNC', 
-    value: 'xnc', 
-    defaultPort: 9000,
-    defaultConfig: { 
-      local_port: 8888,
-      remote_host: '127.0.0.1',
-      remote_port: 9000,
-      reconnect_interval: 5
-    }
-  },
-  { 
-    label: 'HTTP', 
-    value: 'http', 
-    defaultPort: 80,
-    defaultConfig: { 
-      method: 'POST',
-      timeout: 30
-    }
-  }
-]
-
-const mqttAdapterOptions = [
-  { label: t('channels.adapterStandard'), value: 'standard', description: t('channels.adapterStandardDesc') },
-  { label: t('channels.adapterC001'), value: 'C001', description: t('channels.adapterC001Desc') },
-]
-
-// 适配器默认配置缓存（从后端API获取）
-const adapterDefaultsCache = ref<Record<string, any>>({})
-
-// 产品Key（独立存储，便于表单绑定）
-const productKey = ref('')
-
-// 获取适配器默认配置
-const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
-  if (adapterDefaultsCache.value[adapterCode]) {
-    return adapterDefaultsCache.value[adapterCode]
-  }
-
-  try {
-    const result = await channelApi.getAdapterDefaults(adapterCode)
-    adapterDefaultsCache.value[adapterCode] = result.defaults
-    return result.defaults
-  } catch (e) {
-    console.error('Failed to load adapter defaults:', e)
-    return null
-  }
-}
-
-// 同步 productKey 到 adapter_config
-watch(productKey, (newVal) => {
-  if (channelForm.value.adapter === 'C001') {
-    try {
-      const config = JSON.parse(channelForm.value.adapter_config || '{}')
-      config.productKey = newVal
-      channelForm.value.adapter_config = JSON.stringify(config, null, 2)
-    } catch {
-      // ignore
-    }
-  }
-})
-
-// 适配器变更处理
-const handleAdapterChange = async (adapter: string) => {
-  if (adapter === 'standard') {
-    channelForm.value.adapter_config = '{}'
-    productKey.value = ''
-  } else {
-    if (!isEditing.value || !channelForm.value.adapter_config || channelForm.value.adapter_config === '{}') {
-      const defaults = await loadAdapterDefaults(adapter)
-      if (defaults) {
-        channelForm.value.adapter_config = JSON.stringify(defaults, null, 2)
-        productKey.value = defaults.productKey || ''
-      }
-    }
-  }
-}
-
-// 填充XNC映射配置模板
-const fillMappingTemplate = () => {
-  channelForm.value.mapping_config = JSON.stringify(XNC_MAPPING_TEMPLATE, null, 2)
-}
-
-const channelFormRules = {
-  id: [{ required: true, message: t('channels.idRequired'), trigger: 'blur' }],
-  name: [{ required: true, message: t('channels.nameRequired'), trigger: 'blur' }],
-  protocol: [{ required: true, message: t('channels.protocolRequired'), trigger: 'change' }]
-}
-
-const handleProtocolChange = (val: NorthChannelProtocol) => {
-  const opt = protocolOptions.find(o => o.value === val)
-  if (opt) {
-    channelForm.value.port = opt.defaultPort
-    if (opt.defaultConfig) {
-      Object.assign(channelForm.value, opt.defaultConfig)
-    }
-  }
-}
-
-const handleAddChannel = () => {
-  isEditing.value = false
-  editingId.value = ''
-  productKey.value = ''
-  channelForm.value = {
-    id: '',
-    name: '',
-    description: '',
-    enabled: true,
-    protocol: 'mqtt',
-    host: '',
-    port: 1883,
-    username: '',
-    password: '',
-    client_id: `xagent_${Date.now()}`,
-    topic: 'data/upload',
-    qos: 1,
-    keepalive: 60,
-    clean_session: true,
-    adapter: 'standard',
-    adapter_config: '{}',
-    command_topic: '',
-    publish_mode: 'single',
-    command_timeout: 30,
-    local_port: 8888,
-    remote_host: '127.0.0.1',
-    remote_port: 9000,
-    reconnect_interval: 5,
-    mapping_config: '{}',
-    endpoint: '',
-    method: 'POST',
-    headers: '{}',
-    timeout: 30,
-    immediate_upload: true,
-    batch_size: 100,
-    interval: 5,
-    retry_times: 3,
-    retry_interval: 5,
-    tags: ''
-  }
-  showChannelDialog.value = true
-}
-
-const handleEditChannel = (channel: ChannelListItem) => {
-  const fullChannel = channelStore.getChannelById(channel.id)
-  if (!fullChannel) return
-  
-  isEditing.value = true
-  editingId.value = channel.id
-  channelForm.value = {
-    id: channel.id,
-    name: channel.name,
-    description: fullChannel.description || '',
-    enabled: channel.enabled,
-    protocol: channel.protocol,
-    host: fullChannel.connection.broker || fullChannel.connection.remote_host || '',
-    port: fullChannel.connection.port || fullChannel.connection.remote_port || 1883,
-    username: fullChannel.connection.username || '',
-    password: '',
-    client_id: fullChannel.connection.client_id || '',
-    topic: fullChannel.connection.topic || '',
-    qos: fullChannel.connection.qos || 0,
-    keepalive: fullChannel.connection.keepalive || 60,
-    clean_session: fullChannel.connection.clean_session ?? true,
-    adapter: fullChannel.adapter.adapter || 'standard',
-    adapter_config: JSON.stringify(fullChannel.adapter.config || {}, null, 2),
-    command_topic: fullChannel.connection.command_topic || '',
-    publish_mode: fullChannel.connection.publish_mode || 'single',
-    command_timeout: fullChannel.connection.command_timeout || 30,
-    local_port: fullChannel.connection.local_port || 8888,
-    remote_host: fullChannel.connection.remote_host || '127.0.0.1',
-    remote_port: fullChannel.connection.remote_port || 9000,
-    reconnect_interval: fullChannel.connection.reconnect_interval || 5,
-    mapping_config: JSON.stringify(fullChannel.adapter.mapping_config || {}, null, 2),
-    endpoint: fullChannel.connection.endpoint || '',
-    method: fullChannel.connection.method || 'POST',
-    headers: JSON.stringify(fullChannel.adapter.headers || {}, null, 2),
-    timeout: fullChannel.connection.timeout || 30,
-    immediate_upload: fullChannel.upload_strategy.immediate_upload,
-    batch_size: fullChannel.upload_strategy.batch_size,
-    interval: fullChannel.upload_strategy.interval,
-    retry_times: fullChannel.upload_strategy.retry_times,
-    retry_interval: fullChannel.upload_strategy.retry_interval || 5,
-    tags: (fullChannel.tags || []).join(', ')
-  }
-  
-  try {
-    const config = JSON.parse(channelForm.value.adapter_config || '{}')
-    productKey.value = config.productKey || ''
-  } catch {
-    productKey.value = ''
-  }
-  
-  showChannelDialog.value = true
-}
-
-const buildChannelConfig = (): NorthChannelConfig => {
-  const connection: any = {}
-  let adapterConfig: any = {}
-  let adapterType = 'default'
-  
-  if (channelForm.value.protocol === 'mqtt') {
-    connection.broker = channelForm.value.host
-    connection.port = channelForm.value.port
-    if (channelForm.value.username) connection.username = channelForm.value.username
-    if (channelForm.value.password) connection.password = channelForm.value.password
-    connection.client_id = channelForm.value.client_id
-    connection.topic = channelForm.value.topic
-    connection.qos = channelForm.value.qos
-    connection.keepalive = channelForm.value.keepalive
-    connection.clean_session = channelForm.value.clean_session
-    if (channelForm.value.command_topic) connection.command_topic = channelForm.value.command_topic
-    if (channelForm.value.publish_mode) connection.publish_mode = channelForm.value.publish_mode
-    if (channelForm.value.command_timeout) connection.command_timeout = channelForm.value.command_timeout
-    
-    adapterType = 'mqtt'
-    
-    if (channelForm.value.adapter) {
-      adapterConfig.adapter = channelForm.value.adapter
-    }
-    try {
-      const adapterConfigObj = JSON.parse(channelForm.value.adapter_config)
-      if (Object.keys(adapterConfigObj).length > 0) {
-        adapterConfig.config = adapterConfigObj
-      }
-    } catch (e) {
-      console.error('Invalid adapter config JSON:', e)
-    }
-  } else if (channelForm.value.protocol === 'xnc') {
-    connection.local_port = channelForm.value.local_port
-    connection.remote_host = channelForm.value.remote_host
-    connection.remote_port = channelForm.value.remote_port
-    connection.reconnect_interval = channelForm.value.reconnect_interval
-    
-    adapterType = 'xnc_protobuf'
-    
-    try {
-      const mappingConfig = JSON.parse(channelForm.value.mapping_config)
-      if (Object.keys(mappingConfig).length > 0) {
-        adapterConfig.mapping_config = mappingConfig
-      }
-    } catch (e) {
-      console.error('Invalid mapping config JSON:', e)
-    }
-  } else if (channelForm.value.protocol === 'http') {
-    connection.endpoint = channelForm.value.endpoint
-    connection.method = channelForm.value.method
-    connection.timeout = channelForm.value.timeout
-    if (channelForm.value.username) connection.username = channelForm.value.username
-    if (channelForm.value.password) connection.password = channelForm.value.password
-    
-    adapterType = 'http'
-    
-    try {
-      const headers = JSON.parse(channelForm.value.headers)
-      if (Object.keys(headers).length > 0) {
-        adapterConfig.headers = headers
-      }
-    } catch (e) {
-      console.error('Invalid headers JSON:', e)
-    }
-  }
-  
-  const config: any = {
-    id: channelForm.value.id,
-    name: channelForm.value.name,
-    enabled: channelForm.value.enabled,
-    protocol: channelForm.value.protocol,
-    connection,
-    adapter: {
-      type: adapterType,
-      ...adapterConfig
-    },
-    upload_strategy: {
-      immediate_upload: channelForm.value.immediate_upload,
-      batch_size: channelForm.value.batch_size,
-      interval: channelForm.value.interval,
-      retry_times: channelForm.value.retry_times,
-      retry_interval: channelForm.value.retry_interval
-    }
-  }
-  
-  if (channelForm.value.description) {
-    config.description = channelForm.value.description
-  }
-  
-  if (channelForm.value.tags) {
-    config.tags = channelForm.value.tags.split(',').map(t => t.trim()).filter(Boolean)
-  }
-  
-  return config
-}
-
-const handleSaveChannel = async () => {
-  if (!channelFormRef.value) return
-  try {
-    await channelFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  saving.value = true
-  try {
-    const config = buildChannelConfig()
-    
-    if (isEditing.value) {
-      await channelStore.updateChannel(editingId.value, config)
-      ElMessage.success(t('channels.channelUpdated'))
-    } else {
-      await channelStore.createChannel(config)
-      ElMessage.success(t('channels.channelCreated'))
-    }
-    showChannelDialog.value = false
-  } catch (e: unknown) {
-    const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : t('common.unknownError'))
-    ElMessage.error(isEditing.value ? t('channels.updateFailed', { message: detail }) : t('channels.createFailed', { message: detail }))
-  } finally {
-    saving.value = false
-  }
-}
-
-const handleDeleteChannel = (channel: ChannelListItem) => {
-  ElMessageBox.confirm(
-    t('channels.deleteConfirmMessage', { name: channel.name, id: channel.id }),
-    t('channels.deleteConfirmTitle'),
-    {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      await channelStore.deleteChannel(channel.id)
-      if (selectedChannelId.value === channel.id) {
-        selectedChannelId.value = null
-      }
-      ElMessage.success(t('channels.channelDeleted'))
-    } catch (e: unknown) {
-      ElMessage.error(t('channels.deleteFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
-    }
-  }).catch(() => {})
-}
-
-const handleTestConnection = async (id: string) => {
-  try {
-    ElMessage.info(t('channels.testingConnection'))
-    const result = await channelStore.testConnection(id)
-    if (result.success) {
-      ElMessage.success(t('channels.connectionSuccess', { latency: result.latency }))
-    } else {
-      ElMessage.error(t('channels.connectionFailed', { message: result.message }))
-    }
-  } catch (e: unknown) {
-    ElMessage.error(t('channels.testFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
-  }
-}
-
-const handleRestartChannel = async (id: string) => {
-  try {
-    await channelStore.restartChannel(id)
-    ElMessage.success(t('channels.channelRestarted'))
-  } catch (e: unknown) {
-    ElMessage.error(t('channels.restartFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
-  }
-}
-
-const handleViewDetails = (id: string) => {
-  selectedChannelId.value = id
-}
-
-const handleExportYaml = async () => {
-  try {
-    console.log('开始导出通道...')
-    const result = await channelApi.exportChannels()
-    console.log('导出结果:', result)
-    
-    const channels = result.channels || []
-    
-    if (channels.length === 0) {
-      ElMessage.warning(t('channels.noExportableChannels'))
-      return
-    }
-    
-    const content = yaml.dump({ channels }, { 
-      indent: 2, 
-      lineWidth: 120,
-      noRefs: true,
-      sortKeys: false
-    })
-    const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `xagent-channels-${new Date().toISOString().slice(0, 10)}.yaml`
-    a.click()
-    URL.revokeObjectURL(url)
-    ElMessage.success(t('channels.exportSuccess', { count: channels.length }))
-  } catch (e: unknown) {
-    console.error('导出失败:', e)
-    if (e instanceof Error) {
-      console.error('错误详情:', e.message)
-      console.error('错误堆栈:', e.stack)
-    }
-    const errorMsg = e instanceof Error ? e.message : t('common.unknownError')
-    ElMessage.error(t('channels.exportFailed', { message: errorMsg }))
-  }
-}
-
-const importFileRef = ref<HTMLInputElement | null>(null)
-
-const handleImportYaml = () => {
-  importFileRef.value?.click()
-}
-
-const handleImportFileChange = async (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  input.value = ''
-
-  try {
-    const text = await file.text()
-    const parsed = yaml.load(text) as { channels?: NorthChannelConfig[] }
-    if (!parsed.channels || !Array.isArray(parsed.channels)) {
-      ElMessage.error(t('channels.invalidYaml'))
-      return
-    }
-
-    const channels = parsed.channels
-    await ElMessageBox.confirm(
-      t('channels.importConfirmMessage', { count: channels.length }),
-      t('channels.importConfirmTitle'),
-      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'info' }
-    )
-
-    const result = await channelApi.importChannels({ channels: parsed.channels }, false)
-    if (result.failed > 0) {
-      ElMessage.warning(t('channels.importPartialSuccess', { success: result.succeeded, fail: result.failed }))
-    } else {
-      ElMessage.success(t('channels.importSuccess', { count: result.succeeded }))
-    }
-    await channelStore.fetchChannels()
-  } catch (e: unknown) {
-    if ((e as any) !== 'cancel') {
-      ElMessage.error(t('channels.importFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
-    }
-  }
-}
-
-const selectedChannel = computed(() => {
-  if (!selectedChannelId.value) return null
-  return channelStore.getChannelById(selectedChannelId.value)
-})
-
-// 格式化数字（添加千分位）
-const formatNumber = (num: number): string => {
-  if (num >= 10000) {
-    return (num / 1000).toFixed(1) + 'k'
-  }
-  return num.toLocaleString()
-}
-
-onMounted(async () => {
-  await channelStore.fetchChannels()
-})
-</script>
-
 <template>
   <div class="channels-page">
     <div class="toolbar">
@@ -1576,6 +956,626 @@ onMounted(async () => {
     />
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useChannelStore } from '@/stores/channels'
+import { useUserStore } from '@/stores/users'
+import { channelApi } from '@/api/channels'
+import type { NorthChannelConfig, NorthChannelProtocol } from '@/api/types'
+import type { ChannelListItem } from '@/stores/channels'
+import { useResponsive } from '@/utils/useResponsive'
+import yaml from 'js-yaml'
+import { 
+  Plus, 
+  Upload, 
+  Download, 
+  Refresh,
+  CircleCheck,
+  CircleClose,
+  Search,
+  Connection,
+  Delete,
+  Edit,
+  MoreFilled,
+  RefreshRight
+} from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
+
+// XNC映射配置模板
+const XNC_MAPPING_TEMPLATE = {
+  "vdid_mapping": {
+    "device_1": 1,
+    "device_2": 2
+  },
+  "oid_mapping": {
+    "device_1.temperature": 1,
+    "device_1.humidity": 2,
+    "device_2.pressure": 3
+  },
+  "pid": {
+    "point_value": 85,
+    "point_error": 103
+  }
+}
+
+const channelStore = useChannelStore()
+const userStore = useUserStore()
+const { isTouch, isTablet, isMobile, width } = useResponsive()
+
+const searchQuery = ref('')
+const statusFilter = ref('')
+const protocolFilter = ref('')
+const selectedChannelId = ref<string | null>(null)
+
+const activeTab = ref('channels')
+
+const isCompactMode = computed(() => isTablet.value || isMobile.value || width.value <= 1024)
+
+const filteredChannels = computed(() => {
+  let list = channelStore.channelList
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    list = list.filter(c =>
+      c.name.toLowerCase().includes(query) ||
+      c.id.toLowerCase().includes(query) ||
+      c.protocol.toLowerCase().includes(query)
+    )
+  }
+  if (statusFilter.value === 'online') {
+    list = list.filter(c => c.connectionStatus === 'online')
+  } else if (statusFilter.value === 'offline') {
+    list = list.filter(c => c.connectionStatus !== 'online')
+  }
+  if (protocolFilter.value) {
+    list = list.filter(c => c.protocol === protocolFilter.value)
+  }
+  return list
+})
+
+const handleSearch = () => {}
+
+const handleFilterChange = () => {}
+
+const handleToggleChannel = async (id: string) => {
+  try {
+    await channelStore.toggleChannel(id)
+    ElMessage.success(t('channels.statusChanged'))
+  } catch (e: unknown) {
+    ElMessage.error(t('channels.operationFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
+  }
+}
+
+const handleRefresh = async () => {
+  await channelStore.fetchChannels()
+}
+
+const showChannelDialog = ref(false)
+const channelForm = ref({
+  id: '',
+  name: '',
+  description: '',
+  enabled: true,
+  protocol: 'mqtt' as NorthChannelProtocol,
+  host: '',
+  port: 1883,
+  username: '',
+  password: '',
+  client_id: '',
+  topic: '',
+  qos: 0 as 0 | 1 | 2,
+  keepalive: 60,
+  clean_session: true,
+  adapter: 'standard',
+  adapter_config: '{}',
+  command_topic: '',
+  publish_mode: 'single' as 'single' | 'batch',
+  command_timeout: 30,
+  local_port: 8888,
+  remote_host: '127.0.0.1',
+  remote_port: 9000,
+  reconnect_interval: 5,
+  mapping_config: '{}',
+  endpoint: '',
+  method: 'POST' as 'GET' | 'POST' | 'PUT',
+  headers: '{}',
+  timeout: 30,
+  immediate_upload: true,
+  batch_size: 100,
+  interval: 5,
+  retry_times: 3,
+  retry_interval: 5,
+  tags: ''
+})
+const channelFormRef = ref()
+const isEditing = ref(false)
+const editingId = ref('')
+const saving = ref(false)
+
+const protocolOptions = [
+  { 
+    label: 'MQTT', 
+    value: 'mqtt', 
+    defaultPort: 1883,
+    defaultConfig: {
+      client_id: `xagent_${Date.now()}`,
+      topic: 'data/upload',
+      qos: 1,
+      keepalive: 60,
+      clean_session: true,
+      command_topic: 'xagent/command',
+      publish_mode: 'single',
+      command_timeout: 30
+    }
+  },
+  { 
+    label: 'XNC', 
+    value: 'xnc', 
+    defaultPort: 9000,
+    defaultConfig: { 
+      local_port: 8888,
+      remote_host: '127.0.0.1',
+      remote_port: 9000,
+      reconnect_interval: 5
+    }
+  },
+  { 
+    label: 'HTTP', 
+    value: 'http', 
+    defaultPort: 80,
+    defaultConfig: { 
+      method: 'POST',
+      timeout: 30
+    }
+  }
+]
+
+const mqttAdapterOptions = [
+  { label: t('channels.adapterStandard'), value: 'standard', description: t('channels.adapterStandardDesc') },
+  { label: t('channels.adapterC001'), value: 'C001', description: t('channels.adapterC001Desc') },
+]
+
+// 适配器默认配置缓存（从后端API获取）
+const adapterDefaultsCache = ref<Record<string, any>>({})
+
+// 产品Key（独立存储，便于表单绑定）
+const productKey = ref('')
+
+// 获取适配器默认配置
+const loadAdapterDefaults = async (adapterCode: string): Promise<any> => {
+  if (adapterDefaultsCache.value[adapterCode]) {
+    return adapterDefaultsCache.value[adapterCode]
+  }
+
+  try {
+    const result = await channelApi.getAdapterDefaults(adapterCode)
+    adapterDefaultsCache.value[adapterCode] = result.defaults
+    return result.defaults
+  } catch (e) {
+    console.error('Failed to load adapter defaults:', e)
+    return null
+  }
+}
+
+// 同步 productKey 到 adapter_config
+watch(productKey, (newVal) => {
+  if (channelForm.value.adapter === 'C001') {
+    try {
+      const config = JSON.parse(channelForm.value.adapter_config || '{}')
+      config.productKey = newVal
+      channelForm.value.adapter_config = JSON.stringify(config, null, 2)
+    } catch {
+      // ignore
+    }
+  }
+})
+
+// 适配器变更处理
+const handleAdapterChange = async (adapter: string) => {
+  if (adapter === 'standard') {
+    channelForm.value.adapter_config = '{}'
+    productKey.value = ''
+  } else {
+    if (!isEditing.value || !channelForm.value.adapter_config || channelForm.value.adapter_config === '{}') {
+      const defaults = await loadAdapterDefaults(adapter)
+      if (defaults) {
+        channelForm.value.adapter_config = JSON.stringify(defaults, null, 2)
+        productKey.value = defaults.productKey || ''
+      }
+    }
+  }
+}
+
+// 填充XNC映射配置模板
+const fillMappingTemplate = () => {
+  channelForm.value.mapping_config = JSON.stringify(XNC_MAPPING_TEMPLATE, null, 2)
+}
+
+const channelFormRules = {
+  id: [{ required: true, message: t('channels.idRequired'), trigger: 'blur' }],
+  name: [{ required: true, message: t('channels.nameRequired'), trigger: 'blur' }],
+  protocol: [{ required: true, message: t('channels.protocolRequired'), trigger: 'change' }]
+}
+
+const handleProtocolChange = (val: NorthChannelProtocol) => {
+  const opt = protocolOptions.find(o => o.value === val)
+  if (opt) {
+    channelForm.value.port = opt.defaultPort
+    if (opt.defaultConfig) {
+      Object.assign(channelForm.value, opt.defaultConfig)
+    }
+  }
+}
+
+const handleAddChannel = () => {
+  isEditing.value = false
+  editingId.value = ''
+  productKey.value = ''
+  channelForm.value = {
+    id: '',
+    name: '',
+    description: '',
+    enabled: true,
+    protocol: 'mqtt',
+    host: '',
+    port: 1883,
+    username: '',
+    password: '',
+    client_id: `xagent_${Date.now()}`,
+    topic: 'data/upload',
+    qos: 1,
+    keepalive: 60,
+    clean_session: true,
+    adapter: 'standard',
+    adapter_config: '{}',
+    command_topic: '',
+    publish_mode: 'single',
+    command_timeout: 30,
+    local_port: 8888,
+    remote_host: '127.0.0.1',
+    remote_port: 9000,
+    reconnect_interval: 5,
+    mapping_config: '{}',
+    endpoint: '',
+    method: 'POST',
+    headers: '{}',
+    timeout: 30,
+    immediate_upload: true,
+    batch_size: 100,
+    interval: 5,
+    retry_times: 3,
+    retry_interval: 5,
+    tags: ''
+  }
+  showChannelDialog.value = true
+}
+
+const handleEditChannel = (channel: ChannelListItem) => {
+  const fullChannel = channelStore.getChannelById(channel.id)
+  if (!fullChannel) return
+  
+  isEditing.value = true
+  editingId.value = channel.id
+  channelForm.value = {
+    id: channel.id,
+    name: channel.name,
+    description: fullChannel.description || '',
+    enabled: channel.enabled,
+    protocol: channel.protocol,
+    host: fullChannel.connection.broker || fullChannel.connection.remote_host || '',
+    port: fullChannel.connection.port || fullChannel.connection.remote_port || 1883,
+    username: fullChannel.connection.username || '',
+    password: '',
+    client_id: fullChannel.connection.client_id || '',
+    topic: fullChannel.connection.topic || '',
+    qos: fullChannel.connection.qos || 0,
+    keepalive: fullChannel.connection.keepalive || 60,
+    clean_session: fullChannel.connection.clean_session ?? true,
+    adapter: fullChannel.adapter.adapter || 'standard',
+    adapter_config: JSON.stringify(fullChannel.adapter.config || {}, null, 2),
+    command_topic: fullChannel.connection.command_topic || '',
+    publish_mode: fullChannel.connection.publish_mode || 'single',
+    command_timeout: fullChannel.connection.command_timeout || 30,
+    local_port: fullChannel.connection.local_port || 8888,
+    remote_host: fullChannel.connection.remote_host || '127.0.0.1',
+    remote_port: fullChannel.connection.remote_port || 9000,
+    reconnect_interval: fullChannel.connection.reconnect_interval || 5,
+    mapping_config: JSON.stringify(fullChannel.adapter.mapping_config || {}, null, 2),
+    endpoint: fullChannel.connection.endpoint || '',
+    method: fullChannel.connection.method || 'POST',
+    headers: JSON.stringify(fullChannel.adapter.headers || {}, null, 2),
+    timeout: fullChannel.connection.timeout || 30,
+    immediate_upload: fullChannel.upload_strategy.immediate_upload,
+    batch_size: fullChannel.upload_strategy.batch_size,
+    interval: fullChannel.upload_strategy.interval,
+    retry_times: fullChannel.upload_strategy.retry_times,
+    retry_interval: fullChannel.upload_strategy.retry_interval || 5,
+    tags: (fullChannel.tags || []).join(', ')
+  }
+  
+  try {
+    const config = JSON.parse(channelForm.value.adapter_config || '{}')
+    productKey.value = config.productKey || ''
+  } catch {
+    productKey.value = ''
+  }
+  
+  showChannelDialog.value = true
+}
+
+const buildChannelConfig = (): NorthChannelConfig => {
+  const connection: any = {}
+  let adapterConfig: any = {}
+  let adapterType = 'default'
+  
+  if (channelForm.value.protocol === 'mqtt') {
+    connection.broker = channelForm.value.host
+    connection.port = channelForm.value.port
+    if (channelForm.value.username) connection.username = channelForm.value.username
+    if (channelForm.value.password) connection.password = channelForm.value.password
+    connection.client_id = channelForm.value.client_id
+    connection.topic = channelForm.value.topic
+    connection.qos = channelForm.value.qos
+    connection.keepalive = channelForm.value.keepalive
+    connection.clean_session = channelForm.value.clean_session
+    if (channelForm.value.command_topic) connection.command_topic = channelForm.value.command_topic
+    if (channelForm.value.publish_mode) connection.publish_mode = channelForm.value.publish_mode
+    if (channelForm.value.command_timeout) connection.command_timeout = channelForm.value.command_timeout
+    
+    adapterType = 'mqtt'
+    
+    if (channelForm.value.adapter) {
+      adapterConfig.adapter = channelForm.value.adapter
+    }
+    try {
+      const adapterConfigObj = JSON.parse(channelForm.value.adapter_config)
+      if (Object.keys(adapterConfigObj).length > 0) {
+        adapterConfig.config = adapterConfigObj
+      }
+    } catch (e) {
+      console.error('Invalid adapter config JSON:', e)
+    }
+  } else if (channelForm.value.protocol === 'xnc') {
+    connection.local_port = channelForm.value.local_port
+    connection.remote_host = channelForm.value.remote_host
+    connection.remote_port = channelForm.value.remote_port
+    connection.reconnect_interval = channelForm.value.reconnect_interval
+    
+    adapterType = 'xnc_protobuf'
+    
+    try {
+      const mappingConfig = JSON.parse(channelForm.value.mapping_config)
+      if (Object.keys(mappingConfig).length > 0) {
+        adapterConfig.mapping_config = mappingConfig
+      }
+    } catch (e) {
+      console.error('Invalid mapping config JSON:', e)
+    }
+  } else if (channelForm.value.protocol === 'http') {
+    connection.endpoint = channelForm.value.endpoint
+    connection.method = channelForm.value.method
+    connection.timeout = channelForm.value.timeout
+    if (channelForm.value.username) connection.username = channelForm.value.username
+    if (channelForm.value.password) connection.password = channelForm.value.password
+    
+    adapterType = 'http'
+    
+    try {
+      const headers = JSON.parse(channelForm.value.headers)
+      if (Object.keys(headers).length > 0) {
+        adapterConfig.headers = headers
+      }
+    } catch (e) {
+      console.error('Invalid headers JSON:', e)
+    }
+  }
+  
+  const config: any = {
+    id: channelForm.value.id,
+    name: channelForm.value.name,
+    enabled: channelForm.value.enabled,
+    protocol: channelForm.value.protocol,
+    connection,
+    adapter: {
+      type: adapterType,
+      ...adapterConfig
+    },
+    upload_strategy: {
+      immediate_upload: channelForm.value.immediate_upload,
+      batch_size: channelForm.value.batch_size,
+      interval: channelForm.value.interval,
+      retry_times: channelForm.value.retry_times,
+      retry_interval: channelForm.value.retry_interval
+    }
+  }
+  
+  if (channelForm.value.description) {
+    config.description = channelForm.value.description
+  }
+  
+  if (channelForm.value.tags) {
+    config.tags = channelForm.value.tags.split(',').map(t => t.trim()).filter(Boolean)
+  }
+  
+  return config
+}
+
+const handleSaveChannel = async () => {
+  if (!channelFormRef.value) return
+  try {
+    await channelFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  saving.value = true
+  try {
+    const config = buildChannelConfig()
+    
+    if (isEditing.value) {
+      await channelStore.updateChannel(editingId.value, config)
+      ElMessage.success(t('channels.channelUpdated'))
+    } else {
+      await channelStore.createChannel(config)
+      ElMessage.success(t('channels.channelCreated'))
+    }
+    showChannelDialog.value = false
+  } catch (e: unknown) {
+    const detail = (e as any)?.response?.data?.detail || (e instanceof Error ? e.message : t('common.unknownError'))
+    ElMessage.error(isEditing.value ? t('channels.updateFailed', { message: detail }) : t('channels.createFailed', { message: detail }))
+  } finally {
+    saving.value = false
+  }
+}
+
+const handleDeleteChannel = (channel: ChannelListItem) => {
+  ElMessageBox.confirm(
+    t('channels.deleteConfirmMessage', { name: channel.name, id: channel.id }),
+    t('channels.deleteConfirmTitle'),
+    {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      await channelStore.deleteChannel(channel.id)
+      if (selectedChannelId.value === channel.id) {
+        selectedChannelId.value = null
+      }
+      ElMessage.success(t('channels.channelDeleted'))
+    } catch (e: unknown) {
+      ElMessage.error(t('channels.deleteFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
+    }
+  }).catch(() => {})
+}
+
+const handleTestConnection = async (id: string) => {
+  try {
+    ElMessage.info(t('channels.testingConnection'))
+    const result = await channelStore.testConnection(id)
+    if (result.success) {
+      ElMessage.success(t('channels.connectionSuccess', { latency: result.latency }))
+    } else {
+      ElMessage.error(t('channels.connectionFailed', { message: result.message }))
+    }
+  } catch (e: unknown) {
+    ElMessage.error(t('channels.testFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
+  }
+}
+
+const handleRestartChannel = async (id: string) => {
+  try {
+    await channelStore.restartChannel(id)
+    ElMessage.success(t('channels.channelRestarted'))
+  } catch (e: unknown) {
+    ElMessage.error(t('channels.restartFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
+  }
+}
+
+const handleViewDetails = (id: string) => {
+  selectedChannelId.value = id
+}
+
+const handleExportYaml = async () => {
+  try {
+    console.log('开始导出通道...')
+    const result = await channelApi.exportChannels()
+    console.log('导出结果:', result)
+    
+    const channels = result.channels || []
+    
+    if (channels.length === 0) {
+      ElMessage.warning(t('channels.noExportableChannels'))
+      return
+    }
+    
+    const content = yaml.dump({ channels }, { 
+      indent: 2, 
+      lineWidth: 120,
+      noRefs: true,
+      sortKeys: false
+    })
+    const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `xagent-channels-${new Date().toISOString().slice(0, 10)}.yaml`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(t('channels.exportSuccess', { count: channels.length }))
+  } catch (e: unknown) {
+    console.error('导出失败:', e)
+    if (e instanceof Error) {
+      console.error('错误详情:', e.message)
+      console.error('错误堆栈:', e.stack)
+    }
+    const errorMsg = e instanceof Error ? e.message : t('common.unknownError')
+    ElMessage.error(t('channels.exportFailed', { message: errorMsg }))
+  }
+}
+
+const importFileRef = ref<HTMLInputElement | null>(null)
+
+const handleImportYaml = () => {
+  importFileRef.value?.click()
+}
+
+const handleImportFileChange = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const text = await file.text()
+    const parsed = yaml.load(text) as { channels?: NorthChannelConfig[] }
+    if (!parsed.channels || !Array.isArray(parsed.channels)) {
+      ElMessage.error(t('channels.invalidYaml'))
+      return
+    }
+
+    const channels = parsed.channels
+    await ElMessageBox.confirm(
+      t('channels.importConfirmMessage', { count: channels.length }),
+      t('channels.importConfirmTitle'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'info' }
+    )
+
+    const result = await channelApi.importChannels({ channels: parsed.channels }, false)
+    if (result.failed > 0) {
+      ElMessage.warning(t('channels.importPartialSuccess', { success: result.succeeded, fail: result.failed }))
+    } else {
+      ElMessage.success(t('channels.importSuccess', { count: result.succeeded }))
+    }
+    await channelStore.fetchChannels()
+  } catch (e: unknown) {
+    if ((e as any) !== 'cancel') {
+      ElMessage.error(t('channels.importFailed', { message: e instanceof Error ? e.message : t('common.unknownError') }))
+    }
+  }
+}
+
+const selectedChannel = computed(() => {
+  if (!selectedChannelId.value) return null
+  return channelStore.getChannelById(selectedChannelId.value)
+})
+
+// 格式化数字（添加千分位）
+const formatNumber = (num: number): string => {
+  if (num >= 10000) {
+    return (num / 1000).toFixed(1) + 'k'
+  }
+  return num.toLocaleString()
+}
+
+onMounted(async () => {
+  await channelStore.fetchChannels()
+})
+</script>
 
 <style scoped>
 .channels-page {

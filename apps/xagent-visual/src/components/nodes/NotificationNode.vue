@@ -1,3 +1,30 @@
+<template>
+  <div class="rule-node notification-node">
+    <Handle type="target" :position="Position.Top" />
+
+    <div class="node-header">
+      <span class="node-icon">📢</span>
+      <span class="node-title">{{ t('nodeViews.notification') }}</span>
+      <span class="level-badge" :style="{ background: levelColor }">{{ nodeData?.level || 'warning' }}</span>
+    </div>
+
+    <div class="node-body">
+      <div class="node-info">
+        <div class="info-row">
+          <span class="info-label">{{ t('nodeViews.channel') }}:</span>
+          <span class="info-value">{{ channelLabel }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">{{ t('nodeViews.level') }}:</span>
+          <span class="info-value">{{ levelLabel }}</span>
+        </div>
+      </div>
+    </div>
+
+    <Handle type="source" :position="Position.Bottom" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
@@ -38,33 +65,6 @@ const levelColor = computed(() => {
   return colors[level] || '#f59e0b'
 })
 </script>
-
-<template>
-  <div class="rule-node notification-node">
-    <Handle type="target" :position="Position.Top" />
-
-    <div class="node-header">
-      <span class="node-icon">📢</span>
-      <span class="node-title">{{ t('nodeViews.notification') }}</span>
-      <span class="level-badge" :style="{ background: levelColor }">{{ nodeData?.level || 'warning' }}</span>
-    </div>
-
-    <div class="node-body">
-      <div class="node-info">
-        <div class="info-row">
-          <span class="info-label">{{ t('nodeViews.channel') }}:</span>
-          <span class="info-value">{{ channelLabel }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">{{ t('nodeViews.level') }}:</span>
-          <span class="info-value">{{ levelLabel }}</span>
-        </div>
-      </div>
-    </div>
-
-    <Handle type="source" :position="Position.Bottom" />
-  </div>
-</template>
 
 <style scoped>
 .notification-node {

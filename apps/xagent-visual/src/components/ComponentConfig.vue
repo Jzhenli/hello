@@ -1,171 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, watch, markRaw } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useScadaStore } from '@/stores/scada'
-import { usePointStore } from '@/stores/points'
-import type { PointBinding } from '@/types/scada'
-import { getConfigPanel } from '@/components/scada-components'
-
-const { t } = useI18n()
-const scadaStore = useScadaStore()
-const pointStore = usePointStore()
-
-const selectedDevice = ref<string>('')
-const selectedPoint = ref<string>('')
-
-const component = computed(() => scadaStore.selectedComponent)
-const currentPanel = computed(() => scadaStore.currentPanel)
-
-const currentBinding = computed(() => component.value?.binding)
-
-// 获取当前组件类型的配置面板
-const componentConfigPanel = computed(() => {
-  if (!component.value) return null
-  const panel = getConfigPanel(component.value.type)
-  return panel ? markRaw(panel) : null
-})
-
-// Display name: translate if it's a template key, otherwise show custom name
-const displayName = computed(() => {
-  if (!component.value) return ''
-  if (component.value.name?.startsWith('scadaComponentNames.')) {
-    return t(component.value.name)
-  }
-  return component.value.name || component.value.type
-})
-
-const panelWidth = ref(1200)
-const panelHeight = ref(800)
-const panelBgColor = ref('#f0f2f5')
-const panelGrid = ref(20)
-const panelBgImage = ref<string | undefined>(undefined)
-const panelBgType = ref<'color' | 'image'>('color')
-const bgImageInput = ref<HTMLInputElement | null>(null)
-
-watch(currentPanel, (panel) => {
-  if (panel) {
-    panelWidth.value = panel.width
-    panelHeight.value = panel.height
-    panelBgColor.value = panel.backgroundColor
-    panelGrid.value = panel.grid
-    panelBgImage.value = panel.backgroundImage
-    panelBgType.value = panel.backgroundImage ? 'image' : 'color'
-  }
-}, { immediate: true })
-
-watch(currentBinding, (binding) => {
-  if (binding) {
-    selectedDevice.value = binding.deviceId
-    selectedPoint.value = binding.pointName
-  } else {
-    selectedDevice.value = ''
-    selectedPoint.value = ''
-  }
-}, { immediate: true })
-
-const availablePoints = computed(() => {
-  if (!selectedDevice.value) return []
-  const device = pointStore.devices.find(d => d.asset === selectedDevice.value || d.name === selectedDevice.value)
-  return device?.points || []
-})
-
-const handleDeviceChange = () => {
-  selectedPoint.value = ''
-}
-
-const handlePointChange = () => {
-  if (!component.value || !selectedDevice.value || !selectedPoint.value) return
-  
-  const point = availablePoints.value.find(p => p.name === selectedPoint.value)
-  if (!point) return
-
-  const binding: PointBinding = {
-    deviceId: selectedDevice.value,
-    pointName: selectedPoint.value,
-    pointDescription: point.description,
-    unit: point.unit
-  }
-
-  scadaStore.bindPoint(component.value.id, binding)
-}
-
-const handleUnbind = () => {
-  if (!component.value) return
-  scadaStore.bindPoint(component.value.id, null)
-  selectedDevice.value = ''
-  selectedPoint.value = ''
-}
-
-const updateStyle = (key: string, value: any) => {
-  if (!component.value) return
-  scadaStore.updateComponent(component.value.id, {
-    style: { ...component.value.style, [key]: value }
-  })
-}
-
-const updatePanelSize = () => {
-  if (!currentPanel.value) return
-  scadaStore.updatePanel({
-    width: panelWidth.value,
-    height: panelHeight.value,
-    backgroundColor: panelBgColor.value,
-    grid: panelGrid.value,
-    backgroundImage: panelBgType.value === 'image' ? panelBgImage.value : undefined
-  })
-}
-
-const onBgTypeChange = (type: 'color' | 'image') => {
-  if (type === 'color') {
-    // Clear image when switching to color mode
-    panelBgImage.value = undefined
-  }
-  updatePanelSize()
-}
-
-const handleBgImageUpload = (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = (event) => {
-    const result = event.target?.result as string
-    if (result) {
-      panelBgImage.value = result
-      panelBgType.value = 'image'
-      updatePanelSize()
-    }
-  }
-  reader.readAsDataURL(file)
-  
-  // Reset input
-  input.value = ''
-}
-
-const removeBgImage = () => {
-  panelBgImage.value = undefined
-  panelBgType.value = 'color'
-  updatePanelSize()
-}
-
-const triggerBgImageUpload = () => {
-  bgImageInput.value?.click()
-}
-
-const presetSizes = [
-  { key: 'small', name: 'componentConfig.small', width: 800, height: 600 },
-  { key: 'medium', name: 'componentConfig.medium', width: 1200, height: 800 },
-  { key: 'large', name: 'componentConfig.large', width: 1920, height: 1080 },
-  { key: 'extraWide', name: 'componentConfig.extraWide', width: 2560, height: 1080 },
-]
-
-const applyPreset = (preset: typeof presetSizes[0]) => {
-  panelWidth.value = preset.width
-  panelHeight.value = preset.height
-  updatePanelSize()
-}
-</script>
-
 <template>
   <div class="config-panel">
     <div class="panel-header">
@@ -339,6 +171,174 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, watch, markRaw } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useScadaStore } from '@/stores/scada'
+import { usePointStore } from '@/stores/points'
+import type { PointBinding } from '@/types/scada'
+import { getConfigPanel } from '@/components/scada-components'
+
+const { t } = useI18n()
+const scadaStore = useScadaStore()
+const pointStore = usePointStore()
+
+const selectedDevice = ref<string>('')
+const selectedPoint = ref<string>('')
+
+const component = computed(() => scadaStore.selectedComponent)
+const currentPanel = computed(() => scadaStore.currentPanel)
+
+const currentBinding = computed(() => component.value?.binding)
+
+// 获取当前组件类型的配置面板
+const componentConfigPanel = computed(() => {
+  if (!component.value) return null
+  const panel = getConfigPanel(component.value.type)
+  return panel ? markRaw(panel) : null
+})
+
+// Display name: translate if it's a template key, otherwise show custom name
+const displayName = computed(() => {
+  if (!component.value) return ''
+  if (component.value.name?.startsWith('scadaComponentNames.')) {
+    return t(component.value.name)
+  }
+  return component.value.name || component.value.type
+})
+
+const panelWidth = ref(1200)
+const panelHeight = ref(800)
+const panelBgColor = ref('#f0f2f5')
+const panelGrid = ref(20)
+const panelBgImage = ref<string | undefined>(undefined)
+const panelBgType = ref<'color' | 'image'>('color')
+const bgImageInput = ref<HTMLInputElement | null>(null)
+
+watch(currentPanel, (panel) => {
+  if (panel) {
+    panelWidth.value = panel.width
+    panelHeight.value = panel.height
+    panelBgColor.value = panel.backgroundColor
+    panelGrid.value = panel.grid
+    panelBgImage.value = panel.backgroundImage
+    panelBgType.value = panel.backgroundImage ? 'image' : 'color'
+  }
+}, { immediate: true })
+
+watch(currentBinding, (binding) => {
+  if (binding) {
+    selectedDevice.value = binding.deviceId
+    selectedPoint.value = binding.pointName
+  } else {
+    selectedDevice.value = ''
+    selectedPoint.value = ''
+  }
+}, { immediate: true })
+
+const availablePoints = computed(() => {
+  if (!selectedDevice.value) return []
+  const device = pointStore.devices.find(d => d.asset === selectedDevice.value || d.name === selectedDevice.value)
+  return device?.points || []
+})
+
+const handleDeviceChange = () => {
+  selectedPoint.value = ''
+}
+
+const handlePointChange = () => {
+  if (!component.value || !selectedDevice.value || !selectedPoint.value) return
+  
+  const point = availablePoints.value.find(p => p.name === selectedPoint.value)
+  if (!point) return
+
+  const binding: PointBinding = {
+    deviceId: selectedDevice.value,
+    pointName: selectedPoint.value,
+    pointDescription: point.description,
+    unit: point.unit
+  }
+
+  scadaStore.bindPoint(component.value.id, binding)
+}
+
+const handleUnbind = () => {
+  if (!component.value) return
+  scadaStore.bindPoint(component.value.id, null)
+  selectedDevice.value = ''
+  selectedPoint.value = ''
+}
+
+const updateStyle = (key: string, value: any) => {
+  if (!component.value) return
+  scadaStore.updateComponent(component.value.id, {
+    style: { ...component.value.style, [key]: value }
+  })
+}
+
+const updatePanelSize = () => {
+  if (!currentPanel.value) return
+  scadaStore.updatePanel({
+    width: panelWidth.value,
+    height: panelHeight.value,
+    backgroundColor: panelBgColor.value,
+    grid: panelGrid.value,
+    backgroundImage: panelBgType.value === 'image' ? panelBgImage.value : undefined
+  })
+}
+
+const onBgTypeChange = (type: 'color' | 'image') => {
+  if (type === 'color') {
+    // Clear image when switching to color mode
+    panelBgImage.value = undefined
+  }
+  updatePanelSize()
+}
+
+const handleBgImageUpload = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (event) => {
+    const result = event.target?.result as string
+    if (result) {
+      panelBgImage.value = result
+      panelBgType.value = 'image'
+      updatePanelSize()
+    }
+  }
+  reader.readAsDataURL(file)
+  
+  // Reset input
+  input.value = ''
+}
+
+const removeBgImage = () => {
+  panelBgImage.value = undefined
+  panelBgType.value = 'color'
+  updatePanelSize()
+}
+
+const triggerBgImageUpload = () => {
+  bgImageInput.value?.click()
+}
+
+const presetSizes = [
+  { key: 'small', name: 'componentConfig.small', width: 800, height: 600 },
+  { key: 'medium', name: 'componentConfig.medium', width: 1200, height: 800 },
+  { key: 'large', name: 'componentConfig.large', width: 1920, height: 1080 },
+  { key: 'extraWide', name: 'componentConfig.extraWide', width: 2560, height: 1080 },
+]
+
+const applyPreset = (preset: typeof presetSizes[0]) => {
+  panelWidth.value = preset.width
+  panelHeight.value = preset.height
+  updatePanelSize()
+}
+</script>
 
 <style scoped>
 .config-panel {

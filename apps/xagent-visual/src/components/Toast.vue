@@ -1,10 +1,3 @@
-<script setup lang="ts">
-defineProps<{
-  message: string
-  type: 'success' | 'error' | 'warning' | 'info'
-}>()
-</script>
-
 <template>
   <div class="toast" :class="type">
     <span class="toast-icon">
@@ -16,6 +9,13 @@ defineProps<{
     <span class="toast-message">{{ message }}</span>
   </div>
 </template>
+
+<script setup lang="ts">
+defineProps<{
+  message: string
+  type: 'success' | 'error' | 'warning' | 'info'
+}>()
+</script>
 
 <style scoped>
 .toast {

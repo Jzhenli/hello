@@ -1,155 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { 
-  Odometer, 
-  Monitor, 
-  Connection, 
-  Bell, 
-  Setting,
-  User,
-  PictureFilled,
-  Expand,
-  Fold,
-  Menu
-} from '@element-plus/icons-vue'
-import { useAlertStore } from '@/stores/alerts'
-import { useScadaStore } from '@/stores/scada'
-import { useUserStore } from '@/stores/users'
-//import { useThemeStore } from '@/stores/theme'
-import { useResponsive } from '@/utils/useResponsive'
-import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
-import { ElMessage } from 'element-plus'
-
-const { t, locale } = useI18n()
-
-const route = useRoute()
-const router = useRouter()
-const alertStore = useAlertStore()
-const scadaStore = useScadaStore()
-const userStore = useUserStore()
-//const themeStore = useThemeStore()
-const { isTablet, isMobile, width, height } = useResponsive()
-
-const isCollapsed = ref(false)
-const isDrawerVisible = ref(false)
-const forceExpanded = ref(false)
-
-// Language options
-const languageOptions = [
-  { value: 'zh-CN', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'zh-TW', label: '繁體中文' }
-]
-
-const currentLanguageLabel = computed(() => {
-  const opt = languageOptions.find(o => o.value === locale.value)
-  return opt ? opt.label : locale.value
-})
-
-function handleLanguageChange(lang: string) {
-  locale.value = lang as 'zh-CN' | 'en' | 'zh-TW'
-  localStorage.setItem('locale', lang)
-  ElMessage.success(t('common.languageChanged'))
-}
-
-// 当前时间
-const currentTime = ref(new Date().toLocaleString(locale.value, {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit'
-}))
-let timeTimer: ReturnType<typeof setInterval>
-
-watch(locale, () => {
-  currentTime.value = new Date().toLocaleString(locale.value, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-})
-
-const shouldCollapseSidebar = computed(() => {
-  if (forceExpanded.value) return false
-  return width.value <= 1280 || height.value <= 700
-})
-
-const allMenuItems = computed(() => [
-  { path: '/dashboard', title: t('layout.dashboard'), icon: Odometer, resource: 'dashboard' },
-  { path: '/channels', title: t('layout.channels'), icon: Connection, resource: 'channels' },
-  { path: '/devices', title: t('layout.devices'), icon: Monitor, resource: 'devices' },
-  { path: '/scada', title: t('layout.scada'), icon: PictureFilled, resource: 'scada' },
-  { path: '/alerts', title: t('layout.alerts'), icon: Bell, resource: 'alerts' },
-  { path: '/rules', title: t('layout.rules'), icon: Connection, resource: 'rules' },
-  { path: '/settings', title: t('layout.settings'), icon: Setting, resource: 'settings' }
-])
-
-const menuItems = computed(() =>
-  allMenuItems.value.filter(item => userStore.hasPermission(item.resource, 'view'))
-)
-
-const activeMenu = computed(() => route.path)
-
-const handleMenuSelect = (path: string) => {
-  if (route.path !== path) {
-    router.push(path).catch(() => {})
-  }
-  if (isTablet.value || isMobile.value) {
-    isDrawerVisible.value = false
-  }
-}
-
-const toggleCollapse = () => {
-  if (shouldCollapseSidebar.value || (width.value <= 1280 || height.value <= 700)) {
-    forceExpanded.value = !forceExpanded.value
-  } else {
-    isCollapsed.value = !isCollapsed.value
-  }
-}
-
-const toggleDrawer = () => {
-  isDrawerVisible.value = !isDrawerVisible.value
-}
-
-const isFullscreenMode = computed(() => scadaStore.isFullscreenPreview)
-
-const showSidebar = computed(() => !isTablet.value && !isMobile.value && route.path !== '/login')
-const showDrawer = computed(() => (isTablet.value || isMobile.value) && route.path !== '/login')
-const isLoginPage = computed(() => route.path === '/login')
-
-function handleLogout() {
-  userStore.logout()
-  router.push('/login')
-}
-
-// 时间更新
-onMounted(() => {
-  timeTimer = setInterval(() => {
-    currentTime.value = new Date().toLocaleString(locale.value, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (timeTimer) {
-    clearInterval(timeTimer)
-  }
-})
-</script>
-
 <template>
   <el-container class="app-layout">
     <template v-if="showSidebar">
@@ -305,6 +153,158 @@ onUnmounted(() => {
     </el-container>
   </el-container>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { 
+  Odometer, 
+  Monitor, 
+  Connection, 
+  Bell, 
+  Setting,
+  User,
+  PictureFilled,
+  Expand,
+  Fold,
+  Menu
+} from '@element-plus/icons-vue'
+import { useAlertStore } from '@/stores/alerts'
+import { useScadaStore } from '@/stores/scada'
+import { useUserStore } from '@/stores/users'
+//import { useThemeStore } from '@/stores/theme'
+import { useResponsive } from '@/utils/useResponsive'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
+import { ElMessage } from 'element-plus'
+
+const { t, locale } = useI18n()
+
+const route = useRoute()
+const router = useRouter()
+const alertStore = useAlertStore()
+const scadaStore = useScadaStore()
+const userStore = useUserStore()
+//const themeStore = useThemeStore()
+const { isTablet, isMobile, width, height } = useResponsive()
+
+const isCollapsed = ref(false)
+const isDrawerVisible = ref(false)
+const forceExpanded = ref(false)
+
+// Language options
+const languageOptions = [
+  { value: 'zh-CN', label: '简体中文' },
+  { value: 'en', label: 'English' },
+  { value: 'zh-TW', label: '繁體中文' }
+]
+
+const currentLanguageLabel = computed(() => {
+  const opt = languageOptions.find(o => o.value === locale.value)
+  return opt ? opt.label : locale.value
+})
+
+function handleLanguageChange(lang: string) {
+  locale.value = lang as 'zh-CN' | 'en' | 'zh-TW'
+  localStorage.setItem('locale', lang)
+  ElMessage.success(t('common.languageChanged'))
+}
+
+// 当前时间
+const currentTime = ref(new Date().toLocaleString(locale.value, {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+}))
+let timeTimer: ReturnType<typeof setInterval>
+
+watch(locale, () => {
+  currentTime.value = new Date().toLocaleString(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+})
+
+const shouldCollapseSidebar = computed(() => {
+  if (forceExpanded.value) return false
+  return width.value <= 1280 || height.value <= 700
+})
+
+const allMenuItems = computed(() => [
+  { path: '/dashboard', title: t('layout.dashboard'), icon: Odometer, resource: 'dashboard' },
+  { path: '/channels', title: t('layout.channels'), icon: Connection, resource: 'channels' },
+  { path: '/devices', title: t('layout.devices'), icon: Monitor, resource: 'devices' },
+  { path: '/scada', title: t('layout.scada'), icon: PictureFilled, resource: 'scada' },
+  { path: '/alerts', title: t('layout.alerts'), icon: Bell, resource: 'alerts' },
+  { path: '/rules', title: t('layout.rules'), icon: Connection, resource: 'rules' },
+  { path: '/settings', title: t('layout.settings'), icon: Setting, resource: 'settings' }
+])
+
+const menuItems = computed(() =>
+  allMenuItems.value.filter(item => userStore.hasPermission(item.resource, 'view'))
+)
+
+const activeMenu = computed(() => route.path)
+
+const handleMenuSelect = (path: string) => {
+  if (route.path !== path) {
+    router.push(path).catch(() => {})
+  }
+  if (isTablet.value || isMobile.value) {
+    isDrawerVisible.value = false
+  }
+}
+
+const toggleCollapse = () => {
+  if (shouldCollapseSidebar.value || (width.value <= 1280 || height.value <= 700)) {
+    forceExpanded.value = !forceExpanded.value
+  } else {
+    isCollapsed.value = !isCollapsed.value
+  }
+}
+
+const toggleDrawer = () => {
+  isDrawerVisible.value = !isDrawerVisible.value
+}
+
+const isFullscreenMode = computed(() => scadaStore.isFullscreenPreview)
+
+const showSidebar = computed(() => !isTablet.value && !isMobile.value && route.path !== '/login')
+const showDrawer = computed(() => (isTablet.value || isMobile.value) && route.path !== '/login')
+const isLoginPage = computed(() => route.path === '/login')
+
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
+
+// 时间更新
+onMounted(() => {
+  timeTimer = setInterval(() => {
+    currentTime.value = new Date().toLocaleString(locale.value, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timeTimer) {
+    clearInterval(timeTimer)
+  }
+})
+</script>
 
 <style scoped>
 .app-layout {

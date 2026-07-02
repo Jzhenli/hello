@@ -1,177 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { RuleNodeData, NodeType } from '@/types/rule'
-import { OPERATORS, LOGIC_OPERATORS, SCHEDULE_MODES, SCHEDULE_FREQUENCIES, WEEKDAYS, NOTIFICATION_LEVELS, NOTIFICATION_CHANNEL_TYPES } from '@/types/rule'
-import { useDeviceStore } from '@/stores/devices'
-import type { DeviceConfig, PointConfig } from '@/api/types'
-
-const { t } = useI18n()
-
-const props = defineProps<{
-  nodeId: string
-  nodeType: NodeType
-  nodeData: RuleNodeData
-}>()
-
-const emit = defineEmits<{
-  (e: 'update', data: RuleNodeData): void
-  (e: 'delete', nodeId: string): void
-}>()
-
-const deviceStore = useDeviceStore()
-
-const localData = ref<RuleNodeData>(JSON.parse(JSON.stringify(props.nodeData || {})))
-
-watch(() => props.nodeData, (newData) => {
-  localData.value = JSON.parse(JSON.stringify(newData || {}))
-}, { deep: true })
-
-const ensureNodeData = () => {
-  if (props.nodeType === 'trigger' && !localData.value.trigger) {
-    localData.value.trigger = { source: '', field: '' }
-  }
-  if (props.nodeType === 'schedule-trigger' && !localData.value.scheduleTrigger) {
-    localData.value.scheduleTrigger = { mode: 'periodic', time: '08:00', frequency: 'daily', days: [] }
-  }
-  if (props.nodeType === 'condition' && !localData.value.condition) {
-    localData.value.condition = { field: '', operator: '>', value: '', duration: 0 }
-  }
-  if (props.nodeType === 'logic' && !localData.value.logic) {
-    localData.value.logic = { operator: 'and' }
-  }
-  if (props.nodeType === 'action' && !localData.value.action) {
-    localData.value.action = { target_asset: '', operation: 'write_setpoint', parameters: {}, delay: 0 }
-  }
-  if (props.nodeType === 'notification' && !localData.value.notification) {
-    localData.value.notification = { channel_type: 'system', level: 'warning' }
-  }
-}
-
-watch(() => props.nodeType, () => { ensureNodeData() }, { immediate: true })
-
-onMounted(() => {
-  if (deviceStore.devices.length === 0) {
-    deviceStore.fetchDevices()
-  }
-})
-
-const devices = computed<DeviceConfig[]>(() => deviceStore.devices)
-
-const triggerDevices = computed(() =>
-  devices.value.filter(d => d.enabled && d.points && d.points.length > 0)
-)
-
-const selectedTriggerDevice = computed<DeviceConfig | undefined>({
-  get: () => {
-    const source = localData.value.trigger?.source
-    return devices.value.find(d => d.asset === source)
-  },
-  set: (device: DeviceConfig | undefined) => {
-    if (localData.value.trigger && device) {
-      localData.value.trigger.source = device.asset
-      localData.value.trigger.sourceService = device.plugin?.name || ''
-      localData.value.trigger.field = ''
-      updateData()
-    }
-  }
-})
-
-const triggerPoints = computed<PointConfig[]>(() => {
-  if (!selectedTriggerDevice.value) return []
-  return selectedTriggerDevice.value.points?.filter(p => p.enabled) || []
-})
-
-const actionDevices = computed(() => devices.value.filter(d => d.enabled))
-
-const selectedActionDevice = computed<DeviceConfig | undefined>({
-  get: () => {
-    const targetAsset = localData.value.action?.target_asset
-    return devices.value.find(d => d.asset === targetAsset)
-  },
-  set: (device: DeviceConfig | undefined) => {
-    if (localData.value.action && device) {
-      localData.value.action.target_asset = device.asset
-      localData.value.action.targetService = device.plugin?.name || ''
-      localData.value.action.operation = 'write_setpoint'
-      localData.value.action.parameters = {}
-      updateData()
-    }
-  }
-})
-
-const actionPoints = computed<PointConfig[]>(() => {
-  if (!selectedActionDevice.value) return []
-  return selectedActionDevice.value.points?.filter(p => p.enabled) || []
-})
-
-const selectedActionPoint = computed<string>({
-  get: () => localData.value.action?.parameters?.point || '',
-  set: (val: string) => {
-    if (localData.value.action) {
-      localData.value.action.parameters = {
-        ...localData.value.action.parameters,
-        point: val,
-      }
-      updateData()
-    }
-  }
-})
-
-const actionValue = computed<string>({
-  get: () => {
-    const v = localData.value.action?.parameters?.value
-    return v !== undefined ? String(v) : ''
-  },
-  set: (val: string) => {
-    if (localData.value.action) {
-      const numVal = Number(val)
-      localData.value.action.parameters = {
-        ...localData.value.action.parameters,
-        value: isNaN(numVal) ? val : numVal,
-      }
-      updateData()
-    }
-  }
-})
-
-const panelTitle = computed(() => {
-  const titles: Record<NodeType, string> = {
-    trigger: t('nodeConfig.triggerTitle'),
-    'schedule-trigger': t('nodeConfig.scheduleTitle'),
-    condition: t('nodeConfig.conditionTitle'),
-    logic: t('nodeConfig.logicTitle'),
-    action: t('nodeConfig.actionTitle'),
-    notification: t('nodeConfig.notificationTitle')
-  }
-  return titles[props.nodeType]
-})
-
-const updateData = () => {
-  emit('update', { ...localData.value })
-}
-
-const handleDelete = () => {
-  emit('delete', props.nodeId)
-}
-
-const toggleDay = (day: number) => {
-  if (!localData.value.scheduleTrigger) return
-  const days = localData.value.scheduleTrigger.days
-  const index = days.indexOf(day)
-  if (index === -1) {
-    days.push(day)
-  } else {
-    days.splice(index, 1)
-  }
-  updateData()
-}
-
-const isDaySelected = (day: number) => {
-  return localData.value.scheduleTrigger?.days?.includes(day) || false
-}
-</script>
-
 <template>
   <div class="node-config-panel">
     <div class="panel-header">
@@ -585,6 +411,180 @@ const isDaySelected = (day: number) => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { RuleNodeData, NodeType } from '@/types/rule'
+import { OPERATORS, LOGIC_OPERATORS, SCHEDULE_MODES, SCHEDULE_FREQUENCIES, WEEKDAYS, NOTIFICATION_LEVELS, NOTIFICATION_CHANNEL_TYPES } from '@/types/rule'
+import { useDeviceStore } from '@/stores/devices'
+import type { DeviceConfig, PointConfig } from '@/api/types'
+
+const { t } = useI18n()
+
+const props = defineProps<{
+  nodeId: string
+  nodeType: NodeType
+  nodeData: RuleNodeData
+}>()
+
+const emit = defineEmits<{
+  (e: 'update', data: RuleNodeData): void
+  (e: 'delete', nodeId: string): void
+}>()
+
+const deviceStore = useDeviceStore()
+
+const localData = ref<RuleNodeData>(JSON.parse(JSON.stringify(props.nodeData || {})))
+
+watch(() => props.nodeData, (newData) => {
+  localData.value = JSON.parse(JSON.stringify(newData || {}))
+}, { deep: true })
+
+const ensureNodeData = () => {
+  if (props.nodeType === 'trigger' && !localData.value.trigger) {
+    localData.value.trigger = { source: '', field: '' }
+  }
+  if (props.nodeType === 'schedule-trigger' && !localData.value.scheduleTrigger) {
+    localData.value.scheduleTrigger = { mode: 'periodic', time: '08:00', frequency: 'daily', days: [] }
+  }
+  if (props.nodeType === 'condition' && !localData.value.condition) {
+    localData.value.condition = { field: '', operator: '>', value: '', duration: 0 }
+  }
+  if (props.nodeType === 'logic' && !localData.value.logic) {
+    localData.value.logic = { operator: 'and' }
+  }
+  if (props.nodeType === 'action' && !localData.value.action) {
+    localData.value.action = { target_asset: '', operation: 'write_setpoint', parameters: {}, delay: 0 }
+  }
+  if (props.nodeType === 'notification' && !localData.value.notification) {
+    localData.value.notification = { channel_type: 'system', level: 'warning' }
+  }
+}
+
+watch(() => props.nodeType, () => { ensureNodeData() }, { immediate: true })
+
+onMounted(() => {
+  if (deviceStore.devices.length === 0) {
+    deviceStore.fetchDevices()
+  }
+})
+
+const devices = computed<DeviceConfig[]>(() => deviceStore.devices)
+
+const triggerDevices = computed(() =>
+  devices.value.filter(d => d.enabled && d.points && d.points.length > 0)
+)
+
+const selectedTriggerDevice = computed<DeviceConfig | undefined>({
+  get: () => {
+    const source = localData.value.trigger?.source
+    return devices.value.find(d => d.asset === source)
+  },
+  set: (device: DeviceConfig | undefined) => {
+    if (localData.value.trigger && device) {
+      localData.value.trigger.source = device.asset
+      localData.value.trigger.sourceService = device.plugin?.name || ''
+      localData.value.trigger.field = ''
+      updateData()
+    }
+  }
+})
+
+const triggerPoints = computed<PointConfig[]>(() => {
+  if (!selectedTriggerDevice.value) return []
+  return selectedTriggerDevice.value.points?.filter(p => p.enabled) || []
+})
+
+const actionDevices = computed(() => devices.value.filter(d => d.enabled))
+
+const selectedActionDevice = computed<DeviceConfig | undefined>({
+  get: () => {
+    const targetAsset = localData.value.action?.target_asset
+    return devices.value.find(d => d.asset === targetAsset)
+  },
+  set: (device: DeviceConfig | undefined) => {
+    if (localData.value.action && device) {
+      localData.value.action.target_asset = device.asset
+      localData.value.action.targetService = device.plugin?.name || ''
+      localData.value.action.operation = 'write_setpoint'
+      localData.value.action.parameters = {}
+      updateData()
+    }
+  }
+})
+
+const actionPoints = computed<PointConfig[]>(() => {
+  if (!selectedActionDevice.value) return []
+  return selectedActionDevice.value.points?.filter(p => p.enabled) || []
+})
+
+const selectedActionPoint = computed<string>({
+  get: () => localData.value.action?.parameters?.point || '',
+  set: (val: string) => {
+    if (localData.value.action) {
+      localData.value.action.parameters = {
+        ...localData.value.action.parameters,
+        point: val,
+      }
+      updateData()
+    }
+  }
+})
+
+const actionValue = computed<string>({
+  get: () => {
+    const v = localData.value.action?.parameters?.value
+    return v !== undefined ? String(v) : ''
+  },
+  set: (val: string) => {
+    if (localData.value.action) {
+      const numVal = Number(val)
+      localData.value.action.parameters = {
+        ...localData.value.action.parameters,
+        value: isNaN(numVal) ? val : numVal,
+      }
+      updateData()
+    }
+  }
+})
+
+const panelTitle = computed(() => {
+  const titles: Record<NodeType, string> = {
+    trigger: t('nodeConfig.triggerTitle'),
+    'schedule-trigger': t('nodeConfig.scheduleTitle'),
+    condition: t('nodeConfig.conditionTitle'),
+    logic: t('nodeConfig.logicTitle'),
+    action: t('nodeConfig.actionTitle'),
+    notification: t('nodeConfig.notificationTitle')
+  }
+  return titles[props.nodeType]
+})
+
+const updateData = () => {
+  emit('update', { ...localData.value })
+}
+
+const handleDelete = () => {
+  emit('delete', props.nodeId)
+}
+
+const toggleDay = (day: number) => {
+  if (!localData.value.scheduleTrigger) return
+  const days = localData.value.scheduleTrigger.days
+  const index = days.indexOf(day)
+  if (index === -1) {
+    days.push(day)
+  } else {
+    days.splice(index, 1)
+  }
+  updateData()
+}
+
+const isDaySelected = (day: number) => {
+  return localData.value.scheduleTrigger?.days?.includes(day) || false
+}
+</script>
 
 <style scoped>
 .node-config-panel {

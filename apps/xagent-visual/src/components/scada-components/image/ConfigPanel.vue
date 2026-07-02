@@ -1,3 +1,40 @@
+<template>
+  <div class="config-section">
+    <div class="section-title">{{ t('componentConfig.imageConfig') }}</div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.imageSource') }}</label>
+      <div v-if="component.imageConfig?.url" class="bg-image-card">
+        <div class="bg-image-preview">
+          <img :src="component.imageConfig.url" alt="image">
+        </div>
+        <div class="bg-image-actions">
+          <el-button size="small" @click="triggerImageUpload">{{ t('componentConfig.changeImage') }}</el-button>
+          <el-button size="small" type="danger" @click="removeImage">{{ t('componentConfig.removeImage') }}</el-button>
+        </div>
+      </div>
+      <div v-else class="bg-upload-area" @click="triggerImageUpload">
+        <span class="upload-icon">+</span>
+        <span class="upload-text">{{ t('componentConfig.uploadImage') }}</span>
+      </div>
+      <input 
+        ref="imageFileInput"
+        type="file"
+        accept="image/*"
+        class="hidden-file-input"
+        @change="handleImageUpload"
+      />
+    </div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.imageFit') }}</label>
+      <select :value="component.imageConfig?.fit || 'contain'" @change="updateConfig('fit', ($event.target as HTMLSelectElement).value)">
+        <option value="contain">{{ t('componentConfig.fitContain') }}</option>
+        <option value="cover">{{ t('componentConfig.fitCover') }}</option>
+        <option value="fill">{{ t('componentConfig.fitFill') }}</option>
+      </select>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -45,43 +82,6 @@ const triggerImageUpload = () => {
   imageFileInput.value?.click()
 }
 </script>
-
-<template>
-  <div class="config-section">
-    <div class="section-title">{{ t('componentConfig.imageConfig') }}</div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.imageSource') }}</label>
-      <div v-if="component.imageConfig?.url" class="bg-image-card">
-        <div class="bg-image-preview">
-          <img :src="component.imageConfig.url" alt="image">
-        </div>
-        <div class="bg-image-actions">
-          <el-button size="small" @click="triggerImageUpload">{{ t('componentConfig.changeImage') }}</el-button>
-          <el-button size="small" type="danger" @click="removeImage">{{ t('componentConfig.removeImage') }}</el-button>
-        </div>
-      </div>
-      <div v-else class="bg-upload-area" @click="triggerImageUpload">
-        <span class="upload-icon">+</span>
-        <span class="upload-text">{{ t('componentConfig.uploadImage') }}</span>
-      </div>
-      <input 
-        ref="imageFileInput"
-        type="file"
-        accept="image/*"
-        class="hidden-file-input"
-        @change="handleImageUpload"
-      />
-    </div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.imageFit') }}</label>
-      <select :value="component.imageConfig?.fit || 'contain'" @change="updateConfig('fit', ($event.target as HTMLSelectElement).value)">
-        <option value="contain">{{ t('componentConfig.fitContain') }}</option>
-        <option value="cover">{{ t('componentConfig.fitCover') }}</option>
-        <option value="fill">{{ t('componentConfig.fitFill') }}</option>
-      </select>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .config-section {

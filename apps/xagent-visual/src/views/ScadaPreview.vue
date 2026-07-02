@@ -1,3 +1,33 @@
+<template>
+  <div class="preview-page" :class="{ fullscreen: isFullscreen }">
+    <div v-if="!isFullscreen" class="preview-header">
+      <div class="header-left">
+        <el-button :icon="ArrowLeft" size="small" @click="handleGoBack">
+          {{ $t('scada.backToList') }}
+        </el-button>
+        <h3 class="panel-title">{{ currentPanel?.name }}</h3>
+      </div>
+      <div class="header-right">
+        <el-button :icon="FullScreen" size="small" @click="handleToggleFullscreen">
+          {{ $t('scada.fullscreen') }}
+        </el-button>
+      </div>
+    </div>
+
+    <div v-if="currentPanel" class="preview-content">
+      <div class="canvas-wrapper">
+        <ScadaCanvas />
+      </div>
+    </div>
+
+    <div v-else class="empty-state">
+      <el-empty :description="$t('scada.projectNotExist')">
+        <el-button type="primary" @click="handleGoBack">{{ $t('scada.backToProjectList') }}</el-button>
+      </el-empty>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -45,36 +75,6 @@ const handleToggleFullscreen = async () => {
   }
 }
 </script>
-
-<template>
-  <div class="preview-page" :class="{ fullscreen: isFullscreen }">
-    <div v-if="!isFullscreen" class="preview-header">
-      <div class="header-left">
-        <el-button :icon="ArrowLeft" size="small" @click="handleGoBack">
-          {{ $t('scada.backToList') }}
-        </el-button>
-        <h3 class="panel-title">{{ currentPanel?.name }}</h3>
-      </div>
-      <div class="header-right">
-        <el-button :icon="FullScreen" size="small" @click="handleToggleFullscreen">
-          {{ $t('scada.fullscreen') }}
-        </el-button>
-      </div>
-    </div>
-
-    <div v-if="currentPanel" class="preview-content">
-      <div class="canvas-wrapper">
-        <ScadaCanvas />
-      </div>
-    </div>
-
-    <div v-else class="empty-state">
-      <el-empty :description="$t('scada.projectNotExist')">
-        <el-button type="primary" @click="handleGoBack">{{ $t('scada.backToProjectList') }}</el-button>
-      </el-empty>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .preview-page {

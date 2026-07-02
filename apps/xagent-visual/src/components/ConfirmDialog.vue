@@ -1,3 +1,16 @@
+<template>
+  <div class="confirm-overlay" @click.self="emit('cancel')">
+    <div class="confirm-dialog">
+      <div class="confirm-icon">⚠️</div>
+      <div class="confirm-message">{{ message }}</div>
+      <div class="confirm-buttons">
+        <button class="btn-cancel" @click="emit('cancel')">{{ t('confirmDialog.cancel') }}</button>
+        <button class="btn-ok" @click="emit('ok')">{{ t('confirmDialog.confirm') }}</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
@@ -12,19 +25,6 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 </script>
-
-<template>
-  <div class="confirm-overlay" @click.self="emit('cancel')">
-    <div class="confirm-dialog">
-      <div class="confirm-icon">⚠️</div>
-      <div class="confirm-message">{{ message }}</div>
-      <div class="confirm-buttons">
-        <button class="btn-cancel" @click="emit('cancel')">{{ t('confirmDialog.cancel') }}</button>
-        <button class="btn-ok" @click="emit('ok')">{{ t('confirmDialog.confirm') }}</button>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .confirm-overlay {

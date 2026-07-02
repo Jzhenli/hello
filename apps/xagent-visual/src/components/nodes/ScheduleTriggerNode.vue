@@ -1,3 +1,31 @@
+<template>
+  <div class="rule-node schedule-trigger">
+    <Handle type="target" :position="Position.Top" />
+    
+    <div class="node-header">
+      <span class="node-icon">⏰</span>
+      <span class="node-title">{{ node.data?.label || t('nodeViews.scheduleTrigger') }}</span>
+    </div>
+    
+    <div class="node-body">
+      <div class="node-info has-data">
+        <div class="info-row">
+          <span class="info-label">{{ t('nodeViews.mode') }}:</span>
+          <span class="info-value">
+            {{ scheduleData?.mode === 'cron' ? 'Cron' : (scheduleData?.mode === 'once' ? t('nodeViews.once') : t('nodeViews.periodic')) }}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">{{ t('nodeViews.time') }}:</span>
+          <span class="info-value">{{ getScheduleDisplay }}</span>
+        </div>
+      </div>
+    </div>
+    
+    <Handle type="source" :position="Position.Bottom" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { computed } from 'vue'
@@ -30,34 +58,6 @@ const getScheduleDisplay = computed(() => {
   return `${freq} ${scheduleData.value.time}`
 })
 </script>
-
-<template>
-  <div class="rule-node schedule-trigger">
-    <Handle type="target" :position="Position.Top" />
-    
-    <div class="node-header">
-      <span class="node-icon">⏰</span>
-      <span class="node-title">{{ node.data?.label || t('nodeViews.scheduleTrigger') }}</span>
-    </div>
-    
-    <div class="node-body">
-      <div class="node-info has-data">
-        <div class="info-row">
-          <span class="info-label">{{ t('nodeViews.mode') }}:</span>
-          <span class="info-value">
-            {{ scheduleData?.mode === 'cron' ? 'Cron' : (scheduleData?.mode === 'once' ? t('nodeViews.once') : t('nodeViews.periodic')) }}
-          </span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">{{ t('nodeViews.time') }}:</span>
-          <span class="info-value">{{ getScheduleDisplay }}</span>
-        </div>
-      </div>
-    </div>
-    
-    <Handle type="source" :position="Position.Bottom" />
-  </div>
-</template>
 
 <style scoped>
 .schedule-trigger {

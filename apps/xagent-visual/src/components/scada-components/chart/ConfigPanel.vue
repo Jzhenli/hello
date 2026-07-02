@@ -1,3 +1,22 @@
+<template>
+  <div class="config-section">
+    <div class="section-title">{{ t('componentConfig.chartConfig') }}</div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.timeRange') }}</label>
+      <select :value="component.chartConfig?.timeRange ?? '24h'" @change="updateConfig('timeRange', ($event.target as HTMLSelectElement).value)">
+        <option value="1h">{{ t('dashboard.timeRange1h') }}</option>
+        <option value="6h">{{ t('pointTrend.timeRange6h') }}</option>
+        <option value="24h">{{ t('dashboard.timeRange24h') }}</option>
+        <option value="7d">{{ t('dashboard.timeRange7d') }}</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>{{ t('componentConfig.lineColor') }}</label>
+      <input type="color" :value="component.chartConfig?.lineColor ?? '#3498db'" @input="updateConfig('lineColor', ($event.target as HTMLInputElement).value)">
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useScadaStore } from '@/stores/scada'
@@ -17,25 +36,6 @@ const updateConfig = (key: string, value: any) => {
   })
 }
 </script>
-
-<template>
-  <div class="config-section">
-    <div class="section-title">{{ t('componentConfig.chartConfig') }}</div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.timeRange') }}</label>
-      <select :value="component.chartConfig?.timeRange ?? '24h'" @change="updateConfig('timeRange', ($event.target as HTMLSelectElement).value)">
-        <option value="1h">{{ t('dashboard.timeRange1h') }}</option>
-        <option value="6h">{{ t('pointTrend.timeRange6h') }}</option>
-        <option value="24h">{{ t('dashboard.timeRange24h') }}</option>
-        <option value="7d">{{ t('dashboard.timeRange7d') }}</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>{{ t('componentConfig.lineColor') }}</label>
-      <input type="color" :value="component.chartConfig?.lineColor ?? '#3498db'" @input="updateConfig('lineColor', ($event.target as HTMLInputElement).value)">
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .config-section {

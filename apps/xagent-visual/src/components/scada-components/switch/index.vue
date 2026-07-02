@@ -1,3 +1,13 @@
+<template>
+  <div class="switch-container" @click="handleToggle">
+    <div class="switch-label">{{ switchConfig?.onText || t('scadaComponents.switchOn') }}</div>
+    <div class="switch-track" :class="{ on: currentValue, writing }">
+      <div class="switch-thumb" :class="{ on: currentValue }"></div>
+    </div>
+    <div class="switch-label">{{ switchConfig?.offText || t('scadaComponents.switchOff') }}</div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -60,16 +70,6 @@ const handleToggle = async () => {
   }
 }
 </script>
-
-<template>
-  <div class="switch-container" @click="handleToggle">
-    <div class="switch-label">{{ switchConfig?.onText || t('scadaComponents.switchOn') }}</div>
-    <div class="switch-track" :class="{ on: currentValue, writing }">
-      <div class="switch-thumb" :class="{ on: currentValue }"></div>
-    </div>
-    <div class="switch-label">{{ switchConfig?.offText || t('scadaComponents.switchOff') }}</div>
-  </div>
-</template>
 
 <style scoped>
 .switch-container {

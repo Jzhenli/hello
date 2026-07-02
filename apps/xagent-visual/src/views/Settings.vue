@@ -1,3 +1,434 @@
+<template>
+  <div class="settings-page">
+    <div class="settings-container">
+      <template v-if="!useCompactLayout">
+        <div class="settings-sidebar">
+          <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
+            <el-menu-item index="general">
+              <el-icon><Setting /></el-icon>
+              <span>{{ $t('settings.menu.general') }}</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
+              <el-icon><Document /></el-icon>
+              <span>{{ $t('settings.menu.logs') }}</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
+              <el-icon><Refresh /></el-icon>
+              <span>{{ $t('settings.menu.backup') }}</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
+              <el-icon><User /></el-icon>
+              <span>{{ $t('settings.menu.users') }}</span>
+            </el-menu-item>
+            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
+              <el-icon><Lock /></el-icon>
+              <span>{{ $t('settings.menu.permissions') }}</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="settings-tabs">
+          <div 
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'general' }"
+            @click="activeMenu = 'general'"
+          >
+            <el-icon><Setting /></el-icon>
+            <span>{{ $t('settings.menu.general') }}</span>
+          </div>
+          <div 
+            v-if="userStore.hasPermission('logs', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'logs' }"
+            @click="activeMenu = 'logs'"
+          >
+            <el-icon><Document /></el-icon>
+            <span>{{ $t('settings.menu.logs') }}</span>
+          </div>
+          <div 
+            v-if="userStore.hasPermission('backup', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'backup' }"
+            @click="activeMenu = 'backup'"
+          >
+            <el-icon><Refresh /></el-icon>
+            <span>{{ $t('settings.menu.backup') }}</span>
+          </div>
+          <div 
+            v-if="userStore.hasPermission('users', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'users' }"
+            @click="activeMenu = 'users'"
+          >
+            <el-icon><User /></el-icon>
+            <span>{{ $t('settings.menu.users') }}</span>
+          </div>
+          <div 
+            v-if="userStore.hasPermission('users', 'view')"
+            class="settings-tab" 
+            :class="{ active: activeMenu === 'permissions' }"
+            @click="activeMenu = 'permissions'"
+          >
+            <el-icon><Lock /></el-icon>
+            <span>{{ $t('settings.menu.permissions') }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div class="settings-content">
+        <div v-if="activeMenu === 'general'" class="settings-section">
+          <h3>{{ $t('settings.menu.general') }}</h3>
+          <el-form label-width="120px" class="settings-form">
+            <el-form-item :label="$t('settings.general.log_level')">
+              <el-select v-model="systemConfig.logLevel" style="width: 200px">
+                <el-option label="DEBUG" value="debug" />
+                <el-option label="INFO" value="info" />
+                <el-option label="WARNING" value="warning" />
+                <el-option label="ERROR" value="error" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('settings.general.data_retention')">
+              <el-input-number v-model="systemConfig.dataRetention" :min="1" :max="365" />
+            </el-form-item>
+            <el-form-item :label="$t('settings.general.max_connections')">
+              <el-input-number v-model="systemConfig.maxConnections" :min="1" :max="1000" />
+            </el-form-item>
+            <el-form-item :label="$t('settings.general.timeout')">
+              <el-input-number v-model="systemConfig.timeout" :min="1" :max="300" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleSave">{{ $t('settings.general.save_config') }}</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div v-if="activeMenu === 'logs'" class="settings-section">
+          <h3>{{ $t('settings.menu.logs') }}</h3>
+          <div class="log-viewer">
+            <div class="log-toolbar">
+              <el-select :placeholder="$t('settings.log.level')" style="width: 120px">
+                <el-option :label="$t('settings.log.all')" value="" />
+                <el-option label="DEBUG" value="debug" />
+                <el-option label="INFO" value="info" />
+                <el-option label="WARNING" value="warning" />
+                <el-option label="ERROR" value="error" />
+              </el-select>
+              <el-button type="primary">{{ $t('common.refresh') }}</el-button>
+              <el-button>{{ $t('settings.log.download') }}</el-button>
+            </div>
+            <div class="log-content">
+              <div class="log-line info">
+                <span class="log-time">2026-04-27 10:23:45</span>
+                <span class="log-level">INFO</span>
+                <span class="log-message">[KNX-01] 数据采集完成，共128个点位</span>
+              </div>
+              <div class="log-line info">
+                <span class="log-time">2026-04-27 10:23:40</span>
+                <span class="log-level">INFO</span>
+                <span class="log-message">[RuleEngine] 规则 rule-001 执行成功</span>
+              </div>
+              <div class="log-line warning">
+                <span class="log-time">2026-04-27 10:23:35</span>
+                <span class="log-level">WARNING</span>
+                <span class="log-message">[BACNET-01] 连接超时，正在重试...</span>
+              </div>
+              <div class="log-line error">
+                <span class="log-time">2026-04-27 10:23:30</span>
+                <span class="log-level">ERROR</span>
+                <span class="log-message">[BACNET-01] 连接失败: Connection refused</span>
+              </div>
+              <div class="log-line debug">
+                <span class="log-time">2026-04-27 10:23:25</span>
+                <span class="log-level">DEBUG</span>
+                <span class="log-message">[MQTT] 发布消息到 topic: xagent/data</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeMenu === 'backup'" class="settings-section">
+          <h3>{{ $t('settings.menu.backup') }}</h3>
+          <div class="backup-section">
+            <!-- 操作按钮 -->
+            <div class="backup-actions">
+              <el-button 
+                type="primary" 
+                :icon="Refresh" 
+                :loading="exportLoading"
+                @click="handleCreateBackup"
+              >
+                {{ $t('settings.backup.export') }}
+              </el-button>
+              <el-upload
+                :show-file-list="false"
+                accept=".zip"
+                :auto-upload="false"
+                :disabled="importLoading"
+                :on-change="handleImportConfig"
+              >
+                <el-button :icon="Upload" :loading="importLoading">{{ $t('settings.backup.import') }}</el-button>
+              </el-upload>
+              <el-button 
+                :icon="Download" 
+                :disabled="backupList.length === 0"
+                @click="handleDownloadConfig()"
+              >
+                {{ $t('settings.backup.download_latest') }}
+              </el-button>
+            </div>
+
+            <!-- 备份列表 -->
+            <el-table 
+              :data="backupList" 
+              v-loading="backupLoading"
+              stripe
+              style="width: 100%"
+            >
+              <el-table-column :label="$t('settings.backup.filename')" min-width="200">
+                <template #default="{ row, $index }">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <el-icon style="color: var(--color-primary);"><Document /></el-icon>
+                    <span>{{ row.filename }}</span>
+                    <el-tag v-if="$index === 0" type="success" size="small">{{ $t('settings.backup.latest') }}</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('settings.backup.size')" width="100" align="center">
+                <template #default="{ row }">
+                  {{ row.size_mb }} MB
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('settings.backup.created_at')" width="170" align="center">
+                <template #default="{ row }">
+                  {{ row.created_at.replace('T', ' ').substring(0, 19) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="$t('settings.actions_label')" width="200" align="center">
+                <template #default="{ row }">
+                  <el-button type="primary" link size="small" @click="handleRestoreBackup(row)">{{ $t('settings.backup.restore') }}</el-button>
+                  <el-button type="default" link size="small" @click="handleDownloadConfig(row)">{{ $t('settings.backup.download') }}</el-button>
+                  <el-button type="danger" link size="small" @click="handleDeleteBackup(row)">{{ $t('common.delete') }}</el-button>
+                </template>
+              </el-table-column>
+              
+              <template #empty>
+                <el-empty :description="$t('settings.backup.no_backup')">
+                  <el-button type="primary" size="small" @click="handleCreateBackup">{{ $t('settings.backup.create_now') }}</el-button>
+                </el-empty>
+              </template>
+            </el-table>
+          </div>
+        </div>
+
+        <div v-if="activeMenu === 'users'" class="settings-section">
+          <h3>{{ $t('settings.menu.users') }}</h3>
+          <div class="user-section">
+            <el-card shadow="never" class="section-card">
+              <template #header>
+                <div class="card-header">
+                  <span class="card-title">{{ $t('settings.user.list_title') }}</span>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">{{ $t('settings.user.add') }}</el-button>
+                </div>
+              </template>
+              <el-table :data="userStore.users" stripe v-loading="userStore.loading">
+                <el-table-column prop="username" :label="$t('settings.user.username')" min-width="90" />
+                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
+                <el-table-column :label="$t('settings.user.role')" min-width="90">
+                  <template #default="{ row }">
+                    <el-tag size="small">{{ row.role_display_name || row.role_name }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="$t('settings.user.status')" width="70" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="$t('settings.user.last_login')" min-width="140">
+                  <template #default="{ row }">
+                    {{ formatTime(row.last_login) }}
+                  </template>
+                </el-table-column>
+                <el-table-column :label="$t('settings.actions_label')" width="180" fixed="right" align="center">
+                  <template #default="{ row }">
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditUserDialog(row)">{{ $t('common.edit') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" @click="openChangePasswordDialog(row)">{{ $t('settings.user.change_password') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">{{ $t('common.delete') }}</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <el-card shadow="never" class="section-card">
+              <template #header>
+                <div class="card-header">
+                  <span class="card-title">{{ $t('settings.role.list_title') }}</span>
+                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">{{ $t('settings.role.add') }}</el-button>
+                </div>
+              </template>
+              <el-table :data="userStore.roles" stripe>
+                <el-table-column prop="name" :label="$t('settings.role.name')" min-width="90" />
+                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
+                <el-table-column prop="description" :label="$t('settings.role.description')" min-width="140" />
+                <el-table-column :label="$t('settings.role.type')" width="70" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.is_system ? 'info' : 'success'" size="small">
+                      {{ row.is_system ? $t('settings.role.system') : $t('settings.role.custom') }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="$t('settings.actions_label')" width="120" fixed="right" align="center">
+                  <template #default="{ row }">
+                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditRoleDialog(row)">{{ $t('common.edit') }}</el-button>
+                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteRole(row)" :disabled="row.is_system">{{ $t('common.delete') }}</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </div>
+        </div>
+
+        <div v-if="activeMenu === 'permissions'" class="settings-section">
+          <h3>{{ $t('settings.menu.permissions') }}</h3>
+          <div class="permission-section">
+            <div class="permission-toolbar">
+              <el-select v-model="activePermissionRole" :placeholder="$t('settings.permission.select_role')" style="width: 200px">
+                <el-option
+                  v-for="role in userStore.permissionMatrix?.roles || []"
+                  :key="role.name"
+                  :label="role.display_name"
+                  :value="role.name"
+                />
+              </el-select>
+              <div v-if="!isEditingPermissions && userStore.hasPermission('users', 'update')" class="permission-actions">
+                <el-button type="primary" :icon="Edit" @click="startEditPermissions">{{ $t('settings.permission.edit') }}</el-button>
+              </div>
+              <div v-else class="permission-actions">
+                <el-button type="success" :icon="Check" @click="savePermissions">{{ $t('common.save') }}</el-button>
+                <el-button :icon="Close" @click="cancelEditPermissions">{{ $t('common.cancel') }}</el-button>
+              </div>
+            </div>
+
+            <div v-if="userStore.permissionMatrix && activePermissionRole" class="permission-matrix">
+              <table class="matrix-table">
+                <thead>
+                  <tr>
+                    <th class="resource-header">{{ $t('settings.permission.resource_action') }}</th>
+                    <th v-for="action in userStore.permissionMatrix.actions" :key="action" class="action-header">
+                      {{ ACTION_LABELS[action] || action }}
+                    </th>
+                    <th v-if="isEditingPermissions" class="action-header">{{ $t('settings.permission.quick_action') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="resource in userStore.permissionMatrix.resources" :key="resource">
+                    <td class="resource-cell">{{ RESOURCE_LABELS[resource] || resource }}</td>
+                    <td v-for="action in userStore.permissionMatrix.actions" :key="`${resource}-${action}`" class="permission-cell">
+                      <template v-if="isEditingPermissions">
+                        <el-checkbox
+                          :model-value="permissionEditData[resource]?.[action] ?? false"
+                          @change="togglePermission(resource, action)"
+                        />
+                      </template>
+                      <template v-else>
+                        <el-icon v-if="currentRolePermissions?.permissions?.[resource]?.[action]" class="perm-allowed"><Check /></el-icon>
+                        <el-icon v-else class="perm-denied"><Close /></el-icon>
+                      </template>
+                    </td>
+                    <td v-if="isEditingPermissions" class="shortcut-cell">
+                      <el-button link type="primary" size="small" @click="selectAllForResource(resource)">{{ $t('settings.permission.select_all') }}</el-button>
+                      <el-button link type="danger" size="small" @click="clearAllForResource(resource)">{{ $t('settings.permission.clear_all') }}</el-button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="!activePermissionRole && userStore.permissionMatrix" class="empty-hint">
+              {{ $t('settings.permission.select_role_hint') }}
+            </div>
+
+            <div class="permission-legend">
+              <span class="legend-item"><el-icon class="perm-allowed"><Check /></el-icon> {{ $t('settings.permission.allowed') }}</span>
+              <span class="legend-item"><el-icon class="perm-denied"><Close /></el-icon> {{ $t('settings.permission.denied') }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="userDialogVisible" :title="userDialogTitle" width="min(480px, 92vw)" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item :label="$t('settings.user.username')" v-if="!editingUserId">
+          <el-input v-model="userForm.username" :placeholder="$t('settings.user.username_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.username')" v-else>
+          <el-input :model-value="userForm.username" disabled />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.password')" v-if="!editingUserId">
+          <el-input v-model="userForm.password" type="password" show-password :placeholder="$t('settings.user.password_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.display_name')">
+          <el-input v-model="userForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.email')">
+          <el-input v-model="userForm.email" :placeholder="$t('settings.user.email_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.role')">
+          <el-select v-model="userForm.role_name" style="width: 100%">
+            <el-option v-for="opt in roleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.status')" v-if="editingUserId">
+          <el-select v-model="userForm.status" style="width: 100%">
+            <el-option :label="$t('settings.status.active')" value="active" />
+            <el-option :label="$t('settings.status.inactive')" value="inactive" />
+            <el-option :label="$t('settings.status.locked')" value="locked" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="userDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleUserSubmit">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="min(480px, 92vw)" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item :label="$t('settings.role.name')" v-if="!editingRoleName">
+          <el-input v-model="roleForm.name" :placeholder="$t('settings.role.name_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.role.name')" v-else>
+          <el-input :model-value="roleForm.name" disabled />
+        </el-form-item>
+        <el-form-item :label="$t('settings.user.display_name')">
+          <el-input v-model="roleForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
+        </el-form-item>
+        <el-form-item :label="$t('settings.role.description')">
+          <el-input v-model="roleForm.description" type="textarea" :rows="3" :placeholder="$t('settings.role.description_placeholder')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="roleDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleRoleSubmit">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="passwordDialogVisible" :title="$t('settings.password.title')" width="min(400px, 90vw)" destroy-on-close>
+      <el-form label-width="80px">
+        <el-form-item :label="$t('settings.password.new_password')">
+          <el-input v-model="passwordForm.new_password" type="password" show-password :placeholder="$t('settings.password.new_password_placeholder')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="passwordDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleChangePassword">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -528,437 +959,6 @@ watch(() => userStore.permissionMatrix, (matrix) => {
   }
 })
 </script>
-
-<template>
-  <div class="settings-page">
-    <div class="settings-container">
-      <template v-if="!useCompactLayout">
-        <div class="settings-sidebar">
-          <el-menu :default-active="activeMenu" @select="(key: string) => activeMenu = key">
-            <el-menu-item index="general">
-              <el-icon><Setting /></el-icon>
-              <span>{{ $t('settings.menu.general') }}</span>
-            </el-menu-item>
-            <el-menu-item v-if="userStore.hasPermission('logs', 'view')" index="logs">
-              <el-icon><Document /></el-icon>
-              <span>{{ $t('settings.menu.logs') }}</span>
-            </el-menu-item>
-            <el-menu-item v-if="userStore.hasPermission('backup', 'view')" index="backup">
-              <el-icon><Refresh /></el-icon>
-              <span>{{ $t('settings.menu.backup') }}</span>
-            </el-menu-item>
-            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="users">
-              <el-icon><User /></el-icon>
-              <span>{{ $t('settings.menu.users') }}</span>
-            </el-menu-item>
-            <el-menu-item v-if="userStore.hasPermission('users', 'view')" index="permissions">
-              <el-icon><Lock /></el-icon>
-              <span>{{ $t('settings.menu.permissions') }}</span>
-            </el-menu-item>
-          </el-menu>
-        </div>
-      </template>
-
-      <template v-else>
-        <div class="settings-tabs">
-          <div 
-            class="settings-tab" 
-            :class="{ active: activeMenu === 'general' }"
-            @click="activeMenu = 'general'"
-          >
-            <el-icon><Setting /></el-icon>
-            <span>{{ $t('settings.menu.general') }}</span>
-          </div>
-          <div 
-            v-if="userStore.hasPermission('logs', 'view')"
-            class="settings-tab" 
-            :class="{ active: activeMenu === 'logs' }"
-            @click="activeMenu = 'logs'"
-          >
-            <el-icon><Document /></el-icon>
-            <span>{{ $t('settings.menu.logs') }}</span>
-          </div>
-          <div 
-            v-if="userStore.hasPermission('backup', 'view')"
-            class="settings-tab" 
-            :class="{ active: activeMenu === 'backup' }"
-            @click="activeMenu = 'backup'"
-          >
-            <el-icon><Refresh /></el-icon>
-            <span>{{ $t('settings.menu.backup') }}</span>
-          </div>
-          <div 
-            v-if="userStore.hasPermission('users', 'view')"
-            class="settings-tab" 
-            :class="{ active: activeMenu === 'users' }"
-            @click="activeMenu = 'users'"
-          >
-            <el-icon><User /></el-icon>
-            <span>{{ $t('settings.menu.users') }}</span>
-          </div>
-          <div 
-            v-if="userStore.hasPermission('users', 'view')"
-            class="settings-tab" 
-            :class="{ active: activeMenu === 'permissions' }"
-            @click="activeMenu = 'permissions'"
-          >
-            <el-icon><Lock /></el-icon>
-            <span>{{ $t('settings.menu.permissions') }}</span>
-          </div>
-        </div>
-      </template>
-
-      <div class="settings-content">
-        <div v-if="activeMenu === 'general'" class="settings-section">
-          <h3>{{ $t('settings.menu.general') }}</h3>
-          <el-form label-width="120px" class="settings-form">
-            <el-form-item :label="$t('settings.general.log_level')">
-              <el-select v-model="systemConfig.logLevel" style="width: 200px">
-                <el-option label="DEBUG" value="debug" />
-                <el-option label="INFO" value="info" />
-                <el-option label="WARNING" value="warning" />
-                <el-option label="ERROR" value="error" />
-              </el-select>
-            </el-form-item>
-            <el-form-item :label="$t('settings.general.data_retention')">
-              <el-input-number v-model="systemConfig.dataRetention" :min="1" :max="365" />
-            </el-form-item>
-            <el-form-item :label="$t('settings.general.max_connections')">
-              <el-input-number v-model="systemConfig.maxConnections" :min="1" :max="1000" />
-            </el-form-item>
-            <el-form-item :label="$t('settings.general.timeout')">
-              <el-input-number v-model="systemConfig.timeout" :min="1" :max="300" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="handleSave">{{ $t('settings.general.save_config') }}</el-button>
-            </el-form-item>
-          </el-form>
-        </div>
-
-        <div v-if="activeMenu === 'logs'" class="settings-section">
-          <h3>{{ $t('settings.menu.logs') }}</h3>
-          <div class="log-viewer">
-            <div class="log-toolbar">
-              <el-select :placeholder="$t('settings.log.level')" style="width: 120px">
-                <el-option :label="$t('settings.log.all')" value="" />
-                <el-option label="DEBUG" value="debug" />
-                <el-option label="INFO" value="info" />
-                <el-option label="WARNING" value="warning" />
-                <el-option label="ERROR" value="error" />
-              </el-select>
-              <el-button type="primary">{{ $t('common.refresh') }}</el-button>
-              <el-button>{{ $t('settings.log.download') }}</el-button>
-            </div>
-            <div class="log-content">
-              <div class="log-line info">
-                <span class="log-time">2026-04-27 10:23:45</span>
-                <span class="log-level">INFO</span>
-                <span class="log-message">[KNX-01] 数据采集完成，共128个点位</span>
-              </div>
-              <div class="log-line info">
-                <span class="log-time">2026-04-27 10:23:40</span>
-                <span class="log-level">INFO</span>
-                <span class="log-message">[RuleEngine] 规则 rule-001 执行成功</span>
-              </div>
-              <div class="log-line warning">
-                <span class="log-time">2026-04-27 10:23:35</span>
-                <span class="log-level">WARNING</span>
-                <span class="log-message">[BACNET-01] 连接超时，正在重试...</span>
-              </div>
-              <div class="log-line error">
-                <span class="log-time">2026-04-27 10:23:30</span>
-                <span class="log-level">ERROR</span>
-                <span class="log-message">[BACNET-01] 连接失败: Connection refused</span>
-              </div>
-              <div class="log-line debug">
-                <span class="log-time">2026-04-27 10:23:25</span>
-                <span class="log-level">DEBUG</span>
-                <span class="log-message">[MQTT] 发布消息到 topic: xagent/data</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="activeMenu === 'backup'" class="settings-section">
-          <h3>{{ $t('settings.menu.backup') }}</h3>
-          <div class="backup-section">
-            <!-- 操作按钮 -->
-            <div class="backup-actions">
-              <el-button 
-                type="primary" 
-                :icon="Refresh" 
-                :loading="exportLoading"
-                @click="handleCreateBackup"
-              >
-                {{ $t('settings.backup.export') }}
-              </el-button>
-              <el-upload
-                :show-file-list="false"
-                accept=".zip"
-                :auto-upload="false"
-                :disabled="importLoading"
-                :on-change="handleImportConfig"
-              >
-                <el-button :icon="Upload" :loading="importLoading">{{ $t('settings.backup.import') }}</el-button>
-              </el-upload>
-              <el-button 
-                :icon="Download" 
-                :disabled="backupList.length === 0"
-                @click="handleDownloadConfig()"
-              >
-                {{ $t('settings.backup.download_latest') }}
-              </el-button>
-            </div>
-
-            <!-- 备份列表 -->
-            <el-table 
-              :data="backupList" 
-              v-loading="backupLoading"
-              stripe
-              style="width: 100%"
-            >
-              <el-table-column :label="$t('settings.backup.filename')" min-width="200">
-                <template #default="{ row, $index }">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <el-icon style="color: var(--color-primary);"><Document /></el-icon>
-                    <span>{{ row.filename }}</span>
-                    <el-tag v-if="$index === 0" type="success" size="small">{{ $t('settings.backup.latest') }}</el-tag>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column :label="$t('settings.backup.size')" width="100" align="center">
-                <template #default="{ row }">
-                  {{ row.size_mb }} MB
-                </template>
-              </el-table-column>
-              <el-table-column :label="$t('settings.backup.created_at')" width="170" align="center">
-                <template #default="{ row }">
-                  {{ row.created_at.replace('T', ' ').substring(0, 19) }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="$t('settings.actions_label')" width="200" align="center">
-                <template #default="{ row }">
-                  <el-button type="primary" link size="small" @click="handleRestoreBackup(row)">{{ $t('settings.backup.restore') }}</el-button>
-                  <el-button type="default" link size="small" @click="handleDownloadConfig(row)">{{ $t('settings.backup.download') }}</el-button>
-                  <el-button type="danger" link size="small" @click="handleDeleteBackup(row)">{{ $t('common.delete') }}</el-button>
-                </template>
-              </el-table-column>
-              
-              <template #empty>
-                <el-empty :description="$t('settings.backup.no_backup')">
-                  <el-button type="primary" size="small" @click="handleCreateBackup">{{ $t('settings.backup.create_now') }}</el-button>
-                </el-empty>
-              </template>
-            </el-table>
-          </div>
-        </div>
-
-        <div v-if="activeMenu === 'users'" class="settings-section">
-          <h3>{{ $t('settings.menu.users') }}</h3>
-          <div class="user-section">
-            <el-card shadow="never" class="section-card">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-title">{{ $t('settings.user.list_title') }}</span>
-                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateUserDialog">{{ $t('settings.user.add') }}</el-button>
-                </div>
-              </template>
-              <el-table :data="userStore.users" stripe v-loading="userStore.loading">
-                <el-table-column prop="username" :label="$t('settings.user.username')" min-width="90" />
-                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
-                <el-table-column :label="$t('settings.user.role')" min-width="90">
-                  <template #default="{ row }">
-                    <el-tag size="small">{{ row.role_display_name || row.role_name }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column :label="$t('settings.user.status')" width="70" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column :label="$t('settings.user.last_login')" min-width="140">
-                  <template #default="{ row }">
-                    {{ formatTime(row.last_login) }}
-                  </template>
-                </el-table-column>
-                <el-table-column :label="$t('settings.actions_label')" width="180" fixed="right" align="center">
-                  <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditUserDialog(row)">{{ $t('common.edit') }}</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="warning" link size="small" @click="openChangePasswordDialog(row)">{{ $t('settings.user.change_password') }}</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteUser(row)" :disabled="row.username === 'admin'">{{ $t('common.delete') }}</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-
-            <el-card shadow="never" class="section-card">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-title">{{ $t('settings.role.list_title') }}</span>
-                  <el-button v-if="userStore.hasPermission('users', 'create')" type="primary" :icon="Plus" size="small" @click="openCreateRoleDialog">{{ $t('settings.role.add') }}</el-button>
-                </div>
-              </template>
-              <el-table :data="userStore.roles" stripe>
-                <el-table-column prop="name" :label="$t('settings.role.name')" min-width="90" />
-                <el-table-column prop="display_name" :label="$t('settings.user.display_name')" min-width="90" />
-                <el-table-column prop="description" :label="$t('settings.role.description')" min-width="140" />
-                <el-table-column :label="$t('settings.role.type')" width="70" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="row.is_system ? 'info' : 'success'" size="small">
-                      {{ row.is_system ? $t('settings.role.system') : $t('settings.role.custom') }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column :label="$t('settings.actions_label')" width="120" fixed="right" align="center">
-                  <template #default="{ row }">
-                    <el-button v-if="userStore.hasPermission('users', 'update')" type="primary" link size="small" @click="openEditRoleDialog(row)">{{ $t('common.edit') }}</el-button>
-                    <el-button v-if="userStore.hasPermission('users', 'delete')" type="danger" link size="small" @click="handleDeleteRole(row)" :disabled="row.is_system">{{ $t('common.delete') }}</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-          </div>
-        </div>
-
-        <div v-if="activeMenu === 'permissions'" class="settings-section">
-          <h3>{{ $t('settings.menu.permissions') }}</h3>
-          <div class="permission-section">
-            <div class="permission-toolbar">
-              <el-select v-model="activePermissionRole" :placeholder="$t('settings.permission.select_role')" style="width: 200px">
-                <el-option
-                  v-for="role in userStore.permissionMatrix?.roles || []"
-                  :key="role.name"
-                  :label="role.display_name"
-                  :value="role.name"
-                />
-              </el-select>
-              <div v-if="!isEditingPermissions && userStore.hasPermission('users', 'update')" class="permission-actions">
-                <el-button type="primary" :icon="Edit" @click="startEditPermissions">{{ $t('settings.permission.edit') }}</el-button>
-              </div>
-              <div v-else class="permission-actions">
-                <el-button type="success" :icon="Check" @click="savePermissions">{{ $t('common.save') }}</el-button>
-                <el-button :icon="Close" @click="cancelEditPermissions">{{ $t('common.cancel') }}</el-button>
-              </div>
-            </div>
-
-            <div v-if="userStore.permissionMatrix && activePermissionRole" class="permission-matrix">
-              <table class="matrix-table">
-                <thead>
-                  <tr>
-                    <th class="resource-header">{{ $t('settings.permission.resource_action') }}</th>
-                    <th v-for="action in userStore.permissionMatrix.actions" :key="action" class="action-header">
-                      {{ ACTION_LABELS[action] || action }}
-                    </th>
-                    <th v-if="isEditingPermissions" class="action-header">{{ $t('settings.permission.quick_action') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="resource in userStore.permissionMatrix.resources" :key="resource">
-                    <td class="resource-cell">{{ RESOURCE_LABELS[resource] || resource }}</td>
-                    <td v-for="action in userStore.permissionMatrix.actions" :key="`${resource}-${action}`" class="permission-cell">
-                      <template v-if="isEditingPermissions">
-                        <el-checkbox
-                          :model-value="permissionEditData[resource]?.[action] ?? false"
-                          @change="togglePermission(resource, action)"
-                        />
-                      </template>
-                      <template v-else>
-                        <el-icon v-if="currentRolePermissions?.permissions?.[resource]?.[action]" class="perm-allowed"><Check /></el-icon>
-                        <el-icon v-else class="perm-denied"><Close /></el-icon>
-                      </template>
-                    </td>
-                    <td v-if="isEditingPermissions" class="shortcut-cell">
-                      <el-button link type="primary" size="small" @click="selectAllForResource(resource)">{{ $t('settings.permission.select_all') }}</el-button>
-                      <el-button link type="danger" size="small" @click="clearAllForResource(resource)">{{ $t('settings.permission.clear_all') }}</el-button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div v-if="!activePermissionRole && userStore.permissionMatrix" class="empty-hint">
-              {{ $t('settings.permission.select_role_hint') }}
-            </div>
-
-            <div class="permission-legend">
-              <span class="legend-item"><el-icon class="perm-allowed"><Check /></el-icon> {{ $t('settings.permission.allowed') }}</span>
-              <span class="legend-item"><el-icon class="perm-denied"><Close /></el-icon> {{ $t('settings.permission.denied') }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <el-dialog v-model="userDialogVisible" :title="userDialogTitle" width="min(480px, 92vw)" destroy-on-close>
-      <el-form label-width="90px">
-        <el-form-item :label="$t('settings.user.username')" v-if="!editingUserId">
-          <el-input v-model="userForm.username" :placeholder="$t('settings.user.username_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.username')" v-else>
-          <el-input :model-value="userForm.username" disabled />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.password')" v-if="!editingUserId">
-          <el-input v-model="userForm.password" type="password" show-password :placeholder="$t('settings.user.password_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.display_name')">
-          <el-input v-model="userForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.email')">
-          <el-input v-model="userForm.email" :placeholder="$t('settings.user.email_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.role')">
-          <el-select v-model="userForm.role_name" style="width: 100%">
-            <el-option v-for="opt in roleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.status')" v-if="editingUserId">
-          <el-select v-model="userForm.status" style="width: 100%">
-            <el-option :label="$t('settings.status.active')" value="active" />
-            <el-option :label="$t('settings.status.inactive')" value="inactive" />
-            <el-option :label="$t('settings.status.locked')" value="locked" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="userDialogVisible = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleUserSubmit">{{ $t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="roleDialogVisible" :title="roleDialogTitle" width="min(480px, 92vw)" destroy-on-close>
-      <el-form label-width="90px">
-        <el-form-item :label="$t('settings.role.name')" v-if="!editingRoleName">
-          <el-input v-model="roleForm.name" :placeholder="$t('settings.role.name_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.role.name')" v-else>
-          <el-input :model-value="roleForm.name" disabled />
-        </el-form-item>
-        <el-form-item :label="$t('settings.user.display_name')">
-          <el-input v-model="roleForm.display_name" :placeholder="$t('settings.user.display_name_placeholder')" />
-        </el-form-item>
-        <el-form-item :label="$t('settings.role.description')">
-          <el-input v-model="roleForm.description" type="textarea" :rows="3" :placeholder="$t('settings.role.description_placeholder')" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="roleDialogVisible = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleRoleSubmit">{{ $t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="passwordDialogVisible" :title="$t('settings.password.title')" width="min(400px, 90vw)" destroy-on-close>
-      <el-form label-width="80px">
-        <el-form-item :label="$t('settings.password.new_password')">
-          <el-input v-model="passwordForm.new_password" type="password" show-password :placeholder="$t('settings.password.new_password_placeholder')" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="passwordDialogVisible = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleChangePassword">{{ $t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
-  </div>
-</template>
 
 <style scoped>
 .settings-page {

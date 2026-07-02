@@ -1,3 +1,23 @@
+<template>
+  <div class="slider-container">
+    <div v-if="binding" class="slider-label">
+      {{ binding.pointDescription || binding.pointName }}
+    </div>
+    <div class="slider-body">
+      <el-slider
+        v-model="sliderValue"
+        :min="min"
+        :max="max"
+        :step="step"
+        :disabled="editing"
+        show-input
+        input-size="small"
+      />
+    </div>
+    <div class="slider-value">{{ currentValue }}</div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
@@ -32,26 +52,6 @@ const sliderValue = computed({
   }
 })
 </script>
-
-<template>
-  <div class="slider-container">
-    <div v-if="binding" class="slider-label">
-      {{ binding.pointDescription || binding.pointName }}
-    </div>
-    <div class="slider-body">
-      <el-slider
-        v-model="sliderValue"
-        :min="min"
-        :max="max"
-        :step="step"
-        :disabled="editing"
-        show-input
-        input-size="small"
-      />
-    </div>
-    <div class="slider-value">{{ currentValue }}</div>
-  </div>
-</template>
 
 <style scoped>
 .slider-container {

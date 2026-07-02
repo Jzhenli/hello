@@ -1,3 +1,32 @@
+<template>
+  <div class="node-palette" :style="{ width: paletteWidth }">
+    <div class="palette-header">
+      <h3>{{ t('ruleNodes.nodePanel') }}</h3>
+      <p class="hint">{{ t('ruleNodes.dragHint') }}</p>
+    </div>
+    
+    <div class="palette-body">
+      <div v-for="(templates, category) in categories" :key="category" class="category-section">
+        <div class="category-title">{{ t(category) }}</div>
+        <div
+          v-for="template in templates"
+          :key="template.type"
+          class="palette-item"
+          :class="{ 'touch-item': isTablet || isMobile }"
+          :style="{ '--node-color': template.color }"
+          draggable="true"
+          @dragstart="onDragStart(template.type, $event)"
+        >
+          <div class="item-icon">{{ template.icon }}</div>
+          <div class="item-info">
+            <div class="item-label">{{ t(template.label) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -38,35 +67,6 @@ const paletteWidth = computed(() => {
   return '220px'
 })
 </script>
-
-<template>
-  <div class="node-palette" :style="{ width: paletteWidth }">
-    <div class="palette-header">
-      <h3>{{ t('ruleNodes.nodePanel') }}</h3>
-      <p class="hint">{{ t('ruleNodes.dragHint') }}</p>
-    </div>
-    
-    <div class="palette-body">
-      <div v-for="(templates, category) in categories" :key="category" class="category-section">
-        <div class="category-title">{{ t(category) }}</div>
-        <div
-          v-for="template in templates"
-          :key="template.type"
-          class="palette-item"
-          :class="{ 'touch-item': isTablet || isMobile }"
-          :style="{ '--node-color': template.color }"
-          draggable="true"
-          @dragstart="onDragStart(template.type, $event)"
-        >
-          <div class="item-icon">{{ template.icon }}</div>
-          <div class="item-info">
-            <div class="item-label">{{ t(template.label) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 .node-palette {

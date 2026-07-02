@@ -1,3 +1,79 @@
+<template>
+  <div class="rule-editor-canvas">
+    <div class="editor-toolbar">
+      <div class="toolbar-left">
+        <el-input 
+          v-model="ruleName" 
+          :placeholder="t('ruleEditor.ruleName')" 
+          style="width: 200px"
+        />
+        <el-input 
+          v-model="ruleDescription" 
+          :placeholder="t('ruleEditor.ruleDescription')" 
+          style="width: 300px"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="node-count">{{ t('ruleEditor.nodeCount') }}: {{ nodes.length }} | {{ t('ruleEditor.edgeCount') }}: {{ edges.length }}</span>
+        <el-button @click="handleClear" :disabled="loading">{{ t('ruleEditor.clear') }}</el-button>
+        <el-button type="primary" :disabled="!canSave" :loading="saving" @click="handleSave">
+          {{ saving ? t('ruleEditor.saving') : t('ruleEditor.save') }}
+        </el-button>
+      </div>
+    </div>
+    
+    <div v-if="loading" class="editor-loading">
+      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <span>{{ t('ruleEditor.loadingRule') }}</span>
+    </div>
+
+    <div v-else class="editor-main">
+      <NodePalette @drag-start="onDragStart" />
+      
+      <div class="editor-canvas" @drop="onDrop" @dragover="onDragOver">
+        <VueFlow
+          v-model:nodes="nodes"
+          v-model:edges="edges"
+          :node-types="nodeTypes"
+          :default-edge-options="{ type: 'smoothstep', animated: true }"
+          :fit-view-on-init="true"
+          :snap-to-grid="true"
+          :snap-grid="[15, 15]"
+          class="vue-flow-container"
+        >
+          <Background pattern-color="#aaa" :gap="20" />
+          <Controls />
+          <MiniMap />
+        </VueFlow>
+      </div>
+      
+      <div v-if="selectedNode" class="config-panel">
+        <div class="panel-header">
+          <span>{{ t('ruleEditor.nodeConfig') }}</span>
+          <el-button type="danger" link size="small" @click="handleNodeDelete(selectedNode.id)">
+            {{ t('ruleEditor.deleteNode') }}
+          </el-button>
+        </div>
+        <NodeConfigPanel
+          :node-id="selectedNode.id"
+          :node-type="selectedNode.type as NodeType"
+          :node-data="selectedNode.data ?? {}"
+          @update="handleNodeUpdate"
+          @delete="handleNodeDelete"
+        />
+      </div>
+      
+      <div v-else class="empty-panel">
+        <div class="empty-content">
+          <span class="empty-icon">📝</span>
+          <p>{{ t('ruleEditor.selectNodeHint') }}</p>
+          <p class="hint">{{ t('ruleEditor.dragHint') }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, markRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +96,7 @@ import { createNode, validateGraph } from '@/utils/ruleConverter'
 import { graphToBackendCreate, graphToBackendUpdate, backendToGraph } from '@/utils/ruleBridge'
 import { useRuleStore } from '@/stores/rules'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 
@@ -274,90 +351,6 @@ watch(() => props.ruleId, (newId) => {
     ruleDescription.value = ''
   }
 }, { immediate: false })
-</script>
-
-<template>
-  <div class="rule-editor-canvas">
-    <div class="editor-toolbar">
-      <div class="toolbar-left">
-        <el-input 
-          v-model="ruleName" 
-          :placeholder="t('ruleEditor.ruleName')" 
-          style="width: 200px"
-        />
-        <el-input 
-          v-model="ruleDescription" 
-          :placeholder="t('ruleEditor.ruleDescription')" 
-          style="width: 300px"
-        />
-      </div>
-      <div class="toolbar-right">
-        <span class="node-count">{{ t('ruleEditor.nodeCount') }}: {{ nodes.length }} | {{ t('ruleEditor.edgeCount') }}: {{ edges.length }}</span>
-        <el-button @click="handleClear" :disabled="loading">{{ t('ruleEditor.clear') }}</el-button>
-        <el-button type="primary" :disabled="!canSave" :loading="saving" @click="handleSave">
-          {{ saving ? t('ruleEditor.saving') : t('ruleEditor.save') }}
-        </el-button>
-      </div>
-    </div>
-    
-    <div v-if="loading" class="editor-loading">
-      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-      <span>{{ t('ruleEditor.loadingRule') }}</span>
-    </div>
-
-    <div v-else class="editor-main">
-      <NodePalette @drag-start="onDragStart" />
-      
-      <div class="editor-canvas" @drop="onDrop" @dragover="onDragOver">
-        <VueFlow
-          v-model:nodes="nodes"
-          v-model:edges="edges"
-          :node-types="nodeTypes"
-          :default-edge-options="{ type: 'smoothstep', animated: true }"
-          :fit-view-on-init="true"
-          :snap-to-grid="true"
-          :snap-grid="[15, 15]"
-          class="vue-flow-container"
-        >
-          <Background pattern-color="#aaa" :gap="20" />
-          <Controls />
-          <MiniMap />
-        </VueFlow>
-      </div>
-      
-      <div v-if="selectedNode" class="config-panel">
-        <div class="panel-header">
-          <span>{{ t('ruleEditor.nodeConfig') }}</span>
-          <el-button type="danger" link size="small" @click="handleNodeDelete(selectedNode.id)">
-            {{ t('ruleEditor.deleteNode') }}
-          </el-button>
-        </div>
-        <NodeConfigPanel
-          :node-id="selectedNode.id"
-          :node-type="selectedNode.type as NodeType"
-          :node-data="selectedNode.data ?? {}"
-          @update="handleNodeUpdate"
-          @delete="handleNodeDelete"
-        />
-      </div>
-      
-      <div v-else class="empty-panel">
-        <div class="empty-content">
-          <span class="empty-icon">📝</span>
-          <p>{{ t('ruleEditor.selectNodeHint') }}</p>
-          <p class="hint">{{ t('ruleEditor.dragHint') }}</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script lang="ts">
-import { Loading } from '@element-plus/icons-vue'
-
-export default {
-  components: { Loading }
-}
 </script>
 
 <style scoped>
