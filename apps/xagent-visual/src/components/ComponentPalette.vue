@@ -2,10 +2,7 @@
   <div class="component-palette">
     <div class="palette-header">
       <div class="header-content">
-        <div class="header-text">
-          <h3>{{ t('componentPalette.title') }}</h3>
-          <span class="hint">{{ t('componentPalette.dragHint') }}</span>
-        </div>
+        <span class="header-title">{{ t('componentPalette.title') }}</span>
         <div class="header-toggle" @click="emit('toggleList')" :title="props.showComponentList ? '隐藏组件列表' : '显示组件列表'">
           <el-icon><DArrowLeft v-if="props.showComponentList" /><DArrowRight v-else /></el-icon>
         </div>
@@ -103,7 +100,8 @@ const selectCategory = (key: string) => {
 }
 
 .palette-header {
-  padding: 12px;
+  height: 44px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border-base);
   background: var(--bg-hover);
   flex-shrink: 0;
@@ -112,24 +110,22 @@ const selectCategory = (key: string) => {
 .header-content {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  height: 100%;
   gap: 8px;
 }
 
-.header-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.palette-header h3 {
-  margin: 0 0 4px 0;
+.header-title {
   font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.palette-header .hint {
+.palette-hint {
   font-size: 11px;
   color: var(--text-secondary);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .header-toggle {

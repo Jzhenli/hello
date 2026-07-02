@@ -416,10 +416,11 @@ const handleExport = () => {
 }
 
 .editor-toolbar {
+  height: 44px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0 12px;
   background: var(--bg-container);
   border-bottom: 1px solid var(--border-base);
   flex-shrink: 0;

@@ -350,14 +350,18 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
 }
 
 .panel-header {
-  padding: 12px;
+  height: 44px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border-base);
   background: var(--bg-hover);
+  display: flex;
+  align-items: center;
 }
 
 .panel-header h3 {
   margin: 0;
   font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
