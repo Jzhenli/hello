@@ -1,6 +1,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, type Ref } from 'vue'
 import type { PointBinding } from '@/types/scada'
 import { usePointStore } from '@/stores/points'
+import { useScadaStore } from '@/stores/scada'
 import type { PointDisplay } from '@/stores/points'
 
 export interface UseComponentBindingOptions {
@@ -40,12 +41,12 @@ export function useComponentBinding(
   } = options
 
   const pointStore = usePointStore()
+  const scadaStore = useScadaStore()
 
   const currentValue = ref<any>(null)
   const boundPoint = ref<PointDisplay | null>(null)
   let refreshTimer: ReturnType<typeof setInterval> | null = null
 
-  // 查找绑定的点位
   const findBoundPoint = (): PointDisplay | null => {
     if (!binding.value) return null
 
@@ -57,8 +58,14 @@ export function useComponentBinding(
     return device.points.find(p => p.name === binding.value!.pointName) || null
   }
 
-  // 更新当前值
   const updateValue = () => {
+    // 编辑模式下不读取真实数据，返回默认值
+    if (scadaStore.isEditing) {
+      currentValue.value = transform ? transform(null, null) : null
+      boundPoint.value = null
+      return
+    }
+
     const point = findBoundPoint()
     boundPoint.value = point
 
@@ -71,7 +78,6 @@ export function useComponentBinding(
     }
   }
 
-  // 监听点位数据变化
   watch(
     () => pointStore.devices,
     () => {
@@ -80,13 +86,22 @@ export function useComponentBinding(
     { deep: true }
   )
 
-  // 监听 binding 变化
   watch(binding, () => {
     updateValue()
   })
 
-  // 自动刷新
+  // 监听编辑模式变化
+  watch(() => scadaStore.isEditing, () => {
+    updateValue()
+    if (scadaStore.isEditing) {
+      stopAutoRefresh()
+    } else {
+      startAutoRefresh()
+    }
+  })
+
   const startAutoRefresh = () => {
+    if (scadaStore.isEditing) return
     if (autoRefresh && binding.value) {
       refreshTimer = setInterval(() => {
         pointStore.fetchDevicePoints(binding.value!.deviceId)
@@ -101,14 +116,13 @@ export function useComponentBinding(
     }
   }
 
-  // 手动刷新
   const refresh = async () => {
+    if (scadaStore.isEditing) return
     if (binding.value) {
       await pointStore.fetchDevicePoints(binding.value.deviceId)
     }
   }
 
-  // 写入值
   const writeValue = async (value: any): Promise<{ success: boolean; message: string }> => {
     if (!binding.value || !boundPoint.value) {
       return { success: false, message: '未绑定有效点位' }
@@ -125,7 +139,6 @@ export function useComponentBinding(
     )
   }
 
-  // 生命周期
   onMounted(() => {
     updateValue()
     startAutoRefresh()

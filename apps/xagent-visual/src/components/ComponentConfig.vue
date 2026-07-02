@@ -43,29 +43,15 @@
         <div class="section-title">{{ t('componentConfig.pointBinding') }}</div>
         <div class="form-group">
           <label>{{ t('componentConfig.device') }}</label>
-          <select v-model="selectedDevice" @change="handleDeviceChange">
-            <option value="">{{ t('componentConfig.selectDevice') }}</option>
-            <option v-for="device in pointStore.devices" :key="device.asset" :value="device.asset">
-              {{ device.name }}
-            </option>
-          </select>
+          <el-select v-model="selectedDevice" @change="handleDeviceChange" clearable :placeholder="t('componentConfig.selectDevice')" style="width: 100%">
+            <el-option v-for="device in pointStore.devices" :key="device.asset" :value="device.asset" :label="device.name" />
+          </el-select>
         </div>
         <div class="form-group">
           <label>{{ t('componentConfig.point') }}</label>
-          <select v-model="selectedPoint" @change="handlePointChange">
-            <option value="">{{ t('componentConfig.selectPoint') }}</option>
-            <option v-for="point in availablePoints" :key="point.name" :value="point.name">
-              {{ point.name }} ({{ point.description }})
-            </option>
-          </select>
-        </div>
-        <div v-if="currentBinding" class="binding-info">
-          <div class="binding-badge">
-            <span class="device">{{ currentBinding.deviceId }}</span>
-            <span class="separator">/</span>
-            <span class="point">{{ currentBinding.pointName }}</span>
-          </div>
-          <el-button type="danger" size="small" @click="handleUnbind">{{ t('componentConfig.unbind') }}</el-button>
+          <el-select v-model="selectedPoint" @change="handlePointChange" clearable :placeholder="t('componentConfig.selectPoint')" style="width: 100%" :disabled="!selectedDevice">
+            <el-option v-for="point in availablePoints" :key="point.name" :value="point.name" :label="point.name + (point.description ? ' (' + point.description + ')' : '')" />
+          </el-select>
         </div>
       </div>
 
@@ -245,10 +231,19 @@ const availablePoints = computed(() => {
 
 const handleDeviceChange = () => {
   selectedPoint.value = ''
+  if (!component.value) return
+  if (!selectedDevice.value) {
+    scadaStore.bindPoint(component.value.id, null)
+  }
 }
 
 const handlePointChange = () => {
-  if (!component.value || !selectedDevice.value || !selectedPoint.value) return
+  if (!component.value) return
+  
+  if (!selectedDevice.value || !selectedPoint.value) {
+    scadaStore.bindPoint(component.value.id, null)
+    return
+  }
   
   const point = availablePoints.value.find(p => p.name === selectedPoint.value)
   if (!point) return
@@ -261,13 +256,6 @@ const handlePointChange = () => {
   }
 
   scadaStore.bindPoint(component.value.id, binding)
-}
-
-const handleUnbind = () => {
-  if (!component.value) return
-  scadaStore.bindPoint(component.value.id, null)
-  selectedDevice.value = ''
-  selectedPoint.value = ''
 }
 
 const updateStyle = (key: string, value: any) => {
@@ -523,34 +511,6 @@ const applyPreset = (preset: typeof presetSizes[0]) => {
   flex: 1;
   min-width: calc(50% - 3px);
   font-size: 11px;
-}
-
-.binding-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px;
-  background: var(--color-success-light, #e8f5e9);
-  border-radius: 4px;
-  margin-top: 8px;
-}
-
-.binding-badge {
-  font-size: 12px;
-}
-
-.binding-badge .device {
-  color: var(--color-success);
-  font-weight: 600;
-}
-
-.binding-badge .separator {
-  color: var(--text-secondary);
-  margin: 0 4px;
-}
-
-.binding-badge .point {
-  color: var(--text-primary);
 }
 
 .info-item {
