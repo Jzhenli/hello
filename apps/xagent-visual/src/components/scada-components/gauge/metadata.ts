@@ -1,14 +1,7 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { GaugeConfig } from '../registry'
 import ScadaGauge from './index.vue'
 import GaugeConfigPanel from './ConfigPanel.vue'
-
-export interface GaugeConfig {
-  min: number
-  max: number
-  unit: string
-  thresholds: { value: number; color: string }[]
-  showValue: boolean
-}
 
 const defaultStyle: StyleConfig = { width: 150, height: 150 }
 

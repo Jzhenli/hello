@@ -1,5 +1,13 @@
 import type { Component } from 'vue'
 
+/** 测点绑定配置 */
+export interface PointBinding {
+  deviceId: string
+  pointName: string
+  pointDescription?: string
+  unit?: string
+}
+
 // 组件样式配置
 export interface StyleConfig {
   width: number

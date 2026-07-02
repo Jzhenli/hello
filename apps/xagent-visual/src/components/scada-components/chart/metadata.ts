@@ -1,13 +1,7 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { ChartConfig } from '../registry'
 import ScadaChart from './index.vue'
 import ChartConfigPanel from './ConfigPanel.vue'
-
-export interface ChartConfig {
-  timeRange: '1h' | '6h' | '24h' | '7d'
-  lineColor: string
-  areaFill: boolean
-  showLegend: boolean
-}
 
 const defaultStyle: StyleConfig = { width: 300, height: 200 }
 

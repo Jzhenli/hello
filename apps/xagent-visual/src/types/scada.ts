@@ -3,46 +3,52 @@
 // 此处重新导出以保持向后兼容
 
 // 重新导出组件公共类型
-export type { StyleConfig } from '@/components/scada-components/types'
+export type { StyleConfig, PointBinding } from '@/components/scada-components/types'
 
 // ComponentType 从 registry 导出（自动推导）
 export type { ComponentType } from '@/components/scada-components/registry'
 
-// 重新导出各组件配置类型
-export type { GaugeConfig } from '@/components/scada-components/gauge/metadata'
-export type { ChartConfig } from '@/components/scada-components/chart/metadata'
-export type { IndicatorConfig } from '@/components/scada-components/indicator/metadata'
-export type { SwitchConfig } from '@/components/scada-components/switch/metadata'
-export type { SliderConfig } from '@/components/scada-components/slider/metadata'
-export type { TextConfig } from '@/components/scada-components/text/metadata'
-export type { ButtonConfig } from '@/components/scada-components/button/metadata'
+// 导入公共类型和组件配置类型
+import type { StyleConfig, PointBinding } from '@/components/scada-components/types'
+import type { ComponentType,
+  GaugeConfig,
+  ChartConfig,
+  IndicatorConfig,
+  SwitchConfig,
+  SliderConfig,
+  TextConfig,
+  ButtonConfig
+} from '@/components/scada-components/registry'
+
+export type {
+  GaugeConfig,
+  ChartConfig,
+  IndicatorConfig,
+  SwitchConfig,
+  SliderConfig,
+  TextConfig,
+  ButtonConfig
+}
 
 // 重新导出组件模板列表
 export { COMPONENT_TEMPLATES } from '@/components/scada-components'
 
-export interface PointBinding {
-  deviceId: string
-  pointName: string
-  pointDescription?: string
-  unit?: string
-}
-
 export interface ScadaComponent {
   id: string
-  type: import('@/components/scada-components/types').ComponentType
+  type: ComponentType
   name: string
   x: number
   y: number
-  style: import('@/components/scada-components/types').StyleConfig
+  style: StyleConfig
   binding: PointBinding | null
-  gaugeConfig?: import('@/components/scada-components/gauge/metadata').GaugeConfig
-  chartConfig?: import('@/components/scada-components/chart/metadata').ChartConfig
-  indicatorConfig?: import('@/components/scada-components/indicator/metadata').IndicatorConfig
-  switchConfig?: import('@/components/scada-components/switch/metadata').SwitchConfig
-  sliderConfig?: import('@/components/scada-components/slider/metadata').SliderConfig
-  textConfig?: import('@/components/scada-components/text/metadata').TextConfig
+  gaugeConfig?: GaugeConfig
+  chartConfig?: ChartConfig
+  indicatorConfig?: IndicatorConfig
+  switchConfig?: SwitchConfig
+  sliderConfig?: SliderConfig
+  textConfig?: TextConfig
   imageConfig?: { url?: string; fit?: string }
-  buttonConfig?: import('@/components/scada-components/button/metadata').ButtonConfig
+  buttonConfig?: ButtonConfig
   locked: boolean
   visible: boolean
 }

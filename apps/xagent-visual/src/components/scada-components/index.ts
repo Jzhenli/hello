@@ -7,14 +7,16 @@ export type {
 } from './types'
 export type { ComponentType } from './registry'
 
-// 导出各组件配置类型和元数据
-export type { GaugeConfig } from './gauge/metadata'
-export type { ChartConfig } from './chart/metadata'
-export type { IndicatorConfig } from './indicator/metadata'
-export type { SwitchConfig } from './switch/metadata'
-export type { SliderConfig } from './slider/metadata'
-export type { TextConfig } from './text/metadata'
-export type { ButtonConfig } from './button/metadata'
+// 导出各组件配置类型（统一从 registry 导出）
+export type {
+  GaugeConfig,
+  ChartConfig,
+  IndicatorConfig,
+  SwitchConfig,
+  SliderConfig,
+  TextConfig,
+  ButtonConfig
+} from './registry'
 
 // 导出统一注册表
 export {

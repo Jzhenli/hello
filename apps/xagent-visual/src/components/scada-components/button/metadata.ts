@@ -1,13 +1,6 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { PointBinding } from '@/types/scada'
+import type { ButtonConfig } from '../registry'
 import ScadaButton from './index.vue'
-
-export interface ButtonConfig {
-  text: string
-  type: 'primary' | 'success' | 'warning' | 'danger' | 'info'
-  writeValue: number | boolean | string
-  writePoint: PointBinding | null
-}
 
 export const buttonMeta: ScadaComponentMeta = {
   type: 'button',

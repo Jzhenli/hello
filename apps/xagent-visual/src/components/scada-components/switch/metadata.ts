@@ -1,13 +1,6 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { PointBinding } from '@/types/scada'
+import type { SwitchConfig } from '../registry'
 import ScadaSwitch from './index.vue'
-
-export interface SwitchConfig {
-  onText: string
-  offText: string
-  confirmRequired: boolean
-  writePoint: PointBinding | null
-}
 
 export const switchMeta: ScadaComponentMeta = {
   type: 'switch',

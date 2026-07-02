@@ -1,12 +1,7 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { IndicatorConfig } from '../registry'
 import ScadaIndicator from './index.vue'
 import IndicatorConfigPanel from './ConfigPanel.vue'
-
-export interface IndicatorConfig {
-  onColor: string
-  offColor: string
-  blinkOnAlarm: boolean
-}
 
 export const indicatorMeta: ScadaComponentMeta = {
   type: 'indicator',

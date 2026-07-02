@@ -1,13 +1,6 @@
 import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { TextConfig } from '../registry'
 import ScadaText from './index.vue'
-
-export interface TextConfig {
-  content: string
-  fontSize: number
-  fontColor: string
-  fontWeight: 'normal' | 'bold'
-  textAlign: 'left' | 'center' | 'right'
-}
 
 export const textMeta: ScadaComponentMeta = {
   type: 'text',
