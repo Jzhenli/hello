@@ -1,4 +1,4 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
 import ScadaContainer from './index.vue'
 
 export const containerMeta: ScadaComponentMeta = {

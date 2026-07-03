@@ -3,7 +3,7 @@
 // 此处重新导出以保持向后兼容
 
 // 重新导出组件公共类型
-export type { StyleConfig, PointBinding } from '@/components/scada-components/types'
+export type { StyleConfig, PointBinding, ComponentTemplate } from '@/components/scada-components/types'
 
 // ComponentType 从 registry 导出（自动推导）
 export type { ComponentType } from '@/components/scada-components/registry'

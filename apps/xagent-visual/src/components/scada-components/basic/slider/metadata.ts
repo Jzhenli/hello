@@ -1,5 +1,5 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { SliderConfig } from '../registry'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
+import type { SliderConfig } from '../../registry'
 import ScadaSlider from './index.vue'
 
 export const sliderMeta: ScadaComponentMeta = {
@@ -8,7 +8,7 @@ export const sliderMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.slider',
     icon: '🎚️',
-    category: 'scadaComponentCategories.control',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 200, height: 40 },
     defaultConfig: {
       sliderConfig: { min: 0, max: 100, step: 1 }

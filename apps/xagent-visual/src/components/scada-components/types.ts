@@ -43,3 +43,13 @@ export interface ScadaComponentMeta {
   /** 配置类型定义（可选） */
   configTypes?: Record<string, any>
 }
+
+/** 组件模板（用于组件库面板展示和拖拽创建） */
+export interface ComponentTemplate {
+  type: string
+  name: string
+  icon: string
+  category: string
+  defaultStyle: StyleConfig
+  defaultConfig: Record<string, any>
+}

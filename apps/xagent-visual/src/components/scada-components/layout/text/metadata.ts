@@ -1,5 +1,5 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { TextConfig } from '../registry'
+import type { ScadaComponentMeta } from '../../types'
+import type { TextConfig } from '../../registry'
 import ScadaText from './index.vue'
 
 export const textMeta: ScadaComponentMeta = {
@@ -8,7 +8,7 @@ export const textMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.text',
     icon: '📝',
-    category: 'scadaComponentCategories.basic',
+    category: 'scadaComponentCategories.layout',
     defaultStyle: { width: 150, height: 40, fontSize: 14, fontColor: '#2c3e50' },
     defaultConfig: {
       textConfig: {

@@ -4,40 +4,43 @@
 
 ```
 scada-components/
-├── types.ts              # 公共类型定义（StyleConfig、ScadaComponentMeta）
-├── registry.ts           # 组件注册表 + 查询/注册 API
+├── types.ts              # 公共类型定义（StyleConfig、ScadaComponentMeta、PointBinding）
+├── registry.ts           # 组件注册表 + 配置接口定义 + 查询/注册 API
 ├── index.ts              # 统一导出（类型 + 注册表 API）
-├── gauge/                # 仪表盘组件
-│   ├── index.vue
-│   ├── metadata.ts       # 组件元数据（视图 + 配置面板 + 模板）
-│   └── ConfigPanel.vue   # 专属配置面板
-├── chart/                # 图表组件（折线图 + 柱状图）
-│   ├── index.vue
-│   ├── metadata.ts       # chartLineMeta + chartBarMeta 两个元数据
-│   └── ConfigPanel.vue
-├── indicator/            # 指示灯组件
-│   ├── index.vue
-│   ├── metadata.ts
-│   └── ConfigPanel.vue
-├── switch/               # 开关组件
-│   ├── index.vue
-│   └── metadata.ts
-├── slider/               # 滑块组件
-│   ├── index.vue
-│   └── metadata.ts
-├── text/                 # 文本组件
-│   ├── index.vue
-│   └── metadata.ts
-├── image/                # 图片组件
-│   ├── index.vue
-│   ├── metadata.ts
-│   └── ConfigPanel.vue
-├── button/               # 按钮组件
-│   ├── index.vue
-│   └── metadata.ts
-└── container/            # 容器组件
-    ├── index.vue
-    └── metadata.ts
+├── basic/                # 基础组件分类
+│   ├── button/           # 按钮组件
+│   │   ├── index.vue
+│   │   └── metadata.ts
+│   ├── gauge/            # 仪表盘组件
+│   │   ├── index.vue
+│   │   ├── metadata.ts
+│   │   └── ConfigPanel.vue
+│   ├── image/            # 图片组件
+│   │   ├── index.vue
+│   │   ├── metadata.ts
+│   │   └── ConfigPanel.vue
+│   ├── indicator/        # 指示灯组件
+│   │   ├── index.vue
+│   │   ├── metadata.ts
+│   │   └── ConfigPanel.vue
+│   ├── slider/           # 滑块组件
+│   │   ├── index.vue
+│   │   └── metadata.ts
+│   └── switch/           # 开关组件
+│       ├── index.vue
+│       └── metadata.ts
+├── chart/                # 图表组件分类
+│   └── chart/            # 图表组件（折线图 + 柱状图）
+│       ├── index.vue
+│       ├── metadata.ts   # chartLineMeta + chartBarMeta 两个元数据
+│       └── ConfigPanel.vue
+└── layout/               # 布局组件分类
+    ├── container/        # 容器组件
+    │   ├── index.vue
+    │   └── metadata.ts
+    └── text/             # 文本组件
+        ├── index.vue
+        └── metadata.ts
 ```
 
 ## 核心设计
@@ -49,16 +52,17 @@ scada-components/
 
 ## 如何添加新组件（两步）
 
-### 1. 新建组件文件夹
+### 1. 在对应分类目录下新建组件文件夹
 
-在 `scada-components/` 下新建文件夹，包含 `index.vue` 和 `metadata.ts`（可选 `ConfigPanel.vue`）：
+根据组件类型选择分类目录（basic/control/layout 等），新建文件夹包含 `index.vue` 和 `metadata.ts`（可选 `ConfigPanel.vue`）：
 
 ```
 scada-components/
-└── my-component/
-    ├── index.vue         # 组件实现
-    ├── metadata.ts       # 组件元数据
-    └── ConfigPanel.vue   # 专属配置面板（可选）
+└── control/              # 根据组件类型选择分类
+    └── my-component/
+        ├── index.vue         # 组件实现
+        ├── metadata.ts       # 组件元数据
+        └── ConfigPanel.vue   # 专属配置面板（可选）
 ```
 
 ### 2. 在 registry.ts 中注册
@@ -71,8 +75,8 @@ export interface MyComponentConfig {
   // 组件配置字段...
 }
 
-// 2. 导入元数据
-import { myComponentMeta } from './my-component/metadata'
+// 2. 导入元数据（注意分类目录路径）
+import { myComponentMeta } from './control/my-component/metadata'
 
 // 3. 添加到注册表
 export const componentMetaRegistry = {
@@ -81,11 +85,11 @@ export const componentMetaRegistry = {
 }
 ```
 
-**metadata.ts** — 从 registry 导入配置类型：
+**metadata.ts** — 从 registry 导入配置类型（注意相对路径层级）：
 
 ```typescript
-import type { ScadaComponentMeta } from '../types'
-import type { MyComponentConfig } from '../registry'
+import type { ScadaComponentMeta } from '../../types'
+import type { MyComponentConfig } from '../../registry'
 import MyComponent from './index.vue'
 
 export const myComponentMeta: ScadaComponentMeta = {
@@ -95,7 +99,7 @@ export const myComponentMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.myComponent',
     icon: '🔧',
-    category: 'scadaComponentCategories.control',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 200, height: 100 },
     defaultConfig: {
       myComponentConfig: { /* 默认配置 */ }
@@ -104,20 +108,20 @@ export const myComponentMeta: ScadaComponentMeta = {
 }
 ```
 
-> **注意**：`ComponentType` 由注册表自动推导，无需修改 `types.ts`。配置接口统一在 `registry.ts` 中定义，无需修改 `index.ts`。
+> **注意**：
+> - `ComponentType` 由注册表自动推导，无需修改 `types.ts`
+> - 配置接口统一在 `registry.ts` 中定义，无需修改 `index.ts`
+> - 所有组件都放在分类目录下的子目录中，metadata.ts 中相对路径为 `../../types` 和 `../../registry`
 
 ## 分类说明
 
 组件通过 `category` 字段归类，在 `metadata.ts` 的 `template` 中指定：
 
-| 分类 key | 说明 |
-|---------|------|
-| `scadaComponentCategories.basic` | 基础组件 |
-| `scadaComponentCategories.gauge` | 仪表组件 |
-| `scadaComponentCategories.chart` | 图表组件 |
-| `scadaComponentCategories.indicator` | 指示组件 |
-| `scadaComponentCategories.control` | 控制组件 |
-| `scadaComponentCategories.layout` | 布局组件 |
+| 分类 key | 说明 | 包含组件 |
+|---------|------|---------|
+| `scadaComponentCategories.basic` | 基础组件 | button、gauge、image、indicator、slider、switch |
+| `scadaComponentCategories.chart` | 图表组件 | chart-line、chart-bar |
+| `scadaComponentCategories.layout` | 布局组件 | container、text |
 
 ## 文件职责
 

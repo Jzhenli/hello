@@ -1,5 +1,5 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { GaugeConfig } from '../registry'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
+import type { GaugeConfig } from '../../registry'
 import ScadaGauge from './index.vue'
 import GaugeConfigPanel from './ConfigPanel.vue'
 
@@ -12,7 +12,7 @@ export const gaugeMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.gauge',
     icon: '🎯',
-    category: 'scadaComponentCategories.gauge',
+    category: 'scadaComponentCategories.basic',
     defaultStyle,
     defaultConfig: {
       gaugeConfig: {

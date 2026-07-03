@@ -1,4 +1,4 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
 import ScadaImage from './index.vue'
 import ImageConfigPanel from './ConfigPanel.vue'
 

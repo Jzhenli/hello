@@ -15,11 +15,8 @@ export interface CategoryConfig {
 // Category definitions - add new categories here
 export const COMPONENT_CATEGORIES: CategoryConfig[] = [
   { key: 'basic', icon: '📝', order: 1 },
-  { key: 'gauge', icon: '🎯', order: 2 },
-  { key: 'chart', icon: '📊', order: 3 },
-  { key: 'indicator', icon: '💡', order: 4 },
-  { key: 'control', icon: '🎛️', order: 5 },
-  { key: 'layout', icon: '📦', order: 6 },
+  { key: 'chart', icon: '📊', order: 2 },
+  { key: 'layout', icon: '📦', order: 3 },
 ]
 
 // Get sorted categories

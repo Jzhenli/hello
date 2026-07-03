@@ -1,5 +1,5 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { IndicatorConfig } from '../registry'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
+import type { IndicatorConfig } from '../../registry'
 import ScadaIndicator from './index.vue'
 import IndicatorConfigPanel from './ConfigPanel.vue'
 
@@ -10,7 +10,7 @@ export const indicatorMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.indicator',
     icon: '💡',
-    category: 'scadaComponentCategories.indicator',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 60, height: 60 },
     defaultConfig: {
       indicatorConfig: {

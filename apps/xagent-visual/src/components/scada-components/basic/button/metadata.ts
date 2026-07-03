@@ -1,5 +1,5 @@
-import type { StyleConfig, ScadaComponentMeta } from '../types'
-import type { ButtonConfig } from '../registry'
+import type { StyleConfig, ScadaComponentMeta } from '../../types'
+import type { ButtonConfig } from '../../registry'
 import ScadaButton from './index.vue'
 
 export const buttonMeta: ScadaComponentMeta = {
@@ -8,7 +8,7 @@ export const buttonMeta: ScadaComponentMeta = {
   template: {
     name: 'scadaComponentNames.button',
     icon: '🔲',
-    category: 'scadaComponentCategories.control',
+    category: 'scadaComponentCategories.basic',
     defaultStyle: { width: 100, height: 40 },
     defaultConfig: {
       buttonConfig: {

@@ -61,15 +61,15 @@ export interface ButtonConfig {
 }
 
 // ─── 导入所有组件元数据 ────────────────────────────────────────
-import { gaugeMeta } from './gauge/metadata'
-import { chartLineMeta, chartBarMeta } from './chart/metadata'
-import { indicatorMeta } from './indicator/metadata'
-import { switchMeta } from './switch/metadata'
-import { sliderMeta } from './slider/metadata'
-import { textMeta } from './text/metadata'
-import { imageMeta } from './image/metadata'
-import { buttonMeta } from './button/metadata'
-import { containerMeta } from './container/metadata'
+import { gaugeMeta } from './basic/gauge/metadata'
+import { chartLineMeta, chartBarMeta } from './chart/chart/metadata'
+import { indicatorMeta } from './basic/indicator/metadata'
+import { switchMeta } from './basic/switch/metadata'
+import { sliderMeta } from './basic/slider/metadata'
+import { textMeta } from './layout/text/metadata'
+import { imageMeta } from './basic/image/metadata'
+import { buttonMeta } from './basic/button/metadata'
+import { containerMeta } from './layout/container/metadata'
 
 // ─── 统一组件注册表：type -> 完整元数据 ─────────────────────────
 // 新增组件只需在此添加映射，ComponentType 自动推导
