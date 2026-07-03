@@ -15,7 +15,8 @@
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { GraphicEditor } from "@x-plateform/graphic-editor";
-import { onMounted, ref, watch, nextTick } from "vue";
+import { onMounted, ref, watch, nextTick, computed } from "vue";
+import { useThemeStore } from '@/stores/theme'
 
 declare global {
   interface Window {
@@ -28,6 +29,9 @@ declare global {
 //const route = useRoute();
 const router = useRouter();
 const { locale } = useI18n();
+const themeStore = useThemeStore()
+
+const isDark = computed(() => themeStore.theme === 'dark')
 
 const graphicData = ref<any | null>(null);
 const showEditor = ref(true);
@@ -44,9 +48,16 @@ watch(locale, async () => {
   setLang()
 });
 
+//添加监听主题变化
+watch(isDark, async () => {
+  await nextTick()
+  setTheme()
+})
+
 const setTheme = () => {
   const body = document.body
-  if (false) {
+
+  if (isDark.value) {
     body.classList.remove('x-theme-2')
     body.classList.add('x-theme-1')
   } else {
@@ -94,6 +105,6 @@ const showPreview = () => {};
   height: calc(100vh - 100px - 32px);
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-secondary);
+  /* background-color: var(--bg-secondary); */
 }
 </style>
