@@ -97,13 +97,13 @@ const routes = [
   {
     path: '/graphic/:id',
     name: 'GraphicEdit',
-    component: () => import('@/views/Graphic.vue'),
+    component: () => import('@/views/Graphic/index.vue'),
     meta: { title: '图形编辑', icon: 'PictureFilled' }
   },
   {
     path: '/graphic/:id/preview',
     name: 'GraphicPreview',
-    component: () => import('@/views/GraphicPreview.vue'),
+    component: () => import('@/views/GraphicPreview/index.vue'),
     meta: { title: '图形预览', icon: 'PictureFilled', public: true }
   },
   {

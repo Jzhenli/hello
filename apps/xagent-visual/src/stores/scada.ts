@@ -189,6 +189,7 @@ export const useScadaStore = defineStore('scada', () => {
     if (!currentPanel.value) return
 
     const component = currentPanel.value.components.find(c => c.id === id)
+    
     if (component) {
       Object.assign(component, updates)
       currentPanel.value.updatedAt = Date.now()
