@@ -17,7 +17,7 @@
 
     <div v-if="currentPanel" class="preview-content">
       <div class="blank-canvas">
-        <el-empty :description="$t('scada.graphicPreviewPlaceholder')" />
+        <GraphicSingle ref="graphicSingle" />
       </div>
     </div>
 
@@ -34,6 +34,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useScadaStore } from '@/stores/scada'
 import { ArrowLeft, FullScreen } from '@element-plus/icons-vue'
+import GraphicSingle from './GraphicSingle.vue'
 
 const route = useRoute()
 const router = useRouter()
