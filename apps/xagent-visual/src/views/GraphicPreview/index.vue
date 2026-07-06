@@ -55,6 +55,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   scadaStore.isEditing = true
+  scadaStore.isFullscreenPreview = false
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 

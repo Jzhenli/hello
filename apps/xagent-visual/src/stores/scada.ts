@@ -58,33 +58,6 @@ function generateSamplePanels(): ScadaPanel[] {
       grid: 20,
       backgroundColor: bgColor,
       components: [
-        {
-          id: `comp-${String(i + 1).padStart(3, '0')}-01`,
-          type: 'gauge',
-          name: `${panelNames[i]}-仪表`,
-          x: 100,
-          y: 100,
-          style: { width: 150, height: 150 },
-          binding: {
-            deviceId: `DEV-${String(i + 1).padStart(2, '0')}`,
-            pointName: `point_${i + 1}`,
-            pointDescription: `${panelNames[i]}测点`,
-            unit: i % 3 === 0 ? '°C' : i % 3 === 1 ? '%' : 'kW'
-          },
-          gaugeConfig: {
-            min: 0,
-            max: 100,
-            unit: i % 3 === 0 ? '°C' : i % 3 === 1 ? '%' : 'kW',
-            thresholds: [
-              { value: 30, color: '#3498db' },
-              { value: 70, color: '#27ae60' },
-              { value: 100, color: '#e74c3c' }
-            ],
-            showValue: true
-          },
-          locked: false,
-          visible: true
-        }
       ],
       createdAt: Date.now() - daysAgo * 86400000,
       updatedAt: Date.now() - (i % 10) * 3600000
@@ -94,7 +67,9 @@ function generateSamplePanels(): ScadaPanel[] {
   return panels
 }
 
-export const useScadaStore = defineStore('scada', () => {
+export const useScadaStore = defineStore(
+  'scada',
+  () => {
   const panels = ref<ScadaPanel[]>(generateSamplePanels())
 
   const _currentPanelId = ref<string | null>(null)
@@ -403,5 +378,10 @@ export const useScadaStore = defineStore('scada', () => {
     scrollToComponentId,
     scrollToComponent,
     clearScrollTarget
+  }
+}, {
+  persist: {
+    key: 'scada-panels',
+    paths: ['panels'],
   }
 })

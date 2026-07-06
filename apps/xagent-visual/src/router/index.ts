@@ -79,8 +79,14 @@ const routes = [
   {
     path: '/scada',
     name: 'ScadaList',
-    component: () => import('@/views/ProjectList.vue'),
+    component: () => import('@/views/ProjectList/index.vue'),
     meta: { title: '项目管理', icon: 'Folder' }
+  },
+  {
+    path: '/scada/slideshow',
+    name: 'SlideshowPreview',
+    component: () => import('@/views/vant/SlideshowPreview.vue'),
+    meta: { title: '幻灯片预览', icon: 'PictureFilled', public: true }
   },
   {
     path: '/scada/:id',
