@@ -29,6 +29,14 @@
             <el-tag :type="panel.type === 'Dashboard' ? 'info' : 'warning'" size="small" class="type-tag">
               {{ panel.type === 'Dashboard' ? $t('scada.dashboardType') : $t('scada.graphicType') }}
             </el-tag>
+            <el-button 
+              type="success" 
+              :icon="View"
+              size="small"
+              circle
+              @click="handlePreview(panel)"
+              class="preview-btn"
+            />
           </div>
           <p class="project-desc">{{ panel.description || $t('scada.noDescription') }}</p>
           <div class="project-meta">
@@ -37,14 +45,6 @@
           </div>
         </div>
         <div class="project-actions">
-          <el-button 
-            type="success" 
-            :icon="View"
-            size="small"
-            @click="handlePreview(panel)"
-          >
-            {{ $t('scada.preview') }}
-          </el-button>
           <el-button 
             type="primary" 
             :icon="Edit"
@@ -299,10 +299,6 @@ const formatTime = (timestamp: number) => {
   transition: all 0.3s;
 }
 
-.project-card:hover {
-  transform: translateY(-4px);
-}
-
 .project-info {
   margin-bottom: 16px;
 }
@@ -322,6 +318,11 @@ const formatTime = (timestamp: number) => {
 }
 
 .type-tag {
+  flex-shrink: 0;
+}
+
+.preview-btn {
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -348,6 +349,7 @@ const formatTime = (timestamp: number) => {
 
 .project-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border-light);

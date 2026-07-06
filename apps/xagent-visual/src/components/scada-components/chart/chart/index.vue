@@ -8,10 +8,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import type { ScadaComponent } from '@/types/scada'
 import { useComponentBinding } from '@/composables/useComponentBinding'
 import { usePointStore } from '@/stores/points'
+import { useScadaStore } from '@/stores/scada'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, BarChart } from 'echarts/charts'
@@ -26,6 +27,7 @@ const props = defineProps<{
 }>()
 
 const pointStore = usePointStore()
+const scadaStore = useScadaStore()
 const chartConfig = computed(() => props.config.chartConfig)
 const binding = computed(() => props.config.binding)
 
@@ -34,16 +36,93 @@ const { boundPoint } = useComponentBinding(binding, {
   refreshInterval: 10000
 })
 
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+const hoursMap: Record<string, number> = {
+  '1h': 1,
+  '6h': 6,
+  '24h': 24,
+  '7d': 168
+}
+
+// 加载历史数据
+const loadHistoryData = async () => {
+  if (scadaStore.isEditing || !binding.value) return
+  
+  const deviceId = binding.value.deviceId
+  const hours = hoursMap[chartConfig.value?.timeRange || '24h'] || 24
+  
+  await pointStore.fetchHistoryReadings(deviceId, hours)
+}
+
+// 启动自动刷新
+const startAutoRefresh = () => {
+  if (scadaStore.isEditing) return
+  if (refreshTimer) clearInterval(refreshTimer)
+  
+  refreshTimer = setInterval(() => {
+    loadHistoryData()
+  }, 30000) // 30秒刷新一次
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+// 监听编辑模式变化
+watch(() => scadaStore.isEditing, (isEditing) => {
+  if (isEditing) {
+    stopAutoRefresh()
+  } else {
+    loadHistoryData()
+    startAutoRefresh()
+  }
+})
+
+// 监听时间范围变化
+watch(() => chartConfig.value?.timeRange, () => {
+  if (!scadaStore.isEditing) {
+    loadHistoryData()
+  }
+})
+
+onMounted(() => {
+  if (!scadaStore.isEditing && binding.value) {
+    loadHistoryData()
+    startAutoRefresh()
+  }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+})
+
 const chartOption = computed(() => {
   const isLine = props.config.type === 'chart-line'
   
   let data: number[] = []
   if (boundPoint.value) {
-    const hours = chartConfig.value?.timeRange === '1h' ? 1 : 
-                  chartConfig.value?.timeRange === '6h' ? 6 :
-                  chartConfig.value?.timeRange === '7d' ? 168 : 24
-    const trendData = pointStore.generateTrendData(boundPoint.value, hours)
-    data = trendData.map(d => d.value)
+    if (scadaStore.isEditing) {
+      // 编辑模式：使用随机数据作为预览
+      const hours = hoursMap[chartConfig.value?.timeRange || '24h'] || 24
+      const trendData = pointStore.generateTrendData(boundPoint.value, hours)
+      data = trendData.map(d => d.value)
+    } else {
+      // 预览模式：使用真实历史数据
+      const realData = pointStore.getPointTrendData(boundPoint.value.name)
+      if (realData.length > 0) {
+        data = realData.map(d => d.value)
+      } else {
+        // 如果没有历史数据，fallback 到随机数据
+        const hours = hoursMap[chartConfig.value?.timeRange || '24h'] || 24
+        const trendData = pointStore.generateTrendData(boundPoint.value, hours)
+        data = trendData.map(d => d.value)
+      }
+    }
   }
   
   return {

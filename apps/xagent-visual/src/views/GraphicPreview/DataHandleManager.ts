@@ -1,5 +1,4 @@
 
-import cloneDeep from 'lodash/cloneDeep'
 import DataManager from './DataManager'
 
 export enum PointAttrValueType {
